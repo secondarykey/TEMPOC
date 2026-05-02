@@ -56,8 +56,8 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 13px;
       line-height: 1.5;
-      padding: 12px;
-      width: 660px;
+      padding: 16px;
+      width: 740px;
       background: var(--bg);
       color: var(--text);
       margin: 0;
@@ -68,7 +68,7 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       grid-template-rows: auto auto;
-      gap: 10px;
+      gap: 14px;
       align-items: stretch;
     }
     #sec-hour5   { grid-column: 1; grid-row: 1; }
@@ -89,7 +89,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 14px 16px;
+      padding: 14px 16px 4px;
       box-shadow: var(--shadow);
     }
 
@@ -179,7 +179,7 @@
     /* ── dual range slider ── */
     .dual-range {
       position: relative;
-      padding: 6px 0 18px;
+      padding: 6px 0 4px;
       margin-top: 4px;
     }
     .dual-range__values {
@@ -195,7 +195,25 @@
       height: 5px;
       border-radius: 3px;
       background: var(--track-bg);
-      margin: 10px 0;
+      margin: 10px 0 20px;
+    }
+    .dual-range__track::before {
+      content: '-50';
+      position: absolute;
+      top: calc(100% + 5px);
+      left: 0;
+      transform: translateX(-50%);
+      font-size: 10px;
+      color: var(--zero-label);
+    }
+    .dual-range__track::after {
+      content: '50';
+      position: absolute;
+      top: calc(100% + 5px);
+      right: 0;
+      transform: translateX(50%);
+      font-size: 10px;
+      color: var(--zero-label);
     }
     .dual-range__fill {
       position: absolute;
@@ -257,6 +275,54 @@
       height: 5px;
     }
 
+    /* ── help text ── */
+    .row--refresh {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 2px;
+      padding: 4px 0;
+    }
+    .row-refresh__top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .row-refresh__top label { flex: 1; }
+    .help-text {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── format preview ── */
+    .row--preview {
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 4px 8px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    .preview-label {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .preview-value {
+      font-size: 12px;
+      color: var(--text-sub);
+      font-family: ui-monospace, monospace;
+      line-height: 1.7;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .preview-duration {
+      white-space: nowrap;
+      overflow: hidden;
+    }
+    .preview-percent {
+      text-align: right;
+    }
+
     /* ── toast ── */
     @keyframes toast-in  { from { opacity:0; transform:translateX(-50%) translateY(6px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
     @keyframes toast-out { from { opacity:1; } to { opacity:0; } }
@@ -298,6 +364,10 @@
         <label for="showRemainHour5">Show remaining time</label>
         <input type="checkbox" id="showRemainHour5">
       </div>
+      <div class="row">
+        <label for="hour5ColorEnabled">Color threshold</label>
+        <input type="checkbox" id="hour5ColorEnabled" checked>
+      </div>
       <div class="dual-range" id="hour5Range">
         <div class="dual-range__values">
           <span class="warning-label">Warning: <b>0</b>% over</span>
@@ -316,6 +386,14 @@
       <h2>General</h2>
       <div class="rows">
         <div class="row">
+          <label for="durationStyle">Duration style</label>
+          <select id="durationStyle">
+            <option value="narrow">Narrow (3d 4h)</option>
+            <option value="short" selected>Short (3 days 4 hr.)</option>
+            <option value="long">Long (3 days 4 hours)</option>
+          </select>
+        </div>
+        <div class="row">
           <label for="decimalPlaces">Decimal places</label>
           <select id="decimalPlaces">
             <option value="0">0</option>
@@ -325,22 +403,21 @@
           </select>
         </div>
         <div class="row">
-          <label for="durationStyle">Duration style</label>
-          <select id="durationStyle">
-            <option value="narrow">Narrow (3d 4h)</option>
-            <option value="short" selected>Short (3 days 4 hr.)</option>
-            <option value="long">Long (3 days 4 hours)</option>
-          </select>
-        </div>
-        <div class="row">
           <label for="percentFormat">Percent format</label>
-          <input type="text" id="percentFormat" value="{}%">
+          <input type="text" id="percentFormat" value="{}%" style="text-align: right;">
         </div>
-        <div class="row">
-          <label for="enableRefresh">Auto-refresh</label>
-          <input type="checkbox" id="enableRefresh">
-          <input type="number" id="refreshMinutes" min="1" max="60" value="5" disabled>
-          <span class="unit">min</span>
+        <div class="row row--preview">
+          <div class="preview-label">Preview</div>
+          <div id="formatPreview" class="preview-value"></div>
+        </div>
+        <div class="row row--refresh">
+          <div class="row-refresh__top">
+            <label for="enableRefresh">Auto-refresh</label>
+            <input type="checkbox" id="enableRefresh">
+            <input type="number" id="refreshMinutes" min="1" max="60" value="2" disabled>
+            <span class="unit">min</span>
+          </div>
+          <div class="help-text">Refreshes display independently of API calls</div>
         </div>
       </div>
     </section>
@@ -354,6 +431,10 @@
       <div class="row">
         <label for="showRemainDay7">Show remaining time</label>
         <input type="checkbox" id="showRemainDay7">
+      </div>
+      <div class="row">
+        <label for="day7ColorEnabled">Color threshold</label>
+        <input type="checkbox" id="day7ColorEnabled" checked>
       </div>
       <div class="dual-range" id="day7Range">
         <div class="dual-range__values">

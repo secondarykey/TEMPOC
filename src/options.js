@@ -1,8 +1,11 @@
 const status             = document.getElementById("status");
+const formatPreview      = document.getElementById("formatPreview");
 const showDay7Cb         = document.getElementById("showDay7");
 const showHour5Cb        = document.getElementById("showHour5");
 const showRemainDay7Cb   = document.getElementById("showRemainDay7");
 const showRemainHour5Cb  = document.getElementById("showRemainHour5");
+const day7ColorEnabledCb  = document.getElementById("day7ColorEnabled");
+const hour5ColorEnabledCb = document.getElementById("hour5ColorEnabled");
 const decimalPlacesSel   = document.getElementById("decimalPlaces");
 const durationStyleSel   = document.getElementById("durationStyle");
 const percentFormatIn    = document.getElementById("percentFormat");
@@ -11,8 +14,8 @@ const refreshMinutesIn   = document.getElementById("refreshMinutes");
 
 const defaults = {
   showDay7: true, showHour5: true,
-  day7Danger: 10, day7Warning: 0,
-  hour5Danger: 10, hour5Warning: 0,
+  day7Danger: 10, day7Warning: 0, day7ColorEnabled: true,
+  hour5Danger: 10, hour5Warning: 0, hour5ColorEnabled: true,
   showRemainDay7: true, showRemainHour5: false,
   decimalPlaces: 2,
   durationStyle: 'short',
@@ -25,16 +28,55 @@ const COLOR_ACCENT  = cs.getPropertyValue("--color-accent").trim();
 const COLOR_WARNING = cs.getPropertyValue("--color-warning").trim();
 const COLOR_DANGER  = cs.getPropertyValue("--color-danger").trim();
 
+const PREVIEW_PERCENT   = 67.891;
+const PREVIEW_DURATION  = { days: 2, hours: 3, minutes: 45 };
+
+let detectedLocale = navigator.language;
+
+chrome.storage.session.get({ detectedLocale: navigator.language }, (s) => {
+  detectedLocale = s.detectedLocale;
+  updatePreview();
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "session" && changes.detectedLocale) {
+    detectedLocale = changes.detectedLocale.newValue;
+    updatePreview();
+  }
+});
+
+function updatePreview() {
+  const dp    = Number(decimalPlacesSel.value);
+  const style = durationStyleSel.value;
+  const fmt   = percentFormatIn.value || '{}%';
+
+  const percentStr = fmt.replace('{}', PREVIEW_PERCENT.toFixed(dp));
+  let durationStr  = '';
+  try {
+    const dateStr = new Date().toLocaleString(detectedLocale, {
+      month: 'numeric', day: 'numeric',
+      hour: 'numeric', minute: 'numeric', weekday: 'short'
+    });
+    durationStr = dateStr + ' (' + new Intl.DurationFormat(detectedLocale, { style }).format(PREVIEW_DURATION) + ')';
+  } catch (_) {}
+
+  formatPreview.innerHTML =
+    (durationStr ? `<span class="preview-duration">${durationStr}</span>` : '') +
+    `<span class="preview-percent">${percentStr}</span>`;
+}
+
 function getCurrentSettings() {
   return {
     showDay7:        showDay7Cb.checked,
     showHour5:       showHour5Cb.checked,
     showRemainDay7:  showRemainDay7Cb.checked,
     showRemainHour5: showRemainHour5Cb.checked,
-    day7Warning:     day7Range.getWarning(),
-    day7Danger:      day7Range.getDanger(),
-    hour5Warning:    hour5Range.getWarning(),
-    hour5Danger:     hour5Range.getDanger(),
+    day7Warning:      day7Range.getWarning(),
+    day7Danger:       day7Range.getDanger(),
+    day7ColorEnabled: day7ColorEnabledCb.checked,
+    hour5Warning:     hour5Range.getWarning(),
+    hour5Danger:      hour5Range.getDanger(),
+    hour5ColorEnabled: hour5ColorEnabledCb.checked,
     decimalPlaces:   Number(decimalPlacesSel.value),
     durationStyle:   durationStyleSel.value,
     percentFormat:   percentFormatIn.value || '{}%',
@@ -125,16 +167,16 @@ enableRefreshCb.addEventListener("change", () => {
   save();
 });
 
-[showDay7Cb, showHour5Cb, showRemainDay7Cb, showRemainHour5Cb].forEach(el => {
+[showDay7Cb, showHour5Cb, showRemainDay7Cb, showRemainHour5Cb, day7ColorEnabledCb, hour5ColorEnabledCb].forEach(el => {
   el.addEventListener("change", () => { broadcast(); save(); });
 });
 
 [decimalPlacesSel, durationStyleSel].forEach(el => {
-  el.addEventListener("change", () => { broadcast(); save(); });
+  el.addEventListener("change", () => { updatePreview(); broadcast(); save(); });
 });
 
 percentFormatIn.addEventListener("change", save);
-percentFormatIn.addEventListener("input",  broadcast);
+percentFormatIn.addEventListener("input",  () => { updatePreview(); broadcast(); });
 
 refreshMinutesIn.addEventListener("change", save);
 refreshMinutesIn.addEventListener("input", () => {
@@ -147,11 +189,14 @@ chrome.storage.sync.get(defaults, (s) => {
   showRemainDay7Cb.checked  = s.showRemainDay7;
   showRemainHour5Cb.checked = s.showRemainHour5;
   day7Range.setValues(s.day7Warning,   s.day7Danger);
+  day7ColorEnabledCb.checked  = s.day7ColorEnabled;
   hour5Range.setValues(s.hour5Warning, s.hour5Danger);
+  hour5ColorEnabledCb.checked = s.hour5ColorEnabled;
   decimalPlacesSel.value    = s.decimalPlaces;
   durationStyleSel.value    = s.durationStyle;
   percentFormatIn.value     = s.percentFormat;
   enableRefreshCb.checked   = s.refreshInterval > 0;
-  refreshMinutesIn.value    = s.refreshInterval > 0 ? s.refreshInterval : 5;
+  refreshMinutesIn.value    = s.refreshInterval > 0 ? s.refreshInterval : 2;
   refreshMinutesIn.disabled = !enableRefreshCb.checked;
+  updatePreview();
 });

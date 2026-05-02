@@ -1,7 +1,7 @@
 const defaults = {
   showDay7: true, showHour5: true,
-  day7Danger: 10, day7Warning: 0,
-  hour5Danger: 10, hour5Warning: 0,
+  day7Danger: 10, day7Warning: 0, day7ColorEnabled: true,
+  hour5Danger: 10, hour5Warning: 0, hour5ColorEnabled: true,
   showRemainDay7: true, showRemainHour5: false,
   decimalPlaces: 2,
   durationStyle: 'short',
@@ -31,4 +31,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 chrome.runtime.onMessage.addListener((message) => {
   window.dispatchEvent(new CustomEvent("tempoc:settings-changed", { detail: message }));
+});
+
+window.addEventListener("tempoc:locale", (e) => {
+  chrome.storage.session.set({ detectedLocale: e.detail });
 });

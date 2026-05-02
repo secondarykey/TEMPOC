@@ -1,19 +1,21 @@
 const Day7ProgressElementId = "day7Progress";
 const Day7ElementPATH = "main > div > div > div > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
-const Day7ElementBarPATH = Day7ElementPATH + " > div:nth-child(2) > div > div";
+const Day7ElementBarPATH = Day7ElementPATH + " > div:nth-child(2) > div > div > div";
 
 var day7Elm = undefined;
 var day7Obj = undefined;
 var day7Danger = 10;
 var day7Warning = 0;
+var day7ColorEnabled = true;
 
 const Hour5ProgressElementId = "hour5Progress";
 const Hour5ElementPATH = "main > div > div > div > section:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div"
-const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div";
+const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div > div";
 var hour5Elm = undefined;
 var hour5Obj = undefined;
 var hour5Danger = 10;
 var hour5Warning = 0;
+var hour5ColorEnabled = true;
 
 var locale = undefined;
 var decimalPlaces = 2;
@@ -56,7 +58,11 @@ async function createElement(id, path) {
   var cp = target.cloneNode(true);
 
   var divs = cp.querySelectorAll(":scope > div");
-  divs[0].removeChild(divs[0].children[0])
+  divs[0].removeChild(divs[0].children[0]);
+
+  const bar = divs[1].children[0].children[0].children[0];
+  bar.classList.remove("bg-fill-danger", "bg-fill-warning");
+  bar.classList.add("bg-fill-accent");
 
   cp.id = id;
   target.after(cp);
@@ -87,7 +93,7 @@ function createDuration(ms) {
   };
 }
 
-function redraw(elm, obj, dangerAt, warningAt) {
+function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
   if (elm === undefined) return false;
   if (obj === undefined) return false;
 
@@ -128,11 +134,9 @@ function redraw(elm, obj, dangerAt, warningAt) {
     weekday: 'short'
   }) + suffix;
 
-  // 経過時間バー（TEMPOC 注入）: 幅のみ更新、常に中立色
+  // 経過時間バー（TEMPOC 注入）: 幅のみ更新
   const bar = divs[1].children[0].children[0].children[0];
   bar.style.width = notStarted ? "0%" : percent + "%";
-  bar.classList.remove("bg-fill-danger", "bg-fill-warning");
-  bar.classList.add("bg-fill-accent");
 
   divs[1].children[1].textContent =
     notStarted ? "" : percentFormat.replace('{}', percent.toFixed(decimalPlaces));
@@ -142,11 +146,15 @@ function redraw(elm, obj, dangerAt, warningAt) {
   const origBar = document.querySelector(barPath);
   if (origBar) {
     origBar.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
-    const diff = val - percent;
-    if (diff > dangerAt) {
-      origBar.classList.add("bg-fill-danger");
-    } else if (diff > warningAt) {
-      origBar.classList.add("bg-fill-warning");
+    if (colorEnabled) {
+      const diff = val - percent;
+      if (diff > dangerAt) {
+        origBar.classList.add("bg-fill-danger");
+      } else if (diff > warningAt) {
+        origBar.classList.add("bg-fill-warning");
+      } else {
+        origBar.classList.add("bg-fill-accent");
+      }
     } else {
       origBar.classList.add("bg-fill-accent");
     }
@@ -162,8 +170,8 @@ function setupRefreshTimer() {
   }
   if (refreshInterval > 0) {
     refreshTimer = setInterval(() => {
-      redraw(day7Elm, day7Obj, day7Danger, day7Warning);
-      redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning);
+      redraw(day7Elm, day7Obj, day7Danger, day7Warning, day7ColorEnabled);
+      redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning, hour5ColorEnabled);
     }, refreshInterval * 60 * 1000);
   }
 }
@@ -182,20 +190,22 @@ window.fetch = async (...args) => {
 
     if (resource === "/api/account_profile") {
       locale = data.locale;
-      redraw(day7Elm, day7Obj, day7Danger, day7Warning);
-      redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning);
+      window.dispatchEvent(new CustomEvent("tempoc:locale", { detail: locale }));
+      redraw(day7Elm, day7Obj, day7Danger, day7Warning, day7ColorEnabled);
+      redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning, hour5ColorEnabled);
       return;
     }
 
     locale = document.documentElement.lang;
+    window.dispatchEvent(new CustomEvent("tempoc:locale", { detail: locale }));
 
     day7Obj = data.seven_day;
     console.debug(day7Obj);
-    redraw(day7Elm, day7Obj, day7Danger, day7Warning);
+    redraw(day7Elm, day7Obj, day7Danger, day7Warning, day7ColorEnabled);
 
     hour5Obj = data.five_hour;
     console.debug(hour5Obj);
-    redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning);
+    redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning, hour5ColorEnabled);
 
   }).catch(err => {
     // JSON ではない場合などは無視
@@ -206,10 +216,20 @@ window.fetch = async (...args) => {
 function applySettings(settings) {
   const { showDay7, showHour5 } = settings;
 
-  day7Danger      = settings.day7Danger      ?? 10;
-  day7Warning     = settings.day7Warning     ?? 0;
-  hour5Danger     = settings.hour5Danger     ?? 10;
-  hour5Warning    = settings.hour5Warning    ?? 0;
+  day7Danger        = settings.day7Danger        ?? 10;
+  day7Warning       = settings.day7Warning       ?? 0;
+  day7ColorEnabled  = settings.day7ColorEnabled  ?? true;
+  if (!day7ColorEnabled) {
+    const b = document.querySelector(Day7ElementBarPATH);
+    if (b) { b.classList.remove("bg-fill-danger", "bg-fill-warning"); b.classList.add("bg-fill-accent"); }
+  }
+  hour5Danger       = settings.hour5Danger       ?? 10;
+  hour5Warning      = settings.hour5Warning      ?? 0;
+  hour5ColorEnabled = settings.hour5ColorEnabled ?? true;
+  if (!hour5ColorEnabled) {
+    const b = document.querySelector(Hour5ElementBarPATH);
+    if (b) { b.classList.remove("bg-fill-danger", "bg-fill-warning"); b.classList.add("bg-fill-accent"); }
+  }
   showRemainDay7  = settings.showRemainDay7  ?? true;
   showRemainHour5 = settings.showRemainHour5 ?? false;
   decimalPlaces   = settings.decimalPlaces   ?? 2;
@@ -222,11 +242,11 @@ function applySettings(settings) {
     if (!day7Elm) {
       createElement(Day7ProgressElementId, Day7ElementPATH).then((elm) => {
         day7Elm = elm;
-        redraw(day7Elm, day7Obj, day7Danger, day7Warning);
+        redraw(day7Elm, day7Obj, day7Danger, day7Warning, day7ColorEnabled);
       });
     } else {
       day7Elm.style.display = "";
-      redraw(day7Elm, day7Obj, day7Danger, day7Warning);
+      redraw(day7Elm, day7Obj, day7Danger, day7Warning, day7ColorEnabled);
     }
   } else if (day7Elm) {
     day7Elm.style.display = "none";
@@ -236,11 +256,11 @@ function applySettings(settings) {
     if (!hour5Elm) {
       createElement(Hour5ProgressElementId, Hour5ElementPATH).then((elm) => {
         hour5Elm = elm;
-        redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning);
+        redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning, hour5ColorEnabled);
       });
     } else {
       hour5Elm.style.display = "";
-      redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning);
+      redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning, hour5ColorEnabled);
     }
   } else if (hour5Elm) {
     hour5Elm.style.display = "none";

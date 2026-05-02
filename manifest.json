@@ -2,9 +2,17 @@
   "manifest_version": 3,
   "name": "TEMPOC",
   "version": "0.0.0",
-  "permissions": ["scripting"],
+  "permissions": ["scripting", "storage"],
   "host_permissions": ["https://claude.ai/settings/usage"],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
   "content_scripts": [
+    {
+      "matches": ["https://claude.ai/settings/usage"],
+      "js": ["bridge.js"]
+    },
     {
       "matches": ["https://claude.ai/settings/usage"],
       "js": ["content.js"],

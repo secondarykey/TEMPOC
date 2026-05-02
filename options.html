@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TEMPOC 設定</title>
+  <style>
+    :root {
+      --color-accent:  #7dd3fc;
+      --color-warning: #fbbf24;
+      --color-danger:  #ef4444;
+    }
+    body {
+      font-family: sans-serif;
+      padding: 16px;
+      min-width: 300px;
+    }
+    section {
+      margin-bottom: 20px;
+    }
+    h2 {
+      font-size: 0.95rem;
+      margin: 0 0 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #ddd;
+    }
+    .show-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    /* ── dual range slider ── */
+    .dual-range {
+      position: relative;
+      padding: 4px 0 16px;
+    }
+    .dual-range__values {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      margin-bottom: 8px;
+    }
+    .warning-label { color: #b45309; }
+    .danger-label  { color: #b91c1c; }
+    .dual-range__track {
+      position: relative;
+      height: 6px;
+      border-radius: 3px;
+      background: #d1d5db;
+      margin: 10px 0;
+    }
+    .dual-range__fill {
+      position: absolute;
+      inset: 0;
+      border-radius: 3px;
+      pointer-events: none;
+    }
+    .zero-mark {
+      position: absolute;
+      left: 50%;
+      top: -4px;
+      bottom: -4px;
+      width: 2px;
+      background: rgba(0,0,0,0.25);
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+    .zero-mark::after {
+      content: '0';
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.72rem;
+      color: #888;
+    }
+    .dual-range input[type="range"] {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      pointer-events: none;
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+      outline: none;
+      height: 6px;
+    }
+    .dual-range input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      pointer-events: all;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      border: 2px solid #555;
+      cursor: pointer;
+      box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    .dual-range input[type="range"]::-webkit-slider-runnable-track {
+      background: transparent;
+      height: 6px;
+    }
+
+    #status {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: green;
+      visibility: hidden;
+    }
+  </style>
+</head>
+<body>
+  <section>
+    <h2>5時間ウィンドウ</h2>
+    <label class="show-row">
+      <input type="checkbox" id="showHour5"> 表示する
+    </label>
+    <div class="dual-range" id="hour5Range">
+      <div class="dual-range__values">
+        <span class="warning-label">警告: <b>0</b>% 超過</span>
+        <span class="danger-label">危険: <b>10</b>% 超過</span>
+      </div>
+      <div class="dual-range__track">
+        <div class="dual-range__fill"></div>
+        <span class="zero-mark"></span>
+      </div>
+      <input type="range" class="warning-input" min="-50" max="50" value="0">
+      <input type="range" class="danger-input"  min="-50" max="50" value="10">
+    </div>
+  </section>
+
+  <section>
+    <h2>7日間ウィンドウ</h2>
+    <label class="show-row">
+      <input type="checkbox" id="showDay7"> 表示する
+    </label>
+    <div class="dual-range" id="day7Range">
+      <div class="dual-range__values">
+        <span class="warning-label">警告: <b>0</b>% 超過</span>
+        <span class="danger-label">危険: <b>10</b>% 超過</span>
+      </div>
+      <div class="dual-range__track">
+        <div class="dual-range__fill"></div>
+        <span class="zero-mark"></span>
+      </div>
+      <input type="range" class="warning-input" min="-50" max="50" value="0">
+      <input type="range" class="danger-input"  min="-50" max="50" value="10">
+    </div>
+  </section>
+
+  <div id="status"></div>
+  <script src="options.js"></script>
+</body>
+</html>

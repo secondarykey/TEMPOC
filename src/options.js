@@ -53,9 +53,13 @@ function broadcast() {
 
 function save() {
   chrome.storage.sync.set(getCurrentSettings(), () => {
-    status.textContent = "Saved";
-    status.style.visibility = "visible";
-    setTimeout(() => { status.style.visibility = "hidden"; }, 1500);
+    status.textContent = "✓  Saved";
+    status.classList.remove("hide");
+    status.classList.add("show");
+    clearTimeout(status._timer);
+    status._timer = setTimeout(() => {
+      status.classList.replace("show", "hide");
+    }, 1400);
   });
 }
 

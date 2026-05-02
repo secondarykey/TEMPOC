@@ -236,12 +236,25 @@ function applySettings(settings) {
   }
 }
 
-// bridge.js (ISOLATED world) から初期設定を受け取る
+// bridge.js (ISOLATED world) から設定を受け取る（初期 + SPA 再ナビゲーション）
 window.addEventListener("tempoc:settings", (e) => {
   applySettings(e.detail);
-}, { once: true });
+});
 
 // オプション画面での変更を即時反映
 window.addEventListener("tempoc:settings-changed", (e) => {
   applySettings(e.detail);
 });
+
+// SPA ナビゲーション検知: DOM 参照をリセットして bridge.js に再初期化を促す
+function onNavigate() {
+  day7Elm  = undefined;
+  hour5Elm = undefined;
+  window.dispatchEvent(new CustomEvent("tempoc:navigate"));
+}
+
+const origPush    = history.pushState.bind(history);
+const origReplace = history.replaceState.bind(history);
+history.pushState    = (...a) => { origPush(...a);    onNavigate(); };
+history.replaceState = (...a) => { origReplace(...a); onNavigate(); };
+window.addEventListener("popstate", onNavigate);

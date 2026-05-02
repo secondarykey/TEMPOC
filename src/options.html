@@ -10,95 +10,192 @@
       --color-warning: #fbbf24;
       --color-danger:  #ef4444;
 
-      --bg:            #ffffff;
-      --text:          #111111;
-      --border:        #dddddd;
-      --muted:         #555555;
-      --track-bg:      #d1d5db;
+      --bg:            #f4f4f5;
+      --surface:       #ffffff;
+      --text:          #18181b;
+      --text-sub:      #52525b;
+      --border:        #e4e4e7;
+      --muted:         #71717a;
+      --track-bg:      #d4d4d8;
       --thumb-bg:      #ffffff;
-      --thumb-border:  #555555;
-      --zero-mark:     rgba(0,0,0,0.25);
-      --zero-label:    #888888;
-      --warning-text:  #b45309;
-      --danger-text:   #b91c1c;
+      --thumb-border:  #a1a1aa;
+      --zero-mark:     rgba(0,0,0,0.18);
+      --zero-label:    #a1a1aa;
+      --warning-text:  #92400e;
+      --danger-text:   #991b1b;
       --input-bg:      #ffffff;
-      --input-border:  #cccccc;
+      --input-border:  #d4d4d8;
+      --input-focus:   #7dd3fc;
+      --shadow:        0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg:            #18181b;
+        --bg:            #141416;
+        --surface:       #18181b;
         --text:          #f4f4f5;
-        --border:        #3f3f46;
-        --muted:         #a1a1aa;
+        --text-sub:      #a1a1aa;
+        --border:        #27272a;
+        --muted:         #71717a;
         --track-bg:      #3f3f46;
         --thumb-bg:      #27272a;
-        --thumb-border:  #a1a1aa;
-        --zero-mark:     rgba(255,255,255,0.25);
-        --zero-label:    #71717a;
+        --thumb-border:  #71717a;
+        --zero-mark:     rgba(255,255,255,0.2);
+        --zero-label:    #52525b;
         --warning-text:  #fcd34d;
         --danger-text:   #fca5a5;
         --input-bg:      #27272a;
-        --input-border:  #52525b;
+        --input-border:  #3f3f46;
+        --input-focus:   #38bdf8;
+        --shadow:        0 1px 3px rgba(0,0,0,.4);
       }
     }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
     body {
-      font-family: sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
       padding: 12px;
-      min-width: 300px;
+      width: 660px;
       background: var(--bg);
       color: var(--text);
+      margin: 0;
     }
+
+    /* ── layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 10px;
+      align-items: stretch;
+    }
+    #sec-hour5   { grid-column: 1; grid-row: 1; }
+    #sec-day7    { grid-column: 1; grid-row: 2; }
+    #sec-general {
+      grid-column: 2; grid-row: 1 / 3;
+      display: flex;
+      flex-direction: column;
+    }
+    #sec-general .rows {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ── card ── */
     section {
-      margin-bottom: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
     }
+
     h2 {
-      font-size: 0.9rem;
-      margin: 0 0 6px;
-      padding-bottom: 3px;
-      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 12px;
     }
+
+    /* ── rows ── */
     .row {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 5px;
-      font-size: 0.88rem;
+      min-height: 28px;
     }
-    .row label { cursor: pointer; }
-    input[type="checkbox"] { cursor: pointer; }
+    .row {
+      border-bottom: 1px solid var(--border);
+    }
+    .row label {
+      flex: 1;
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* ── toggle (checkbox styled) ── */
+    input[type="checkbox"] {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 32px;
+      height: 18px;
+      border-radius: 9px;
+      background: var(--track-bg);
+      border: none;
+      cursor: pointer;
+      position: relative;
+      flex-shrink: 0;
+      transition: background .15s;
+    }
+    input[type="checkbox"]::after {
+      content: '';
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      top: 2px;
+      left: 2px;
+      transition: transform .15s;
+      box-shadow: 0 1px 2px rgba(0,0,0,.25);
+    }
+    input[type="checkbox"]:checked {
+      background: #3b82f6;
+    }
+    input[type="checkbox"]:checked::after {
+      transform: translateX(14px);
+    }
+
+    /* ── select / number / text inputs ── */
+    select,
     input[type="number"],
-    input[type="text"],
-    select {
-      font-size: 0.9rem;
-      padding: 2px 4px;
+    input[type="text"] {
+      font-size: 12px;
+      font-family: inherit;
+      padding: 4px 8px;
       background: var(--input-bg);
       color: var(--text);
       border: 1px solid var(--input-border);
-      border-radius: 3px;
+      border-radius: 6px;
+      outline: none;
+      transition: border-color .15s;
     }
-    input[type="number"] { width: 52px; }
-    input[type="number"]:disabled { opacity: 0.4; }
-    .unit { font-size: 0.85rem; color: var(--muted); }
+    select:focus,
+    input[type="number"]:focus,
+    input[type="text"]:focus {
+      border-color: var(--input-focus);
+    }
+    input[type="number"] { width: 56px; text-align: center; }
+    input[type="number"]:disabled { opacity: 0.35; }
+    input[type="text"] { width: 96px; }
+    .unit { font-size: 11px; color: var(--muted); }
 
     /* ── dual range slider ── */
     .dual-range {
       position: relative;
-      padding: 2px 0 14px;
+      padding: 6px 0 18px;
+      margin-top: 4px;
     }
     .dual-range__values {
       display: flex;
       justify-content: space-between;
-      font-size: 0.8rem;
-      margin-bottom: 4px;
+      font-size: 11px;
+      margin-bottom: 6px;
     }
-    .warning-label { color: var(--warning-text); }
-    .danger-label  { color: var(--danger-text); }
+    .warning-label { color: var(--warning-text); font-weight: 500; }
+    .danger-label  { color: var(--danger-text);  font-weight: 500; }
     .dual-range__track {
       position: relative;
-      height: 6px;
+      height: 5px;
       border-radius: 3px;
       background: var(--track-bg);
-      margin: 8px 0;
+      margin: 10px 0;
     }
     .dual-range__fill {
       position: absolute;
@@ -109,9 +206,9 @@
     .zero-mark {
       position: absolute;
       left: 50%;
-      top: -4px;
-      bottom: -4px;
-      width: 2px;
+      top: -5px;
+      bottom: -5px;
+      width: 1px;
       background: var(--zero-mark);
       transform: translateX(-50%);
       pointer-events: none;
@@ -119,10 +216,10 @@
     .zero-mark::after {
       content: '0';
       position: absolute;
-      top: calc(100% + 4px);
+      top: calc(100% + 5px);
       left: 50%;
       transform: translateX(-50%);
-      font-size: 0.72rem;
+      font-size: 10px;
       color: var(--zero-label);
     }
     .dual-range input[type="range"] {
@@ -138,120 +235,140 @@
       background: transparent;
       outline: none;
       border: none;
-      height: 6px;
+      height: 5px;
     }
     .dual-range input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       pointer-events: all;
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       border-radius: 50%;
       background: var(--thumb-bg);
-      border: 2px solid var(--thumb-border);
+      border: 1.5px solid var(--thumb-border);
       cursor: pointer;
-      box-shadow: 0 1px 3px rgba(0,0,0,.3);
+      box-shadow: 0 1px 4px rgba(0,0,0,.2);
+      transition: box-shadow .15s;
+    }
+    .dual-range input[type="range"]::-webkit-slider-thumb:hover {
+      box-shadow: 0 1px 6px rgba(0,0,0,.35);
     }
     .dual-range input[type="range"]::-webkit-slider-runnable-track {
       background: transparent;
-      height: 6px;
+      height: 5px;
     }
 
+    /* ── toast ── */
+    @keyframes toast-in  { from { opacity:0; transform:translateX(-50%) translateY(6px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+    @keyframes toast-out { from { opacity:1; } to { opacity:0; } }
     #status {
       position: fixed;
-      bottom: 14px;
+      bottom: 18px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0,0,0,0.72);
+      background: #16a34a;
       color: #fff;
-      font-size: 0.82rem;
-      padding: 5px 14px;
-      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 7px 20px;
+      border-radius: 20px;
       white-space: nowrap;
-      visibility: hidden;
       pointer-events: none;
+      letter-spacing: .02em;
+      box-shadow: 0 4px 14px rgba(22,163,74,.4);
+      display: none;
+    }
+    #status.show {
+      display: block;
+      animation: toast-in .18s ease forwards;
+    }
+    #status.hide {
+      animation: toast-out .25s ease forwards;
     }
   </style>
 </head>
 <body>
-  <section>
-    <h2>5-Hour Window</h2>
-    <div class="row">
-      <input type="checkbox" id="showHour5">
-      <label for="showHour5">Show</label>
-    </div>
-    <div class="row">
-      <input type="checkbox" id="showRemainHour5">
-      <label for="showRemainHour5">Show remaining time</label>
-    </div>
-    <div class="dual-range" id="hour5Range">
-      <div class="dual-range__values">
-        <span class="warning-label">Warning: <b>0</b>% over</span>
-        <span class="danger-label">Danger: <b>10</b>% over</span>
+  <div class="layout">
+    <section id="sec-hour5">
+      <h2>5-Hour Window</h2>
+      <div class="row">
+        <label for="showHour5">Show</label>
+        <input type="checkbox" id="showHour5">
       </div>
-      <div class="dual-range__track">
-        <div class="dual-range__fill"></div>
-        <span class="zero-mark"></span>
+      <div class="row">
+        <label for="showRemainHour5">Show remaining time</label>
+        <input type="checkbox" id="showRemainHour5">
       </div>
-      <input type="range" class="warning-input" min="-50" max="50" value="0">
-      <input type="range" class="danger-input"  min="-50" max="50" value="10">
-    </div>
-  </section>
+      <div class="dual-range" id="hour5Range">
+        <div class="dual-range__values">
+          <span class="warning-label">Warning: <b>0</b>% over</span>
+          <span class="danger-label">Danger: <b>10</b>% over</span>
+        </div>
+        <div class="dual-range__track">
+          <div class="dual-range__fill"></div>
+          <span class="zero-mark"></span>
+        </div>
+        <input type="range" class="warning-input" min="-50" max="50" value="0">
+        <input type="range" class="danger-input"  min="-50" max="50" value="10">
+      </div>
+    </section>
 
-  <section>
-    <h2>7-Day Window</h2>
-    <div class="row">
-      <input type="checkbox" id="showDay7">
-      <label for="showDay7">Show</label>
-    </div>
-    <div class="row">
-      <input type="checkbox" id="showRemainDay7">
-      <label for="showRemainDay7">Show remaining time</label>
-    </div>
-    <div class="dual-range" id="day7Range">
-      <div class="dual-range__values">
-        <span class="warning-label">Warning: <b>0</b>% over</span>
-        <span class="danger-label">Danger: <b>10</b>% over</span>
+    <section id="sec-general">
+      <h2>General</h2>
+      <div class="rows">
+        <div class="row">
+          <label for="decimalPlaces">Decimal places</label>
+          <select id="decimalPlaces">
+            <option value="0">0</option>
+            <option value="1">1</option>
+            <option value="2" selected>2</option>
+            <option value="3">3</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="durationStyle">Duration style</label>
+          <select id="durationStyle">
+            <option value="narrow">Narrow (3d 4h)</option>
+            <option value="short" selected>Short (3 days 4 hr.)</option>
+            <option value="long">Long (3 days 4 hours)</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="percentFormat">Percent format</label>
+          <input type="text" id="percentFormat" value="{}%">
+        </div>
+        <div class="row">
+          <label for="enableRefresh">Auto-refresh</label>
+          <input type="checkbox" id="enableRefresh">
+          <input type="number" id="refreshMinutes" min="1" max="60" value="5" disabled>
+          <span class="unit">min</span>
+        </div>
       </div>
-      <div class="dual-range__track">
-        <div class="dual-range__fill"></div>
-        <span class="zero-mark"></span>
-      </div>
-      <input type="range" class="warning-input" min="-50" max="50" value="0">
-      <input type="range" class="danger-input"  min="-50" max="50" value="10">
-    </div>
-  </section>
+    </section>
 
-  <section>
-    <h2>General</h2>
-    <div class="row">
-      <label for="decimalPlaces">Decimal places</label>
-      <select id="decimalPlaces">
-        <option value="0">0</option>
-        <option value="1">1</option>
-        <option value="2" selected>2</option>
-        <option value="3">3</option>
-      </select>
-    </div>
-    <div class="row">
-      <label for="durationStyle">Duration style</label>
-      <select id="durationStyle">
-        <option value="narrow">Narrow (3d 4h)</option>
-        <option value="short" selected>Short (3 days 4 hr.)</option>
-        <option value="long">Long (3 days 4 hours)</option>
-      </select>
-    </div>
-    <div class="row">
-      <label for="percentFormat">Percent format</label>
-      <input type="text" id="percentFormat" value="{}%" style="width:100px;">
-      <span class="unit">{} = value</span>
-    </div>
-    <div class="row">
-      <input type="checkbox" id="enableRefresh">
-      <label for="enableRefresh">Auto-refresh every</label>
-      <input type="number" id="refreshMinutes" min="1" max="60" value="5" disabled>
-      <span class="unit">min</span>
-    </div>
-  </section>
+    <section id="sec-day7">
+      <h2>7-Day Window</h2>
+      <div class="row">
+        <label for="showDay7">Show</label>
+        <input type="checkbox" id="showDay7">
+      </div>
+      <div class="row">
+        <label for="showRemainDay7">Show remaining time</label>
+        <input type="checkbox" id="showRemainDay7">
+      </div>
+      <div class="dual-range" id="day7Range">
+        <div class="dual-range__values">
+          <span class="warning-label">Warning: <b>0</b>% over</span>
+          <span class="danger-label">Danger: <b>10</b>% over</span>
+        </div>
+        <div class="dual-range__track">
+          <div class="dual-range__fill"></div>
+          <span class="zero-mark"></span>
+        </div>
+        <input type="range" class="warning-input" min="-50" max="50" value="0">
+        <input type="range" class="danger-input"  min="-50" max="50" value="10">
+      </div>
+    </section>
+  </div>
 
   <div id="status"></div>
   <script src="options.js"></script>

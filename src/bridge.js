@@ -9,9 +9,18 @@ const defaults = {
   refreshInterval: 0,
 };
 
-chrome.storage.sync.get(defaults, (settings) => {
-  window.dispatchEvent(new CustomEvent("tempoc:settings", { detail: settings }));
-});
+function dispatchSettings() {
+  if (location.pathname !== "/settings/usage") return;
+  chrome.storage.sync.get(defaults, (settings) => {
+    window.dispatchEvent(new CustomEvent("tempoc:settings", { detail: settings }));
+  });
+}
+
+// 初期ロード
+dispatchSettings();
+
+// SPA ナビゲーションで usage ページに来たとき再初期化
+window.addEventListener("tempoc:navigate", dispatchSettings);
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "sync") return;

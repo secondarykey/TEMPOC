@@ -2,19 +2,25 @@
   "manifest_version": 3,
   "name": "TEMPOC",
   "version": "0.0.0",
+  "icons": {
+    "16":  "tempoc.png",
+    "32":  "tempoc.png",
+    "48":  "tempoc.png",
+    "128": "tempoc.png"
+  },
   "permissions": ["scripting", "storage"],
-  "host_permissions": ["https://claude.ai/settings/usage"],
+  "host_permissions": ["https://claude.ai/*"],
   "options_ui": {
     "page": "options.html",
     "open_in_tab": false
   },
   "content_scripts": [
     {
-      "matches": ["https://claude.ai/settings/usage"],
+      "matches": ["https://claude.ai/*"],
       "js": ["bridge.js"]
     },
     {
-      "matches": ["https://claude.ai/settings/usage"],
+      "matches": ["https://claude.ai/*"],
       "js": ["content.js"],
       "world": "MAIN"
     }

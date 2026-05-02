@@ -90,9 +90,12 @@ function redraw(elm, obj, dangerAt, warningAt) {
 
   const val = obj.utilization;
   const now = new Date();
+
+  const notStarted = obj.resets_at === null;
   const end = new Date(obj.resets_at);
 
   const start = new Date(end);
+
   if (elm.id === Day7ProgressElementId) {
     start.setDate(end.getDate() - 7);
   } else {
@@ -114,7 +117,7 @@ function redraw(elm, obj, dangerAt, warningAt) {
     suffix = " (" + df.format(duration) + ")";
   }
 
-  divs[0].children[0].textContent = end.toLocaleString(locale, {
+  divs[0].children[0].textContent = notStarted ? "" : end.toLocaleString(locale, {
     month: 'numeric',
     day: 'numeric',
     hour: 'numeric',
@@ -123,7 +126,7 @@ function redraw(elm, obj, dangerAt, warningAt) {
   }) + suffix;
 
   const bar = divs[1].children[0].children[0].children[0];
-  bar.style.width = percent + "%";
+  bar.style.width = notStarted ? "0%" : percent + "%";
   bar.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
 
   const diff = val - percent;
@@ -135,7 +138,8 @@ function redraw(elm, obj, dangerAt, warningAt) {
     bar.classList.add("bg-fill-accent");
   }
 
-  divs[1].children[1].textContent = percentFormat.replace('{}', percent.toFixed(decimalPlaces));
+  divs[1].children[1].textContent = 
+        notStarted ? "" : percentFormat.replace('{}', percent.toFixed(decimalPlaces));
 
   return true;
 }

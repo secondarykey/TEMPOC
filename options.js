@@ -45,7 +45,9 @@ function getCurrentSettings() {
 function broadcast() {
   const settings = getCurrentSettings();
   chrome.tabs.query({ url: "https://claude.ai/settings/usage" }, (tabs) => {
-    tabs.forEach(tab => chrome.tabs.sendMessage(tab.id, settings));
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, settings, () => void chrome.runtime.lastError);
+    });
   });
 }
 

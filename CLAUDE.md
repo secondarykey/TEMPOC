@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TEMPOC is a Manifest V3 Chrome extension that enhances the Claude.ai usage page (`https://claude.ai/settings/usage`) by adding progress bars showing weekly (7-day) and 5-hour usage window percentages.
+TEMPOC is a Manifest V3 Chrome extension that enhances the Claude.ai usage page (`https://claude.ai/settings/usage`) by adding progress bars showing elapsed time through the 7-day and 5-hour usage windows, with configurable color thresholds and an options page.
 
 ## Installation & Testing
 
@@ -19,31 +19,78 @@ To reload after changes, click the refresh icon on the extension card in `chrome
 
 ## Architecture
 
-The extension consists of two files:
+### Files
 
-- **`manifest.json`** — Declares the extension with `world: "MAIN"` so `content.js` runs in the page's JavaScript context (required to intercept `window.fetch`)
-- **`content.js`** — All extension logic in a single content script
+| File | World | Role |
+|---|---|---|
+| `manifest.json` | — | Extension declaration |
+| `bridge.js` | ISOLATED | Reads `chrome.storage` and forwards settings to MAIN world via custom events |
+| `content.js` | MAIN | Injects UI and intercepts `window.fetch` |
+| `options.html` / `options.js` | Options page | Settings UI |
+
+`content.js` must run in `world: "MAIN"` to monkey-patch `window.fetch`. Since MAIN world cannot access `chrome.storage` or `chrome.runtime`, `bridge.js` runs in ISOLATED world as a relay.
+
+### Settings flow
+
+```
+options.js
+  input event  → chrome.tabs.sendMessage → bridge.js: onMessage
+  change event → chrome.storage.sync.set → bridge.js: onChanged
+                                                ↓
+                              window.dispatchEvent("tempoc:settings-changed")
+                                                ↓
+                                        content.js: applySettings()
+```
+
+On initial page load, `bridge.js` reads storage and fires `tempoc:settings` (one-time).
 
 ### How content.js works
 
-**UI injection**: `createElement()` clones an existing progress bar element from Claude's DOM and inserts it after the original. Two elements are injected: one for the 7-day window (`day7Progress`) and one for the 5-hour window (`hour5Progress`). It uses `waitForElement()` with a `MutationObserver` to handle Claude's SPA navigation.
+**UI injection**: `createElement()` clones an existing Claude progress bar from the DOM and inserts it after the original. Two elements are injected: `day7Progress` (7-day window) and `hour5Progress` (5-hour window). `waitForElement()` uses a `MutationObserver` to handle Claude's SPA navigation.
 
-**Data extraction**: `window.fetch` is monkey-patched to intercept two API endpoints:
-- `/api/organizations/[id]/usage` — returns `seven_day` and `five_hour` objects with `utilization` (percentage used) and `resets_at` (ISO timestamp)
-- `/api/account_profile` — returns `locale` for localized date/duration formatting
+**Data extraction**: `window.fetch` is monkey-patched to intercept:
+- `/api/organizations/[id]/usage` — returns `seven_day` and `five_hour` objects with `utilization` (%) and `resets_at` (ISO timestamp)
+- `/api/account_profile` — returns `locale` for localized formatting
 
-**Rendering** (`redraw()`): Computes elapsed time percentage through the current window, updates the cloned progress bar's width, and color-codes it:
-- `bg-fill-danger` — usage exceeds time elapsed by >10%
-- `bg-fill-warning` — usage exceeds time elapsed by 0–10%
-- `bg-fill-accent` — usage is at or below time elapsed
+**Rendering** (`redraw(elm, obj, dangerAt, warningAt)`): Computes elapsed time percentage through the window, updates bar width, and color-codes using Claude's own CSS classes:
+- `bg-fill-danger` — `(utilization - elapsed%) > dangerAt`
+- `bg-fill-warning` — `(utilization - elapsed%) > warningAt`
+- `bg-fill-accent` — otherwise
 
-The 7-day bar also shows remaining time via `Intl.DurationFormat`. Locale is set from the account profile API response, falling back to `document.documentElement.lang`.
+### Settings reference
+
+All settings are stored in `chrome.storage.sync`. Defaults are defined identically in both `bridge.js` and `options.js`.
+
+| Key | Default | Description |
+|---|---|---|
+| `showDay7` | `true` | Show 7-day progress bar |
+| `showHour5` | `true` | Show 5-hour progress bar |
+| `day7Danger` / `day7Warning` | `10` / `0` | Color thresholds for 7-day bar (-50–50) |
+| `hour5Danger` / `hour5Warning` | `10` / `0` | Color thresholds for 5-hour bar (-50–50) |
+| `showRemainDay7` | `true` | Show remaining time on 7-day bar |
+| `showRemainHour5` | `false` | Show remaining time on 5-hour bar |
+| `decimalPlaces` | `2` | Percentage decimal places (0–3) |
+| `durationStyle` | `'short'` | `Intl.DurationFormat` style: `narrow`/`short`/`long` |
+| `percentFormat` | `'{}%'` | Display format; `{}` is replaced with the number |
+| `refreshInterval` | `0` | Auto-refresh interval in minutes (0 = disabled) |
 
 ### Key DOM selectors
 
 These CSS path selectors target Claude's existing progress bar sections and are fragile — they will break if Claude changes its page structure:
 
 ```js
-const Day7ElementPATH = "main > div > div > div > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
+const Day7ElementPATH  = "main > div > div > div > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
 const Hour5ElementPATH = "main > div > div > div > section:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div";
+```
+
+### Colors
+
+Theme colors are defined as CSS variables in `options.html` and used in `options.js` for the dual-range slider gradient. The progress bar in `content.js` uses Claude's own CSS classes (`bg-fill-danger`, `bg-fill-warning`, `bg-fill-accent`) for danger/warning/normal states.
+
+```css
+:root {
+  --color-accent:  #7dd3fc;
+  --color-warning: #fbbf24;
+  --color-danger:  #ef4444;
+}
 ```

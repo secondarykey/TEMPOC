@@ -12,7 +12,7 @@ There is no build step. To install for development:
 
 1. Open `chrome://extensions/` in Chrome
 2. Enable "Developer mode"
-3. Click "Load unpacked" and select this directory
+3. Click "Load unpacked" and select the **`src/`** directory
 4. Visit `https://claude.ai/settings/usage` to see the extension in action
 
 To reload after changes, click the refresh icon on the extension card in `chrome://extensions/`.
@@ -21,12 +21,15 @@ To reload after changes, click the refresh icon on the extension card in `chrome
 
 ### Files
 
+Extension files live in `src/`. The repo root contains only `README.md` and `CLAUDE.md`.
+
 | File | World | Role |
 |---|---|---|
-| `manifest.json` | — | Extension declaration |
-| `bridge.js` | ISOLATED | Reads `chrome.storage` and forwards settings to MAIN world via custom events |
-| `content.js` | MAIN | Injects UI and intercepts `window.fetch` |
-| `options.html` / `options.js` | Options page | Settings UI |
+| `src/manifest.json` | — | Extension declaration |
+| `src/bridge.js` | ISOLATED | Reads `chrome.storage` and forwards settings to MAIN world via custom events |
+| `src/content.js` | MAIN | Injects UI and intercepts `window.fetch` |
+| `src/options.html` / `src/options.js` | Options page | Settings UI |
+| `src/tempoc.png` | — | Extension icon |
 
 `content.js` must run in `world: "MAIN"` to monkey-patch `window.fetch`. Since MAIN world cannot access `chrome.storage` or `chrome.runtime`, `bridge.js` runs in ISOLATED world as a relay.
 

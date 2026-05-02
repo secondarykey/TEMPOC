@@ -1,5 +1,7 @@
 const Day7ProgressElementId = "day7Progress";
 const Day7ElementPATH = "main > div > div > div > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
+const Day7ElementBarPATH = Day7ElementPATH + " > div:nth-child(2) > div > div";
+
 var day7Elm = undefined;
 var day7Obj = undefined;
 var day7Danger = 10;
@@ -7,6 +9,7 @@ var day7Warning = 0;
 
 const Hour5ProgressElementId = "hour5Progress";
 const Hour5ElementPATH = "main > div > div > div > section:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div"
+const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div";
 var hour5Elm = undefined;
 var hour5Obj = undefined;
 var hour5Danger = 10;
@@ -125,21 +128,29 @@ function redraw(elm, obj, dangerAt, warningAt) {
     weekday: 'short'
   }) + suffix;
 
+  // 経過時間バー（TEMPOC 注入）: 幅のみ更新、常に中立色
   const bar = divs[1].children[0].children[0].children[0];
   bar.style.width = notStarted ? "0%" : percent + "%";
-  bar.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
+  bar.classList.remove("bg-fill-danger", "bg-fill-warning");
+  bar.classList.add("bg-fill-accent");
 
-  const diff = val - percent;
-  if (diff > dangerAt) {
-    bar.classList.add("bg-fill-danger");
-  } else if (diff > warningAt) {
-    bar.classList.add("bg-fill-warning");
-  } else {
-    bar.classList.add("bg-fill-accent");
+  divs[1].children[1].textContent =
+    notStarted ? "" : percentFormat.replace('{}', percent.toFixed(decimalPlaces));
+
+  // 使用率バー（Claude 本来のバー）: 閾値に応じて色付け
+  const barPath = (elm.id === Day7ProgressElementId) ? Day7ElementBarPATH : Hour5ElementBarPATH;
+  const origBar = document.querySelector(barPath);
+  if (origBar) {
+    origBar.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
+    const diff = val - percent;
+    if (diff > dangerAt) {
+      origBar.classList.add("bg-fill-danger");
+    } else if (diff > warningAt) {
+      origBar.classList.add("bg-fill-warning");
+    } else {
+      origBar.classList.add("bg-fill-accent");
+    }
   }
-
-  divs[1].children[1].textContent = 
-        notStarted ? "" : percentFormat.replace('{}', percent.toFixed(decimalPlaces));
 
   return true;
 }

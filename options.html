@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TEMPOC 設定</title>
+  <title>TEMPOC Settings</title>
   <style>
     :root {
       --color-accent:  #7dd3fc;
@@ -12,37 +12,49 @@
     }
     body {
       font-family: sans-serif;
-      padding: 16px;
+      padding: 12px;
       min-width: 300px;
     }
     section {
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
     h2 {
-      font-size: 0.95rem;
-      margin: 0 0 10px;
-      padding-bottom: 4px;
+      font-size: 0.9rem;
+      margin: 0 0 6px;
+      padding-bottom: 3px;
       border-bottom: 1px solid #ddd;
     }
-    .show-row {
+    .row {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 12px;
-      font-size: 0.9rem;
-      cursor: pointer;
+      margin-bottom: 5px;
+      font-size: 0.88rem;
     }
+    .row label { cursor: pointer; }
+    input[type="checkbox"] { cursor: pointer; }
+    input[type="number"] {
+      width: 52px;
+      padding: 2px 4px;
+      font-size: 0.9rem;
+    }
+    input[type="number"]:disabled { opacity: 0.4; }
+    select {
+      font-size: 0.9rem;
+      padding: 2px 4px;
+    }
+    .unit { font-size: 0.85rem; color: #555; }
 
     /* ── dual range slider ── */
     .dual-range {
       position: relative;
-      padding: 4px 0 16px;
+      padding: 2px 0 14px;
     }
     .dual-range__values {
       display: flex;
       justify-content: space-between;
-      font-size: 0.82rem;
-      margin-bottom: 8px;
+      font-size: 0.8rem;
+      margin-bottom: 4px;
     }
     .warning-label { color: #b45309; }
     .danger-label  { color: #b91c1c; }
@@ -51,7 +63,7 @@
       height: 6px;
       border-radius: 3px;
       background: #d1d5db;
-      margin: 10px 0;
+      margin: 8px 0;
     }
     .dual-range__fill {
       position: absolute;
@@ -109,23 +121,36 @@
     }
 
     #status {
-      margin-top: 8px;
-      font-size: 0.85rem;
-      color: green;
+      position: fixed;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.72);
+      color: #fff;
+      font-size: 0.82rem;
+      padding: 5px 14px;
+      border-radius: 4px;
+      white-space: nowrap;
       visibility: hidden;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
   <section>
-    <h2>5時間ウィンドウ</h2>
-    <label class="show-row">
-      <input type="checkbox" id="showHour5"> 表示する
-    </label>
+    <h2>5-Hour Window</h2>
+    <div class="row">
+      <input type="checkbox" id="showHour5">
+      <label for="showHour5">Show</label>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="showRemainHour5">
+      <label for="showRemainHour5">Show remaining time</label>
+    </div>
     <div class="dual-range" id="hour5Range">
       <div class="dual-range__values">
-        <span class="warning-label">警告: <b>0</b>% 超過</span>
-        <span class="danger-label">危険: <b>10</b>% 超過</span>
+        <span class="warning-label">Warning: <b>0</b>% over</span>
+        <span class="danger-label">Danger: <b>10</b>% over</span>
       </div>
       <div class="dual-range__track">
         <div class="dual-range__fill"></div>
@@ -137,14 +162,19 @@
   </section>
 
   <section>
-    <h2>7日間ウィンドウ</h2>
-    <label class="show-row">
-      <input type="checkbox" id="showDay7"> 表示する
-    </label>
+    <h2>7-Day Window</h2>
+    <div class="row">
+      <input type="checkbox" id="showDay7">
+      <label for="showDay7">Show</label>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="showRemainDay7">
+      <label for="showRemainDay7">Show remaining time</label>
+    </div>
     <div class="dual-range" id="day7Range">
       <div class="dual-range__values">
-        <span class="warning-label">警告: <b>0</b>% 超過</span>
-        <span class="danger-label">危険: <b>10</b>% 超過</span>
+        <span class="warning-label">Warning: <b>0</b>% over</span>
+        <span class="danger-label">Danger: <b>10</b>% over</span>
       </div>
       <div class="dual-range__track">
         <div class="dual-range__fill"></div>
@@ -152,6 +182,38 @@
       </div>
       <input type="range" class="warning-input" min="-50" max="50" value="0">
       <input type="range" class="danger-input"  min="-50" max="50" value="10">
+    </div>
+  </section>
+
+  <section>
+    <h2>General</h2>
+    <div class="row">
+      <label for="decimalPlaces">Decimal places</label>
+      <select id="decimalPlaces">
+        <option value="0">0</option>
+        <option value="1">1</option>
+        <option value="2" selected>2</option>
+        <option value="3">3</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="durationStyle">Duration style</label>
+      <select id="durationStyle">
+        <option value="narrow">Narrow (3d 4h)</option>
+        <option value="short" selected>Short (3 days 4 hr.)</option>
+        <option value="long">Long (3 days 4 hours)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label for="percentFormat">Percent format</label>
+      <input type="text" id="percentFormat" value="{}%" style="width:100px;padding:2px 4px;font-size:0.9rem;">
+      <span class="unit">{} = value</span>
+    </div>
+    <div class="row">
+      <input type="checkbox" id="enableRefresh">
+      <label for="enableRefresh">Auto-refresh every</label>
+      <input type="number" id="refreshMinutes" min="1" max="60" value="5" disabled>
+      <span class="unit">min</span>
     </div>
   </section>
 

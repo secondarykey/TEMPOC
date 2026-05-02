@@ -13,6 +13,13 @@ var hour5Danger = 10;
 var hour5Warning = 0;
 
 var locale = undefined;
+var decimalPlaces = 2;
+var durationStyle = 'short';
+var showRemainDay7 = true;
+var showRemainHour5 = false;
+var percentFormat = '{}%';
+var refreshInterval = 0;
+var refreshTimer = null;
 
 function waitForElement(selector) {
   return new Promise((resolve) => {
@@ -100,9 +107,10 @@ function redraw(elm, obj, dangerAt, warningAt) {
   const duration = createDuration(remain);
   const divs = elm.querySelectorAll(":scope > div");
 
+  const showRemain = (elm.id === Day7ProgressElementId) ? showRemainDay7 : showRemainHour5;
   var suffix = "";
-  if (elm.id === Day7ProgressElementId) {
-    const df = new Intl.DurationFormat(locale, { style: 'short' });
+  if (showRemain) {
+    const df = new Intl.DurationFormat(locale, { style: durationStyle });
     suffix = " (" + df.format(duration) + ")";
   }
 
@@ -127,11 +135,23 @@ function redraw(elm, obj, dangerAt, warningAt) {
     bar.classList.add("bg-fill-accent");
   }
 
-  divs[1].children[1].textContent = percent.toFixed(2) + "%";
+  divs[1].children[1].textContent = percentFormat.replace('{}', percent.toFixed(decimalPlaces));
 
   return true;
 }
 
+function setupRefreshTimer() {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+  if (refreshInterval > 0) {
+    refreshTimer = setInterval(() => {
+      redraw(day7Elm, day7Obj, day7Danger, day7Warning);
+      redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning);
+    }, refreshInterval * 60 * 1000);
+  }
+}
 
 const { fetch: originalFetch } = window;
 window.fetch = async (...args) => {
@@ -155,9 +175,11 @@ window.fetch = async (...args) => {
     locale = document.documentElement.lang;
 
     day7Obj = data.seven_day;
+    console.debug(day7Obj);
     redraw(day7Elm, day7Obj, day7Danger, day7Warning);
 
     hour5Obj = data.five_hour;
+    console.debug(hour5Obj);
     redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning);
 
   }).catch(err => {
@@ -169,10 +191,17 @@ window.fetch = async (...args) => {
 function applySettings(settings) {
   const { showDay7, showHour5 } = settings;
 
-  day7Danger  = settings.day7Danger  ?? 10;
-  day7Warning = settings.day7Warning ?? 0;
-  hour5Danger  = settings.hour5Danger  ?? 10;
-  hour5Warning = settings.hour5Warning ?? 0;
+  day7Danger      = settings.day7Danger      ?? 10;
+  day7Warning     = settings.day7Warning     ?? 0;
+  hour5Danger     = settings.hour5Danger     ?? 10;
+  hour5Warning    = settings.hour5Warning    ?? 0;
+  showRemainDay7  = settings.showRemainDay7  ?? true;
+  showRemainHour5 = settings.showRemainHour5 ?? false;
+  decimalPlaces   = settings.decimalPlaces   ?? 2;
+  durationStyle   = settings.durationStyle   ?? 'short';
+  percentFormat   = settings.percentFormat   ?? '{}%';
+  refreshInterval = settings.refreshInterval ?? 0;
+  setupRefreshTimer();
 
   if (showDay7) {
     if (!day7Elm) {

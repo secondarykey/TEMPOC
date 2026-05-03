@@ -41,6 +41,10 @@ Click the extension icon → **Options** to configure:
 
 The options screen is in English only, but dates and durations are displayed in the language configured in your Claude account.
 
+## Website
+
+https://secondarykey.github.io/TEMPOC/
+
 ## Claude
 
 This extension is an unofficial tool and is not affiliated with or endorsed by Anthropic or Claude.

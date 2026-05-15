@@ -7,6 +7,7 @@ const defaults = {
   durationStyle: 'short',
   percentFormat: '{}%',
   refreshInterval: 0,
+  utilizationWarning: 98, utilizationDanger: 100,
 };
 
 function dispatchSettings() {
@@ -16,8 +17,8 @@ function dispatchSettings() {
   });
 }
 
-// 初期ロード
-dispatchSettings();
+// content.js の準備完了を待ってから設定を送る
+window.addEventListener("tempoc:ready", dispatchSettings);
 
 // SPA ナビゲーションで usage ページに来たとき再初期化
 window.addEventListener("tempoc:navigate", dispatchSettings);

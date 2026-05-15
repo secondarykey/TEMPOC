@@ -215,6 +215,8 @@
       font-size: 10px;
       color: var(--zero-label);
     }
+    .dual-range--util .dual-range__track::before { content: '0'; }
+    .dual-range--util .dual-range__track::after  { content: '100'; }
     .dual-range__fill {
       position: absolute;
       inset: 0;
@@ -418,6 +420,20 @@
             <span class="unit">min</span>
           </div>
           <div class="help-text">Refreshes display independently of API calls</div>
+        </div>
+        <div class="row">
+          <label>Utilization floor</label>
+        </div>
+        <div class="dual-range dual-range--util" id="utilizationRange">
+          <div class="dual-range__values">
+            <span class="warning-label">Warning: <b>98</b>%</span>
+            <span class="danger-label">Danger: <b>100</b>%</span>
+          </div>
+          <div class="dual-range__track">
+            <div class="dual-range__fill"></div>
+          </div>
+          <input type="range" class="warning-input" min="0" max="100" value="98">
+          <input type="range" class="danger-input"  min="0" max="100" value="100">
         </div>
       </div>
     </section>

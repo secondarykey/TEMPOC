@@ -25,6 +25,30 @@ var showRemainHour5 = false;
 var percentFormat = '{}%';
 var refreshInterval = 0;
 var refreshTimer = null;
+var utilizationWarning = 98;
+var utilizationDanger  = 100;
+
+// Desired color state — enforced against Claude's React re-renders
+var day7BarColor = null;
+var hour5BarColor = null;
+var day7BarObserver = null;
+var hour5BarObserver = null;
+
+function makeBarObserver(barPath, getColor) {
+  const bar = document.querySelector(barPath);
+  if (!bar) return null;
+  const obs = new MutationObserver(() => {
+    const desired = getColor();
+    if (!desired) return;
+    const b = document.querySelector(barPath);
+    if (b && !b.classList.contains(desired)) {
+      b.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
+      b.classList.add(desired);
+    }
+  });
+  obs.observe(bar, { attributes: true, attributeFilter: ["class"] });
+  return obs;
+}
 
 function waitForElement(selector) {
   return new Promise((resolve) => {
@@ -93,6 +117,13 @@ function createDuration(ms) {
   };
 }
 
+function applyBarColor(barPath, colorClass) {
+  const bar = document.querySelector(barPath);
+  if (!bar) return;
+  bar.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
+  bar.classList.add(colorClass);
+}
+
 function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
   if (elm === undefined) return false;
   if (obj === undefined) return false;
@@ -143,22 +174,46 @@ function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
 
   // 使用率バー（Claude 本来のバー）: 閾値に応じて色付け
   const barPath = (elm.id === Day7ProgressElementId) ? Day7ElementBarPATH : Hour5ElementBarPATH;
-  const origBar = document.querySelector(barPath);
-  if (origBar) {
-    origBar.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
-    if (colorEnabled) {
+
+  let colorClass;
+  if (colorEnabled) {
+    if (val >= utilizationDanger) {
+      colorClass = "bg-fill-danger";
+    } else {
       const diff = val - percent;
       if (diff > dangerAt) {
-        origBar.classList.add("bg-fill-danger");
-      } else if (diff > warningAt) {
-        origBar.classList.add("bg-fill-warning");
+        colorClass = "bg-fill-danger";
+      } else if (diff > warningAt || val >= utilizationWarning) {
+        colorClass = "bg-fill-warning";
       } else {
-        origBar.classList.add("bg-fill-accent");
+        colorClass = "bg-fill-accent";
       }
-    } else {
-      origBar.classList.add("bg-fill-accent");
+    }
+    console.debug("[TEMPOC] redraw", elm.id, {
+      utilization: val,
+      elapsedPercent: percent.toFixed(2),
+      diff: (val - percent).toFixed(2),
+      dangerAt, warningAt,
+      color: colorClass,
+      resets_at: obj.resets_at,
+    });
+  } else {
+    colorClass = "bg-fill-accent";
+  }
+
+  // Store desired color and enforce via observer
+  if (elm.id === Day7ProgressElementId) {
+    day7BarColor = colorClass;
+    if (!day7BarObserver) {
+      day7BarObserver = makeBarObserver(barPath, () => day7BarColor);
+    }
+  } else {
+    hour5BarColor = colorClass;
+    if (!hour5BarObserver) {
+      hour5BarObserver = makeBarObserver(barPath, () => hour5BarColor);
     }
   }
+  applyBarColor(barPath, colorClass);
 
   return true;
 }
@@ -220,22 +275,24 @@ function applySettings(settings) {
   day7Warning       = settings.day7Warning       ?? 0;
   day7ColorEnabled  = settings.day7ColorEnabled  ?? true;
   if (!day7ColorEnabled) {
-    const b = document.querySelector(Day7ElementBarPATH);
-    if (b) { b.classList.remove("bg-fill-danger", "bg-fill-warning"); b.classList.add("bg-fill-accent"); }
+    day7BarColor = "bg-fill-accent";
+    applyBarColor(Day7ElementBarPATH, "bg-fill-accent");
   }
   hour5Danger       = settings.hour5Danger       ?? 10;
   hour5Warning      = settings.hour5Warning      ?? 0;
   hour5ColorEnabled = settings.hour5ColorEnabled ?? true;
   if (!hour5ColorEnabled) {
-    const b = document.querySelector(Hour5ElementBarPATH);
-    if (b) { b.classList.remove("bg-fill-danger", "bg-fill-warning"); b.classList.add("bg-fill-accent"); }
+    hour5BarColor = "bg-fill-accent";
+    applyBarColor(Hour5ElementBarPATH, "bg-fill-accent");
   }
   showRemainDay7  = settings.showRemainDay7  ?? true;
   showRemainHour5 = settings.showRemainHour5 ?? false;
   decimalPlaces   = settings.decimalPlaces   ?? 2;
   durationStyle   = settings.durationStyle   ?? 'short';
   percentFormat   = settings.percentFormat   ?? '{}%';
-  refreshInterval = settings.refreshInterval ?? 0;
+  refreshInterval    = settings.refreshInterval    ?? 0;
+  utilizationWarning = settings.utilizationWarning ?? 98;
+  utilizationDanger  = settings.utilizationDanger  ?? 100;
   setupRefreshTimer();
 
   if (showDay7) {
@@ -277,10 +334,17 @@ window.addEventListener("tempoc:settings-changed", (e) => {
   applySettings(e.detail);
 });
 
+// リスナー登録完了を bridge.js に通知して設定を要求する
+window.dispatchEvent(new CustomEvent("tempoc:ready"));
+
 // SPA ナビゲーション検知: DOM 参照をリセットして bridge.js に再初期化を促す
 function onNavigate() {
   day7Elm  = undefined;
   hour5Elm = undefined;
+  if (day7BarObserver)  { day7BarObserver.disconnect();  day7BarObserver  = null; }
+  if (hour5BarObserver) { hour5BarObserver.disconnect(); hour5BarObserver = null; }
+  day7BarColor  = null;
+  hour5BarColor = null;
   window.dispatchEvent(new CustomEvent("tempoc:navigate"));
 }
 

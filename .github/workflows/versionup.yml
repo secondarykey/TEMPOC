@@ -25,7 +25,17 @@ jobs:
         id: versionup
         run: python scripts/versionup.py
 
+      - name: Check for file changes
+        id: changes
+        run: |
+          if git diff --quiet version src/manifest.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Commit on release branch
+        if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -36,6 +46,7 @@ jobs:
           git push origin "$BRANCH"
 
       - name: Merge to main and clean up branch
+        if: steps.changes.outputs.changed == 'true'
         run: |
           BRANCH="release/v${{ steps.versionup.outputs.version }}"
           git checkout main
@@ -45,5 +56,10 @@ jobs:
 
       - name: Push tag
         run: |
-          git tag "v${{ steps.versionup.outputs.version }}"
-          git push origin "v${{ steps.versionup.outputs.version }}"
+          TAG="v${{ steps.versionup.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi

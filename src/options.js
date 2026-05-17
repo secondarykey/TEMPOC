@@ -21,6 +21,7 @@ const defaults = {
   durationStyle: 'short',
   percentFormat: '{}%',
   refreshInterval: 0,
+  utilizationWarning: 98, utilizationDanger: 100,
 };
 
 const cs = getComputedStyle(document.documentElement);
@@ -80,7 +81,9 @@ function getCurrentSettings() {
     decimalPlaces:   Number(decimalPlacesSel.value),
     durationStyle:   durationStyleSel.value,
     percentFormat:   percentFormatIn.value || '{}%',
-    refreshInterval: enableRefreshCb.checked ? Number(refreshMinutesIn.value) : 0,
+    refreshInterval:    enableRefreshCb.checked ? Number(refreshMinutesIn.value) : 0,
+    utilizationWarning: utilizationRange.getWarning(),
+    utilizationDanger:  utilizationRange.getDanger(),
   };
 }
 
@@ -105,21 +108,22 @@ function save() {
   });
 }
 
-function setupDualRange(containerId) {
+function setupDualRange(containerId, { min = -50, max = 50 } = {}) {
   const container    = document.getElementById(containerId);
   const warningInput = container.querySelector(".warning-input");
   const dangerInput  = container.querySelector(".danger-input");
   const fill         = container.querySelector(".dual-range__fill");
   const warningBold  = container.querySelector(".warning-label b");
   const dangerBold   = container.querySelector(".danger-label b");
+  const range        = max - min;
 
   function updateDisplay() {
     const w = Number(warningInput.value);
     const d = Number(dangerInput.value);
     warningBold.textContent = w;
     dangerBold.textContent  = d;
-    const wPct = w + 50;
-    const dPct = d + 50;
+    const wPct = ((w - min) / range) * 100;
+    const dPct = ((d - min) / range) * 100;
     fill.style.background =
       `linear-gradient(to right,` +
       ` ${COLOR_ACCENT} 0%, ${COLOR_ACCENT} ${wPct}%,` +
@@ -158,8 +162,9 @@ function setupDualRange(containerId) {
   };
 }
 
-const day7Range  = setupDualRange("day7Range");
-const hour5Range = setupDualRange("hour5Range");
+const day7Range         = setupDualRange("day7Range");
+const hour5Range        = setupDualRange("hour5Range");
+const utilizationRange  = setupDualRange("utilizationRange", { min: 0, max: 100 });
 
 enableRefreshCb.addEventListener("change", () => {
   refreshMinutesIn.disabled = !enableRefreshCb.checked;
@@ -198,5 +203,6 @@ chrome.storage.sync.get(defaults, (s) => {
   enableRefreshCb.checked   = s.refreshInterval > 0;
   refreshMinutesIn.value    = s.refreshInterval > 0 ? s.refreshInterval : 2;
   refreshMinutesIn.disabled = !enableRefreshCb.checked;
+  utilizationRange.setValues(s.utilizationWarning, s.utilizationDanger);
   updatePreview();
 });

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>TEMPOC</title>
+    <meta name="description" content="">
+
+<link rel="stylesheet" href="../assets/styles.css">
+  </head>
+  
+  <body>
+
+     <h1>TEMPOC のリリース作業について</h1>
+<p>GitHub Actions で対象ブランチのPRをマージすると 、バージョンアップ処理を行い、タグを作成、タグによってリリース作業を行います。</p>
+<h2>バージョンアップ</h2>
+<p>PRがマージされたら処理が開始します。</p>
+<ol>
+<li>version ファイルから発行するバージョンを推定</li>
+<li>version,manifest.json を編集</li>
+<li>別ブランチでコミットし、main に自動マージ</li>
+<li>タグ打ちを行う</li>
+</ol>
+<p>mainに自動マージする動作で、当バージョンアップが再度動作しないようにして欲しい。</p>
+<h3>バージョンの推定</h3>
+<p>version ファイルには、バージョンが書いてあるが、</p>
+<ul>
+<li>同じバージョンのタグがある場合、マイナーバージョンアップ</li>
+<li>タグがないバージョンは、その文字列をそのまま発行</li>
+</ul>
+<h2>リリース作業</h2>
+<p>タグ打ちで起動</p>
+<ol>
+<li>src部分 をzip にする（Chrome Extensionへのリリース）</li>
+<li>zipを登録したリリースを発行</li>
+</ol>
+<h2>参考動作</h2>
+<ul>
+<li>D:\Go\Projects\ego\github\workflows\versionup.yml</li>
+<li>D:\Go\Projects\ego\github\workflows\release.yml</li>
+</ul>
+<p>参考にしているyamlはGoが必要な為、Goをインストールしたり、Wailsをインストールしたり、必要なライブラリをインストールしているが、
+そこはインストールなしで、スクリプト（Python）で処理して欲しい。</p>
+<p>もしPythonを選択するなら、ファイルを作ってそれをキックして欲しい</p>
+
+
+
+  </body>
+
+</html>

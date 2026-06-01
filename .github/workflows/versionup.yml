@@ -45,17 +45,23 @@ jobs:
           git commit -m "chore: bump version to ${{ steps.versionup.outputs.version }} [skip ci]"
           git push origin "$BRANCH"
 
-      - name: Merge to main and clean up branch
+      - name: Create PR and merge to main
         if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           BRANCH="release/v${{ steps.versionup.outputs.version }}"
-          git checkout main
-          git merge --ff-only "$BRANCH"
-          git push origin main
-          git push origin --delete "$BRANCH"
+          VERSION="${{ steps.versionup.outputs.version }}"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore: bump version to $VERSION" \
+            --body "Automated version bump to $VERSION"
+          gh pr merge "$BRANCH" --merge --delete-branch
 
       - name: Push tag
+        if: steps.changes.outputs.changed == 'true'
         run: |
+          git checkout main
+          git pull origin main
           TAG="v${{ steps.versionup.outputs.version }}"
           if git rev-parse "$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."

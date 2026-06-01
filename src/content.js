@@ -1,16 +1,11 @@
 const Day7ProgressElementId = "day7Progress";
-const Day7ElementPATH = "main > div > div > div > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
-const Day7ElementBarPATH = Day7ElementPATH + " > div:nth-child(2) > div > div > div";
-
-var day7Elm = undefined;
-var day7Obj = undefined;
-var day7Danger = 10;
-var day7Warning = 0;
-var day7ColorEnabled = true;
-
 const Hour5ProgressElementId = "hour5Progress";
-const Hour5ElementPATH = "main > div > div > div > section:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div"
+
+const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:nth-child(2) > div:nth-child(2)';
+const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div";
 const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div > div";
+const Day7ElementPATH = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
+const Day7ElementBarPATH = Day7ElementPATH + " > div:nth-child(2) > div > div > div";
 var hour5Elm = undefined;
 var hour5Obj = undefined;
 var hour5Danger = 10;
@@ -353,3 +348,4 @@ const origReplace = history.replaceState.bind(history);
 history.pushState    = (...a) => { origPush(...a);    onNavigate(); };
 history.replaceState = (...a) => { origReplace(...a); onNavigate(); };
 window.addEventListener("popstate", onNavigate);
+window.addEventListener("hashchange", onNavigate);

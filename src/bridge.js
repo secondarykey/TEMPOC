@@ -10,8 +10,14 @@ const defaults = {
   utilizationWarning: 98, utilizationDanger: 100,
 };
 
+function isUsagePage() {
+  if (location.pathname === "/settings/usage") return true;
+  if (location.pathname === "/new" && location.hash === "#settings/usage") return true;
+  return false;
+}
+
 function dispatchSettings() {
-  if (location.pathname !== "/settings/usage") return;
+  if (!isUsagePage()) return;
   chrome.storage.sync.get(defaults, (settings) => {
     window.dispatchEvent(new CustomEvent("tempoc:settings", { detail: settings }));
   });

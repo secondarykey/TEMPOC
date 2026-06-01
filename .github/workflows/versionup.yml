@@ -6,6 +6,7 @@ on:
 
 jobs:
   versionup:
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -55,7 +56,8 @@ jobs:
           gh pr create --base main --head "$BRANCH" \
             --title "chore: bump version to $VERSION" \
             --body "Automated version bump to $VERSION"
-          gh pr merge "$BRANCH" --merge --delete-branch
+          gh pr merge "$BRANCH" --merge --delete-branch \
+            --subject "chore: bump version to $VERSION [skip ci]"
 
       - name: Push tag
         if: steps.changes.outputs.changed == 'true'

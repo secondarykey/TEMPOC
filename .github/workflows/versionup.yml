@@ -61,13 +61,16 @@ jobs:
 
       - name: Push tag
         if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          git checkout main
-          git pull origin main
           TAG="v${{ steps.versionup.outputs.version }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
+          if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
           else
-            git tag "$TAG"
-            git push origin "$TAG"
+            MERGE_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+            gh api "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/$TAG" \
+              -f sha="$MERGE_SHA"
+            echo "Created tag $TAG at $MERGE_SHA"
           fi

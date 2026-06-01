@@ -29,3 +29,4 @@ jobs:
           name: "TEMPOC v${{ steps.version.outputs.version }}"
           files: "tempoc-${{ steps.version.outputs.version }}.zip"
           generate_release_notes: true
+          draft: true

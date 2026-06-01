@@ -6,7 +6,7 @@ on:
 
 jobs:
   versionup:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: "!contains(github.event.head_commit.message, '[skip versionup]')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -43,7 +43,7 @@ jobs:
           BRANCH="release/v${{ steps.versionup.outputs.version }}"
           git checkout -b "$BRANCH"
           git add version src/manifest.json
-          git commit -m "chore: bump version to ${{ steps.versionup.outputs.version }} [skip ci]"
+          git commit -m "chore: bump version to ${{ steps.versionup.outputs.version }} [skip versionup]"
           git push origin "$BRANCH"
 
       - name: Create PR and merge to main
@@ -57,7 +57,7 @@ jobs:
             --title "chore: bump version to $VERSION" \
             --body "Automated version bump to $VERSION"
           gh pr merge "$BRANCH" --merge --delete-branch \
-            --subject "chore: bump version to $VERSION [skip ci]"
+            --subject "chore: bump version to $VERSION [skip versionup]"
 
       - name: Push tag
         if: steps.changes.outputs.changed == 'true'

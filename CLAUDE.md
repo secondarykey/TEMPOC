@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TEMPOC is a Manifest V3 Chrome extension that enhances the Claude.ai usage page (`https://claude.ai/settings/usage`) by adding progress bars showing elapsed time through the 7-day and 5-hour usage windows, with configurable color thresholds and an options page.
+TEMPOC is a Manifest V3 Chrome extension that enhances the Claude.ai usage page (`https://claude.ai/new#settings/usage`) by adding progress bars showing elapsed time through the 7-day and 5-hour usage windows, with configurable color thresholds and an options page.
 
 ## Installation & Testing
 
@@ -79,12 +79,15 @@ All settings are stored in `chrome.storage.sync`. Defaults are defined identical
 
 ### Key DOM selectors
 
-These CSS path selectors target Claude's existing progress bar sections and are fragile — they will break if Claude changes its page structure:
+These CSS path selectors target Claude's existing progress bar sections within the Settings dialog and are fragile — they will break if Claude changes its page structure:
 
 ```js
-const Day7ElementPATH  = "main > div > div > div > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
-const Hour5ElementPATH = "main > div > div > div > section:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div";
+const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:nth-child(2) > div:nth-child(2)';
+const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div";
+const Day7ElementPATH  = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
 ```
+
+The usage page is now rendered as a modal dialog at `https://claude.ai/new#settings/usage` (previously a full page at `/settings/usage`). Section 1 = "Current session" (5-hour window), Section 2 = "Weekly limits" (7-day window).
 
 ### Colors
 

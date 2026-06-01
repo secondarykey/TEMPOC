@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TEMPOC",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Displays elapsed-time progress bars for Claude's 7-day and 5-hour usage windows on the Claude usage page.",
   "author": "secondarykey",
   "homepage_url": "https://secondarykey.github.io/TEMPOC/",

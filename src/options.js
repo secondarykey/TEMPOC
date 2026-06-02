@@ -34,13 +34,13 @@ const PREVIEW_DURATION  = { days: 2, hours: 3, minutes: 45 };
 
 let detectedLocale = navigator.language;
 
-chrome.storage.session.get({ detectedLocale: navigator.language }, (s) => {
+chrome.storage.local.get({ detectedLocale: navigator.language }, (s) => {
   detectedLocale = s.detectedLocale;
   updatePreview();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "session" && changes.detectedLocale) {
+  if (area === "local" && changes.detectedLocale) {
     detectedLocale = changes.detectedLocale.newValue;
     updatePreview();
   }

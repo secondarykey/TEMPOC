@@ -1,7 +1,7 @@
 const Day7ProgressElementId = "day7Progress";
 const Hour5ProgressElementId = "hour5Progress";
 
-const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:nth-child(2) > div:nth-child(2)';
+const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child > div:nth-child(2)';
 const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div";
 const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div > div";
 const Day7ElementPATH = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
@@ -74,25 +74,45 @@ function waitForElement(selector) {
   });
 }
 
+const _createElementInFlight = {};
+
 async function createElement(id, path) {
   var prog = document.querySelector("#" + id);
   if (prog !== null) {
     return prog;
   }
 
-  var target = await waitForElement(path);
-  var cp = target.cloneNode(true);
+  // 並走する呼び出しが既にあれば同じ Promise を返して重複挿入を防ぐ
+  if (_createElementInFlight[id]) {
+    return _createElementInFlight[id];
+  }
 
-  var divs = cp.querySelectorAll(":scope > div");
-  divs[0].removeChild(divs[0].children[0]);
+  const promise = (async () => {
+    var target = await waitForElement(path);
 
-  const bar = divs[1].children[0].children[0].children[0];
-  bar.classList.remove("bg-fill-danger", "bg-fill-warning");
-  bar.classList.add("bg-fill-accent");
+    // await 後に再確認（別の呼び出しが先に挿入済みの場合）
+    var existing = document.querySelector("#" + id);
+    if (existing !== null) {
+      return existing;
+    }
 
-  cp.id = id;
-  target.after(cp);
-  return cp;
+    var cp = target.cloneNode(true);
+
+    var divs = cp.querySelectorAll(":scope > div");
+    divs[0].removeChild(divs[0].children[0]);
+
+    const bar = divs[1].children[0].children[0].children[0];
+    bar.classList.remove("bg-fill-danger", "bg-fill-warning");
+    bar.classList.add("bg-fill-accent");
+
+    cp.id = id;
+    target.after(cp);
+    return cp;
+  })();
+
+  _createElementInFlight[id] = promise;
+  promise.finally(() => { delete _createElementInFlight[id]; });
+  return promise;
 }
 
 const patterns = [

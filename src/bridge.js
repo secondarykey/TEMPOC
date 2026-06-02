@@ -41,5 +41,5 @@ chrome.runtime.onMessage.addListener((message) => {
 });
 
 window.addEventListener("tempoc:locale", (e) => {
-  chrome.storage.session.set({ detectedLocale: e.detail });
+  chrome.storage.local.set({ detectedLocale: e.detail });
 });

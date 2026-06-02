@@ -1,7 +1,7 @@
 const Day7ProgressElementId = "day7Progress";
 const Hour5ProgressElementId = "hour5Progress";
 
-const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:nth-child(2) > div:nth-child(2)';
+const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child > div:nth-child(2)';
 const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div";
 const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div > div";
 const Day7ElementPATH = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";

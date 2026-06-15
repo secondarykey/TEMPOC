@@ -82,7 +82,7 @@ All settings are stored in `chrome.storage.sync`. Defaults are defined identical
 These CSS path selectors target Claude's existing progress bar sections within the Settings dialog and are fragile — they will break if Claude changes its page structure:
 
 ```js
-const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child > div:nth-child(2)';
+const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child > div:last-child';
 const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div";
 const Day7ElementPATH  = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
 ```

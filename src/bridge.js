@@ -12,7 +12,7 @@ const defaults = {
 
 function isUsagePage() {
   if (location.pathname === "/settings/usage") return true;
-  if (location.pathname === "/new" && location.hash === "#settings/usage") return true;
+  if (location.hash === "#settings/usage") return true;
   return false;
 }
 

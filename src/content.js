@@ -35,6 +35,8 @@ var day7BarColor = null;
 var hour5BarColor = null;
 var day7BarObserver = null;
 var hour5BarObserver = null;
+var day7ElapsedObserver = null;
+var hour5ElapsedObserver = null;
 
 function makeBarObserver(barPath, getColor) {
   const bar = document.querySelector(barPath);
@@ -46,6 +48,18 @@ function makeBarObserver(barPath, getColor) {
     if (b && !b.classList.contains(desired)) {
       b.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
       b.classList.add(desired);
+    }
+  });
+  obs.observe(bar, { attributes: true, attributeFilter: ["class"] });
+  return obs;
+}
+
+function makeElapsedBarObserver(bar) {
+  if (!bar) return null;
+  const obs = new MutationObserver(() => {
+    if (!bar.classList.contains("bg-fill-accent")) {
+      bar.classList.remove("bg-fill-danger", "bg-fill-warning");
+      bar.classList.add("bg-fill-accent");
     }
   });
   obs.observe(bar, { attributes: true, attributeFilter: ["class"] });
@@ -187,9 +201,16 @@ function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
     weekday: 'short'
   }) + suffix;
 
-  // 経過時間バー（TEMPOC 注入）: 幅のみ更新
+  // 経過時間バー（TEMPOC 注入）: 幅と色を更新し、Observerで保護
   const bar = divs[1].children[0].children[0].children[0];
   bar.style.width = notStarted ? "0%" : percent + "%";
+  bar.classList.remove("bg-fill-danger", "bg-fill-warning");
+  bar.classList.add("bg-fill-accent");
+  if (elm.id === Day7ProgressElementId) {
+    if (!day7ElapsedObserver) day7ElapsedObserver = makeElapsedBarObserver(bar);
+  } else {
+    if (!hour5ElapsedObserver) hour5ElapsedObserver = makeElapsedBarObserver(bar);
+  }
 
   divs[1].children[1].textContent =
     notStarted ? "" : percentFormat.replace('{}', percent.toFixed(decimalPlaces));
@@ -363,8 +384,10 @@ window.dispatchEvent(new CustomEvent("tempoc:ready"));
 function onNavigate() {
   day7Elm  = undefined;
   hour5Elm = undefined;
-  if (day7BarObserver)  { day7BarObserver.disconnect();  day7BarObserver  = null; }
-  if (hour5BarObserver) { hour5BarObserver.disconnect(); hour5BarObserver = null; }
+  if (day7BarObserver)      { day7BarObserver.disconnect();      day7BarObserver      = null; }
+  if (hour5BarObserver)     { hour5BarObserver.disconnect();     hour5BarObserver     = null; }
+  if (day7ElapsedObserver)  { day7ElapsedObserver.disconnect();  day7ElapsedObserver  = null; }
+  if (hour5ElapsedObserver) { hour5ElapsedObserver.disconnect(); hour5ElapsedObserver = null; }
   day7BarColor  = null;
   hour5BarColor = null;
   window.dispatchEvent(new CustomEvent("tempoc:navigate"));

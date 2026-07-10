@@ -115,7 +115,13 @@ async function createElement(id, path) {
     var divs = cp.querySelectorAll(":scope > div");
     divs[0].removeChild(divs[0].children[0]);
 
-    const bar = divs[1].children[0].children[0].children[0];
+    const meter = divs[1].children[0].children[0];
+    let bar = meter.children[0];
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.className = "h-full rounded-full transition-[width] duration-base ease-out motion-reduce:transition-none";
+      meter.appendChild(bar);
+    }
     bar.classList.remove("bg-fill-danger", "bg-fill-warning");
     bar.classList.add("bg-fill-accent");
 
@@ -202,7 +208,8 @@ function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
   }) + suffix;
 
   // 経過時間バー（TEMPOC 注入）: 幅と色を更新し、Observerで保護
-  const bar = divs[1].children[0].children[0].children[0];
+  const bar = divs[1].children[0]?.children[0]?.children[0];
+  if (!bar) return false;
   bar.style.width = notStarted ? "0%" : percent + "%";
   bar.classList.remove("bg-fill-danger", "bg-fill-warning");
   bar.classList.add("bg-fill-accent");

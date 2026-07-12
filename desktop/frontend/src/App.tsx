@@ -1,121 +1,489 @@
-import { useState, useEffect, useRef } from 'react'
-import {Events, WML} from "@wailsio/runtime";
-import {GreetService} from "../bindings/changeme";
+import { useState, useEffect, useCallback } from 'react'
+import { Events, Window } from '@wailsio/runtime'
+import { SettingsService } from '../bindings/changeme'
+import { Settings } from '../bindings/changeme/settings'
 
-// Show the actual Wails version this project was generated against.
-const wailsVersion = "v3.0.0-alpha2.114";
+function PinIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 17v5" />
+      <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+    </svg>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
+
+// Custom title bar for the frameless window: the header itself is the drag
+// region; the gear button and window controls opt out with
+// --wails-draggable: no-drag. The gear toggles the settings view.
+function TitleBar({ settingsOpen, onToggleSettings }: { settingsOpen: boolean; onToggleSettings: () => void }) {
+  const [onTop, setOnTop] = useState(false);
+  const toggleOnTop = () => {
+    const next = !onTop;
+    setOnTop(next);
+    Window.SetAlwaysOnTop(next);
+  };
+  return (
+    <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
+      <button
+        className={`titlebar-gear${settingsOpen ? ' is-active' : ''}`}
+        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
+        aria-label="Settings"
+        title="Settings"
+        onClick={onToggleSettings}
+      >
+        <GearIcon />
+      </button>
+      <div className="titlebar-controls" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
+        <button
+          className={`pin${onTop ? ' is-active' : ''}`}
+          aria-label="Always on top"
+          aria-pressed={onTop}
+          title={onTop ? 'Always on top: on' : 'Always on top: off'}
+          onClick={toggleOnTop}
+        >
+          <PinIcon />
+        </button>
+        <button aria-label="Minimise" onClick={() => Window.Minimise()}>&#x2015;</button>
+        <button aria-label="Close" className="close" onClick={() => Window.Close()}>&#x2715;</button>
+      </div>
+    </header>
+  );
+}
+
+// TEMPOC theme colours (see options.html --color-accent/warning/danger).
+const COLORS = { accent: '#7dd3fc', warning: '#fbbf24', danger: '#ef4444' };
+
+// A dual-thumb range slider: warning is clamped to stay <= danger and vice
+// versa, with a gradient fill mirroring the extension's options.js
+// setupDualRange visual (accent -> warning -> danger).
+function DualRange({
+  min,
+  max,
+  warning,
+  danger,
+  onChange,
+}: {
+  min: number;
+  max: number;
+  warning: number;
+  danger: number;
+  onChange: (warning: number, danger: number) => void;
+}) {
+  const range = max - min;
+  const wPct = ((warning - min) / range) * 100;
+  const dPct = ((danger - min) / range) * 100;
+
+  const handleWarning = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const w = Number(e.target.value);
+    onChange(w, Math.max(w, danger));
+  };
+  const handleDanger = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const d = Number(e.target.value);
+    onChange(Math.min(warning, d), d);
+  };
+
+  return (
+    <div className="dual-range">
+      <div className="dual-range-values">
+        <span className="dual-range-warning">Warning: <b>{warning}</b></span>
+        <span className="dual-range-danger">Danger: <b>{danger}</b></span>
+      </div>
+      <div className="dual-range-track">
+        <div
+          className="dual-range-fill"
+          style={{
+            background: `linear-gradient(to right, ${COLORS.accent} 0%, ${COLORS.accent} ${wPct}%, ${COLORS.warning} ${wPct}%, ${COLORS.warning} ${dPct}%, ${COLORS.danger} ${dPct}%, ${COLORS.danger} 100%)`,
+          }}
+        />
+        <input
+          type="range"
+          className="dual-range-input"
+          min={min}
+          max={max}
+          value={warning}
+          onChange={handleWarning}
+          style={{ zIndex: warning >= danger ? 5 : undefined }}
+        />
+        <input
+          type="range"
+          className="dual-range-input"
+          min={min}
+          max={max}
+          value={danger}
+          onChange={handleDanger}
+        />
+      </div>
+    </div>
+  );
+}
+
+// Settings view: houses configuration and debug controls. All changes update
+// React state immediately (so bars re-render live) and persist via
+// SettingsService.Set.
+function SettingsView({
+  settings,
+  onUpdate,
+}: {
+  settings: Settings;
+  onUpdate: (patch: Partial<Settings>) => void;
+}) {
+  const toggleClaude = () => {
+    Events.Emit('tempoc:toggle-claude');
+  };
+
+  return (
+    <div className="settings">
+      <h2 className="settings-title">Settings</h2>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">5-Hour Window</h3>
+        <label className="settings-check-row">
+          <span>Show</span>
+          <input type="checkbox" checked={settings.showHour5} onChange={(e) => onUpdate({ showHour5: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Show remaining time</span>
+          <input type="checkbox" checked={settings.showRemainHour5} onChange={(e) => onUpdate({ showRemainHour5: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Color threshold</span>
+          <input type="checkbox" checked={settings.hour5ColorEnabled} onChange={(e) => onUpdate({ hour5ColorEnabled: e.target.checked })} />
+        </label>
+        <DualRange
+          min={-50}
+          max={50}
+          warning={settings.hour5Warning}
+          danger={settings.hour5Danger}
+          onChange={(w, d) => onUpdate({ hour5Warning: w, hour5Danger: d })}
+        />
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">7-Day Window</h3>
+        <label className="settings-check-row">
+          <span>Show</span>
+          <input type="checkbox" checked={settings.showDay7} onChange={(e) => onUpdate({ showDay7: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Show remaining time</span>
+          <input type="checkbox" checked={settings.showRemainDay7} onChange={(e) => onUpdate({ showRemainDay7: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Color threshold</span>
+          <input type="checkbox" checked={settings.day7ColorEnabled} onChange={(e) => onUpdate({ day7ColorEnabled: e.target.checked })} />
+        </label>
+        <DualRange
+          min={-50}
+          max={50}
+          warning={settings.day7Warning}
+          danger={settings.day7Danger}
+          onChange={(w, d) => onUpdate({ day7Warning: w, day7Danger: d })}
+        />
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">General</h3>
+        <label className="settings-check-row">
+          <span>Transparent window</span>
+          <input
+            type="checkbox"
+            checked={settings.transparent}
+            onChange={(e) => onUpdate({ transparent: e.target.checked })}
+          />
+        </label>
+        <label className="settings-row">
+          <span>Language</span>
+          <select value={settings.locale} onChange={(e) => onUpdate({ locale: e.target.value })}>
+            <option value="">Auto (system)</option>
+            <option value="en-US">English</option>
+            <option value="ja-JP">日本語</option>
+          </select>
+        </label>
+        <label className="settings-row">
+          <span>Duration style</span>
+          <select value={settings.durationStyle} onChange={(e) => onUpdate({ durationStyle: e.target.value })}>
+            <option value="narrow">Narrow (3d 4h)</option>
+            <option value="short">Short (3 days 4 hr.)</option>
+            <option value="long">Long (3 days 4 hours)</option>
+          </select>
+        </label>
+        <label className="settings-row">
+          <span>Decimal places</span>
+          <select value={settings.decimalPlaces} onChange={(e) => onUpdate({ decimalPlaces: Number(e.target.value) })}>
+            <option value={0}>0</option>
+            <option value={1}>1</option>
+            <option value={2}>2</option>
+            <option value={3}>3</option>
+          </select>
+        </label>
+        <label className="settings-row">
+          <span>Percent format</span>
+          <input
+            type="text"
+            className="settings-text-input"
+            value={settings.percentFormat}
+            onChange={(e) => onUpdate({ percentFormat: e.target.value || '{}%' })}
+          />
+        </label>
+        <div className="settings-row settings-row--refresh">
+          <label className="settings-row settings-row--nogap">
+            <span>Auto-refresh</span>
+            <input
+              type="checkbox"
+              checked={settings.refreshInterval > 0}
+              onChange={(e) => onUpdate({ refreshInterval: e.target.checked ? 2 : 0 })}
+            />
+            <input
+              type="number"
+              className="settings-number-input"
+              min={1}
+              max={60}
+              value={settings.refreshInterval > 0 ? settings.refreshInterval : 2}
+              disabled={settings.refreshInterval <= 0}
+              onChange={(e) => onUpdate({ refreshInterval: Number(e.target.value) })}
+            />
+            <span className="settings-unit">min</span>
+          </label>
+          <div className="settings-help-text">Takes effect on next app launch.</div>
+        </div>
+        <div className="settings-row">
+          <span>Utilization floor</span>
+        </div>
+        <DualRange
+          min={0}
+          max={100}
+          warning={settings.utilizationWarning}
+          danger={settings.utilizationDanger}
+          onChange={(w, d) => onUpdate({ utilizationWarning: w, utilizationDanger: d })}
+        />
+      </section>
+
+      <div className="settings-row settings-debug-row">
+        <div>
+          <div className="settings-row-label">Claude interceptor window</div>
+          <div className="settings-row-desc">Show the hidden Claude page for login or debugging.</div>
+        </div>
+        <button className="settings-btn" onClick={toggleClaude}>Toggle</button>
+      </div>
+    </div>
+  );
+}
+
+type UsageWindow = { utilization?: number; resets_at?: string | null };
+type UsagePayload = {
+  seven_day?: UsageWindow;
+  five_hour?: UsageWindow;
+};
+
+// Length of each usage window in milliseconds. The window start is derived by
+// subtracting this from resets_at (the window end), matching the Chrome
+// extension's calculation.
+const WINDOW_MS: Record<'five_hour' | 'seven_day', number> = {
+  five_hour: 5 * 60 * 60 * 1000,
+  seven_day: 7 * 24 * 60 * 60 * 1000,
+};
+
+const clamp = (n: number) => Math.max(0, Math.min(100, n));
+
+// Effective locale for date/duration formatting: the explicit setting, or the
+// OS/browser locale when set to "auto" (empty).
+const resolveLocale = (settings: Settings): string => settings.locale || navigator.language;
+
+function formatPercent(n: number, settings: Settings): string {
+  const fmt = settings.percentFormat || '{}%';
+  return fmt.replace('{}', n.toFixed(settings.decimalPlaces));
+}
+
+// Format a remaining duration using Intl.DurationFormat (ported from
+// content.js's createDuration + redraw). Intl.DurationFormat isn't in the
+// TS lib yet, so it's accessed dynamically and wrapped in try/catch, falling
+// back to a simple "1d 3h 20m" string when unsupported or given bad input.
+function formatRemaining(ms: number, durationStyle: string, locale: string): string {
+  if (ms < 0) ms = 0;
+  const duration = {
+    days: Math.floor(ms / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((ms / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((ms / (1000 * 60)) % 60),
+  };
+  try {
+    const DurationFormat = (Intl as unknown as { DurationFormat?: new (locale: string, opts: { style: string }) => { format: (d: typeof duration) => string } }).DurationFormat;
+    if (!DurationFormat) throw new Error('Intl.DurationFormat unsupported');
+    const df = new DurationFormat(locale, { style: durationStyle });
+    return df.format(duration);
+  } catch {
+    const parts: string[] = [];
+    if (duration.days) parts.push(`${duration.days}d`);
+    if (duration.days || duration.hours) parts.push(`${duration.hours}h`);
+    parts.push(`${duration.minutes}m`);
+    return parts.join(' ');
+  }
+}
+
+// Format the window's reset moment as a localized date/time (ported from
+// content.js: month/day/weekday + hour/minute). This is the value that isn't
+// shown on Claude's own usage page — knowing exactly which day and hour the
+// window resets is the point of this app.
+function formatResetDate(d: Date, locale: string): string {
+  try {
+    return d.toLocaleString(locale, {
+      month: 'numeric',
+      day: 'numeric',
+      weekday: 'short',
+      hour: 'numeric',
+      minute: 'numeric',
+    });
+  } catch {
+    return d.toLocaleString();
+  }
+}
+
+// A single usage window rendered as a progress bar: the coloured fill is the
+// usage utilisation, and the vertical marker is how far through the time
+// window we are. Color logic ported exactly from content.js's redraw().
+function UsageBar({
+  label,
+  kind,
+  data,
+  now,
+  settings,
+}: {
+  label: string;
+  kind: 'five_hour' | 'seven_day';
+  data: UsageWindow | undefined;
+  now: number;
+  settings: Settings;
+}) {
+  const util = clamp(data?.utilization ?? 0);
+  const resets = data?.resets_at ? new Date(data.resets_at) : null;
+
+  let elapsed = 0;
+  let remainMs = 0;
+  let started = false;
+  if (resets && !Number.isNaN(resets.getTime())) {
+    started = true;
+    const end = resets.getTime();
+    const start = end - WINDOW_MS[kind];
+    elapsed = clamp(((now - start) / (end - start)) * 100);
+    remainMs = end - now;
+  }
+
+  const colorEnabled = kind === 'seven_day' ? settings.day7ColorEnabled : settings.hour5ColorEnabled;
+  const danger = kind === 'seven_day' ? settings.day7Danger : settings.hour5Danger;
+  const warning = kind === 'seven_day' ? settings.day7Warning : settings.hour5Warning;
+  const showRemain = kind === 'seven_day' ? settings.showRemainDay7 : settings.showRemainHour5;
+
+  let color: string;
+  if (!colorEnabled) {
+    color = COLORS.accent;
+  } else if (util >= settings.utilizationDanger) {
+    color = COLORS.danger;
+  } else {
+    const diff = util - elapsed;
+    if (diff > danger) {
+      color = COLORS.danger;
+    } else if (diff > warning || util >= settings.utilizationWarning) {
+      color = COLORS.warning;
+    } else {
+      color = COLORS.accent;
+    }
+  }
+
+  return (
+    <div className="usage-bar">
+      <div className="usage-bar-head">
+        <span className="usage-bar-label">{label}</span>
+        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, resolveLocale(settings)) : ''}</span>
+        <span className="usage-bar-util" style={{ color }}>{formatPercent(util, settings)}</span>
+      </div>
+      <div className="usage-bar-track">
+        <div className="usage-bar-fill" style={{ width: `${util}%`, background: color }} />
+        {started && (
+          <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} title={`Elapsed ${formatPercent(elapsed, settings)}`} />
+        )}
+      </div>
+      <div className="usage-bar-foot">
+        <span>Elapsed {started ? formatPercent(elapsed, settings) : '—'}</span>
+        <span>
+          {started
+            ? showRemain
+              ? `resets in ${formatRemaining(remainMs, settings.durationStyle, resolveLocale(settings))}`
+              : ''
+            : 'not started'}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 function App() {
-  const [name, setName] = useState<string>('');
-  const [time, setTime] = useState<string>('Listening for Time event...');
-
-  const titleNameRef = useRef<HTMLSpanElement | null>(null);
-  const toastRef = useRef<HTMLDivElement | null>(null);
-  const resultRef = useRef<HTMLSpanElement | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-
-  // Crossfade the framework word in the heading ("Wails + React") to the name
-  // the user entered ("Wails + <name>"): the old word fades out while the new one
-  // fades in over the same spot.
-  const swapTitleName = (name: string) => {
-    const titleNameElement = titleNameRef.current;
-    if (!titleNameElement) {
-      return;
-    }
-    const current = titleNameElement.querySelector('.title-name-text:not(.is-outgoing)');
-    if (!current || current.textContent === name) {
-      return;
-    }
-    const incoming = document.createElement('span');
-    incoming.className = 'title-name-text is-entering';
-    incoming.textContent = name;
-    current.classList.add('is-outgoing');
-    titleNameElement.appendChild(incoming);
-    // Force a reflow so the transitions run from the starting state.
-    void incoming.offsetWidth;
-    incoming.classList.remove('is-entering');
-    current.classList.add('is-leaving');
-    current.addEventListener('transitionend', () => current.remove(), {once: true});
-  };
-
-  // Pop the toast with the message Go returned, then auto-dismiss it.
-  const showToast = (message: string) => {
-    if (resultRef.current) {
-      resultRef.current.innerText = message;
-    }
-    if (toastRef.current) {
-      toastRef.current.classList.add('is-visible');
-    }
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => {
-      if (toastRef.current) {
-        toastRef.current.classList.remove('is-visible');
-      }
-    }, 4000);
-  };
-
-  const doGreet = () => {
-    let n = name || 'anonymous';
-    swapTitleName(n);
-    GreetService.Greet(n).then(showToast).catch(console.error);
-  };
+  const [usage, setUsage] = useState<UsagePayload | null>(null);
+  const [now, setNow] = useState<number>(() => Date.now());
+  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
+  const [settings, setSettings] = useState<Settings>(() => new Settings());
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   useEffect(() => {
-    Events.On('time', (timeValue: any) => {
-      // On a narrow screen the full RFC1123 stamp is too wide for the footer, so
-      // show just the clock time there (matching the CSS breakpoint).
-      const full = timeValue.data;
-      const compact = (full.match(/\d{1,2}:\d{2}:\d{2}/) || [full])[0];
-      setTime(window.matchMedia('(max-width: 640px)').matches ? compact : full);
+    SettingsService.Get().then((s) => {
+      setSettings(s);
+      setSettingsLoaded(true);
     });
-    // Reload WML so it picks up the wml tags
-    WML.Reload();
+  }, []);
+
+  useEffect(() => {
+    const off = Events.On('tempoc:usage', (e: any) => {
+      setUsage(e.data as UsagePayload);
+    });
+    // Recompute elapsed-time progress once per second.
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearInterval(id);
+      if (typeof off === 'function') off();
+    };
+  }, []);
+
+  // Apply/remove the opaque page background based on the transparency setting.
+  useEffect(() => {
+    document.documentElement.classList.toggle('is-transparent', settings.transparent);
+  }, [settings.transparent]);
+
+  const updateSettings = useCallback((patch: Partial<Settings>) => {
+    setSettings((prev) => {
+      const next = new Settings({ ...prev, ...patch });
+      SettingsService.Set(next).catch((err) => console.error('tempoc: failed to save settings', err));
+      return next;
+    });
   }, []);
 
   return (
-    <>
-      <main className="container">
-        <header className="brand">
-          <a className="brand-mark" data-wml-openURL="https://v3.wails.io" aria-label="Wails website">
-            <img src="/wails.png" className="brand-logo" alt="Wails logo"/>
-          </a>
-          <a className="brand-badge" data-wml-openURL="https://reactjs.org" aria-label="React">
-            <img src="/react.svg" alt="React logo"/>
-          </a>
-        </header>
-
-        <h1 className="title"><span className="title-accent">Wails +</span> <span className="title-name" ref={titleNameRef}><span className="title-name-text">React</span></span></h1>
-        <p className="subtitle">Build beautiful cross-platform apps with Go and React.</p>
-
-        <div className="greet">
-          <div className="input-box">
-            <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            <input aria-label="input" className="input" value={name} onChange={(e) => setName(e.target.value)} type="text" placeholder="Your name" autoComplete="off"/>
-            <button aria-label="greet-btn" className="btn" onClick={doGreet}>Greet
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </button>
+    <div className="root">
+      <TitleBar settingsOpen={settingsOpen} onToggleSettings={() => setSettingsOpen((v) => !v)} />
+      <main className="app">
+        {settingsOpen ? (
+          settingsLoaded && <SettingsView settings={settings} onUpdate={updateSettings} />
+        ) : !usage ? (
+          <p className="app-placeholder">Waiting for usage data… (log in to Claude if prompted)</p>
+        ) : (
+          <div className="usage-bars">
+            {settings.showHour5 && (
+              <UsageBar label="Current session" kind="five_hour" data={usage.five_hour} now={now} settings={settings} />
+            )}
+            {settings.showDay7 && (
+              <UsageBar label="Weekly limit" kind="seven_day" data={usage.seven_day} now={now} settings={settings} />
+            )}
           </div>
-        </div>
+        )}
       </main>
-
-      <hr className="footer-divider"/>
-      <footer className="footer">
-        <span className="footer-version"><span>{wailsVersion}</span></span>
-        <span className="footer-time">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          <span>{time}</span>
-        </span>
-        <a className="footer-docs" data-wml-openURL="https://v3.wails.io" aria-label="Wails documentation">Docs
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-        </a>
-      </footer>
-
-      <div className="toast" ref={toastRef} role="status" aria-live="polite">
-        <span className="toast-label">From Go</span>
-        <span aria-label="result" className="toast-msg" ref={resultRef}></span>
-      </div>
-    </>
-  )
+    </div>
+  );
 }
 
 export default App

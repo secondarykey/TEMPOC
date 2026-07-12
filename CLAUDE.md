@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TEMPOC is a Manifest V3 Chrome extension that enhances the Claude.ai usage page (`https://claude.ai/new#settings/usage`) by adding progress bars showing elapsed time through the 7-day and 5-hour usage windows, with configurable color thresholds and an options page.
 
+## Desktop App (Wails)
+
+`desktop/` contains a standalone **Wails v3 desktop app** that provides the same functionality as a native window instead of a page enhancement. It loads claude.ai inside a hidden WebView, intercepts the usage API the same way the extension does, and renders the progress bars in its own frameless React UI. It surfaces what claude.ai itself doesn't show: exactly which day and hour each window resets. It also ports all of the extension's settings (persisted to `%APPDATA%\TEMPOC\settings.json`) plus desktop-only options: a locale selector, always-on-top, and a fully transparent window mode (on/off).
+
+**The rest of this file documents the Chrome extension. For anything about the desktop app — architecture, the usage-interception mechanism, the two-window design, settings, the frameless title bar, transparency, build commands, and known constraints — see [`desktop/CLAUDE.md`](desktop/CLAUDE.md).**
+
 ## Installation & Testing
 
 There is no build step. To install for development:
@@ -21,7 +27,7 @@ To reload after changes, click the refresh icon on the extension card in `chrome
 
 ### Files
 
-Extension files live in `src/`. The repo root contains only `README.md` and `CLAUDE.md`.
+Extension files live in `src/`. The desktop app lives in `desktop/` (see `desktop/CLAUDE.md`); the repo root also holds `README.md` and this `CLAUDE.md`.
 
 | File | World | Role |
 |---|---|---|

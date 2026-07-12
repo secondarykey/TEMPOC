@@ -1,3 +1,4 @@
+import '@wailsio/runtime' // side-effect import: enables window drag for frameless windows
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'

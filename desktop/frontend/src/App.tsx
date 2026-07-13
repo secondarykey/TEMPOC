@@ -273,6 +273,14 @@ function SettingsView({
           </select>
         </label>
         <label className="settings-row">
+          <span>Size mode</span>
+          <select value={settings.sizeMode || 'normal'} onChange={(e) => onUpdate({ sizeMode: e.target.value })}>
+            <option value="normal">Normal</option>
+            <option value="small">Small</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
+        <label className="settings-row">
           <span>Decimal places</span>
           <select value={settings.decimalPlaces} onChange={(e) => onUpdate({ decimalPlaces: Number(e.target.value) })}>
             <option value={0}>0</option>
@@ -296,14 +304,14 @@ function SettingsView({
             <input
               type="checkbox"
               checked={settings.refreshInterval > 0}
-              onChange={(e) => onUpdate({ refreshInterval: e.target.checked ? 2 : 0 })}
+              onChange={(e) => onUpdate({ refreshInterval: e.target.checked ? 5 : 0 })}
             />
             <input
               type="number"
               className="settings-number-input"
               min={1}
               max={60}
-              value={settings.refreshInterval > 0 ? settings.refreshInterval : 2}
+              value={settings.refreshInterval > 0 ? settings.refreshInterval : 5}
               disabled={settings.refreshInterval <= 0}
               onChange={(e) => onUpdate({ refreshInterval: Number(e.target.value) })}
             />
@@ -333,6 +341,8 @@ function SettingsView({
     </div>
   );
 }
+
+type SizeMode = 'normal' | 'small' | 'compact';
 
 type UsageWindow = { utilization?: number; resets_at?: string | null };
 type WindowKind = 'five_hour' | 'seven_day' | 'weekly_scoped';
@@ -473,6 +483,7 @@ function UsageBar({
   now,
   settings,
   secondary,
+  sizeMode,
 }: {
   label: string;
   kind: WindowKind;
@@ -480,6 +491,7 @@ function UsageBar({
   now: number;
   settings: Settings;
   secondary?: { label: string; kind: WindowKind; data: UsageWindow | undefined };
+  sizeMode: SizeMode;
 }) {
   const util = clamp(data?.utilization ?? 0);
   const resets = data?.resets_at ? new Date(data.resets_at) : null;
@@ -501,6 +513,34 @@ function UsageBar({
   // secondary shares this window's elapsed timeline; only label/util/color differ.
   const secUtil = secondary ? clamp(secondary.data?.utilization ?? 0) : 0;
   const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
+
+  // Compact mode: a single line per window ("label | reset date | utilization |
+  // remaining") instead of the track/marker/foot layout. The secondary
+  // (weekly_scoped) window, if present, gets its own row with only label +
+  // utilization filled in (it shares the primary's reset/remaining timeline),
+  // with the other cells left empty so the columns still line up.
+  if (sizeMode === 'compact') {
+    return (
+      <div className="usage-bar">
+        <div className="usage-bar-compact">
+          <span className="usage-bar-label">{label}</span>
+          <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, resolveLocale(settings)) : 'not started'}</span>
+          <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
+          <span className="usage-bar-remaining">
+            {started && showRemain ? formatRemaining(remainMs, settings.durationStyle, resolveLocale(settings)) : ''}
+          </span>
+        </div>
+        {secondary && (
+          <div className="usage-bar-compact usage-bar-compact--sub">
+            <span className="usage-bar-label">{secondary.label}</span>
+            <span className="usage-bar-reset" />
+            <span className="usage-bar-util" style={{ color: secColor }}>{formatUtil(secUtil)}</span>
+            <span className="usage-bar-remaining" />
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="usage-bar">
@@ -637,15 +677,34 @@ function App() {
     }
   }, []);
 
+  const sizeMode: SizeMode = (settings.sizeMode as SizeMode) || 'normal';
+
   // Target native window height. Settings is a fixed tall screen; the usage view
   // fits its measured content plus the fixed chrome around it: #root padding
-  // (10) + title bar (34) + .app vertical padding (~52) ≈ 96px. Clamped to the
-  // window's MinHeight so a shrink never desyncs from what the OS applies.
-  const CHROME_PX = 96;
-  const MIN_WINDOW_H = 160;
+  // (10) + title bar (34) + .app vertical padding. The padding shrinks with the
+  // size mode (see style.css .mode-small / .mode-compact), so the chrome
+  // allowance shrinks with it too — these are the same provisional numbers as
+  // the CSS padding tweaks and may need retuning together.
+  const CHROME_PX: Record<SizeMode, number> = { normal: 96, small: 76, compact: 64 };
+  // Low enough that the window can shrink to fit a single compact-mode row;
+  // mirrors main.go's MinHeight.
+  const MIN_WINDOW_H = 90;
   const usageTarget =
-    contentHeight > 0 ? Math.max(MIN_WINDOW_H, Math.round(contentHeight + CHROME_PX)) : 0;
+    contentHeight > 0 ? Math.max(MIN_WINDOW_H, Math.round(contentHeight + CHROME_PX[sizeMode])) : 0;
   const targetHeight = settingsOpen ? 800 : usageTarget;
+
+  // The usage view only resizes horizontally by hand — vertical size always
+  // tracks measured content (above), so the user's bottom-edge drag is locked
+  // out via SetMinSize/SetMaxSize with an equal min/max height (see below).
+  const MIN_W = 360; // mirrors main.go's MinWidth
+  // Wails treats a MaxWidth of 0 (or negative) as "no constraint": in
+  // wails/v3@alpha2.114 pkg/application/webview_window_windows.go's
+  // WM_GETMINMAXINFO handler, `mmi.PtMaxTrackSize.X` is only overridden when
+  // `width > 0` after scaleWithWindowDPI (and scaleWithWindowDPI(0, h) stays 0
+  // regardless of DPI), so passing 0 here leaves width unconstrained while
+  // MaxHeight still locks height. Confirmed by reading that source directly
+  // rather than assumed — no arbitrarily "large" fallback needed.
+  const MAX_W = 0;
 
   // Wails' Window.SetSize is instant, so we tween it ourselves frame-by-frame
   // for a smooth resize. The first application (and a target of 0, i.e. not yet
@@ -660,10 +719,35 @@ function App() {
       animRef.current = null;
     }
     const from = heightRef.current;
+    // Frameless windows report CSS px == DIP, so innerWidth is the window's
+    // current DIP width — avoids an async round-trip through Window.Size()
+    // and, crucially, preserves whatever width the user dragged the window to
+    // instead of snapping it back to a hardcoded value on every height change.
+    const width = window.innerWidth;
+
+    // Widen the height lock to bracket both endpoints *before* animating: the
+    // tween's intermediate SetSize calls pass every height between `from` and
+    // `targetHeight`, and the previous lock (min == max == the old target) would
+    // otherwise reject them — most obviously when shrinking, where the old
+    // lock's min equals `from` and every smaller in-between frame would be
+    // below it. Once we reach the target (either the snap path or the end of
+    // the animation) the lock is tightened back to exactly targetHeight so the
+    // user can't drag the bottom edge.
+    const lo = Math.min(from, targetHeight);
+    const hi = Math.max(from, targetHeight);
+    Window.SetMinSize(MIN_W, lo);
+    Window.SetMaxSize(MAX_W, hi);
+
+    const lockToTarget = () => {
+      Window.SetMinSize(MIN_W, targetHeight);
+      Window.SetMaxSize(MAX_W, targetHeight);
+    };
+
     if (!resizedOnceRef.current || from === targetHeight) {
       resizedOnceRef.current = true;
       heightRef.current = targetHeight;
-      Window.SetSize(520, targetHeight);
+      Window.SetSize(width, targetHeight);
+      lockToTarget();
       return;
     }
     const duration = 220;
@@ -673,8 +757,13 @@ function App() {
       const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
       const h = Math.round(from + (targetHeight - from) * eased);
       heightRef.current = h;
-      Window.SetSize(520, h);
-      animRef.current = p < 1 ? requestAnimationFrame(step) : null;
+      Window.SetSize(width, h);
+      if (p < 1) {
+        animRef.current = requestAnimationFrame(step);
+      } else {
+        animRef.current = null;
+        lockToTarget();
+      }
     };
     animRef.current = requestAnimationFrame(step);
     return () => {
@@ -696,8 +785,10 @@ function App() {
   const lastUpdatedLabel =
     lastUpdated != null ? formatLastUpdated(now - lastUpdated, resolveLocale(settings)) : null;
 
+  const rootModeClass = sizeMode === 'small' ? ' mode-small' : sizeMode === 'compact' ? ' mode-compact' : '';
+
   return (
-    <div className="root">
+    <div className={`root${rootModeClass}`}>
       <TitleBar
         settingsOpen={settingsOpen}
         onToggleSettings={() => setSettingsOpen((v) => !v)}
@@ -724,7 +815,7 @@ function App() {
         ) : (
           <div className="usage-bars" ref={measureRef}>
             {settings.showHour5 && (
-              <UsageBar label="Current session" kind="five_hour" data={usage.five_hour} now={now} settings={settings} />
+              <UsageBar label="Current session" kind="five_hour" data={usage.five_hour} now={now} settings={settings} sizeMode={sizeMode} />
             )}
             {settings.showDay7 ? (
               <UsageBar
@@ -733,6 +824,7 @@ function App() {
                 data={usage.seven_day}
                 now={now}
                 settings={settings}
+                sizeMode={sizeMode}
                 secondary={
                   settings.showWeeklyScoped && weeklyScopedHasData
                     ? { label: settings.weeklyScopedLabel || 'Weekly (scoped)', kind: 'weekly_scoped', data: usage.weekly_scoped }
@@ -748,6 +840,7 @@ function App() {
                   data={usage.weekly_scoped}
                   now={now}
                   settings={settings}
+                  sizeMode={sizeMode}
                 />
               )
             )}

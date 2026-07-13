@@ -108,7 +108,6 @@ body { background: transparent; }
     min-height: 0;
     overflow-y: auto;
     width: 100%;
-    max-width: 620px;
     margin: 0 auto;
     padding: 1.2rem 1.5rem 2rem;
     display: flex;
@@ -260,6 +259,68 @@ body { background: transparent; }
     margin-top: 0.5rem;
     font-size: 0.78rem;
     color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Size mode: Small ──────────────────────────────────────────────
+   Provisional numbers — expect the user to retune padding/font-size. */
+.mode-small .app {
+    gap: 0.8rem;
+    padding: 0.8rem 1rem 1rem;
+}
+.mode-small .usage-bars { gap: 0.8rem; }
+.mode-small .usage-bar { padding: 0.6rem 0.75rem; }
+.mode-small .usage-bar-head { margin-bottom: 0.4rem; }
+.mode-small .usage-bar-label { font-size: 0.8rem; }
+.mode-small .usage-bar-util { font-size: 1rem; }
+.mode-small .usage-bar-reset { font-size: 0.72rem; }
+.mode-small .usage-bar-foot { font-size: 0.7rem; }
+.mode-small .usage-bar-track { height: 8px; }
+.mode-small .usage-bar-marker { top: -1px; height: 10px; width: 1.5px; }
+.mode-small .usage-bar-marker::after,
+.mode-small .usage-bar-marker::before {
+    border-left-width: 2.5px;
+    border-right-width: 2.5px;
+}
+.mode-small .usage-bar-marker::after { border-bottom-width: 3px; }
+.mode-small .usage-bar-marker::before { border-top-width: 3px; }
+
+/* ── Size mode: Compact ────────────────────────────────────────────
+   Hides the track/marker/foot entirely; each window collapses to one row
+   via .usage-bar-compact (label | reset date | utilization | remaining).
+   Provisional numbers — expect the user to retune padding/font-size. */
+.mode-compact .app {
+    gap: 0.6rem;
+    padding: 0.5rem 0.8rem 0.6rem;
+}
+.mode-compact .usage-bars { gap: 0.5rem; }
+.mode-compact .usage-bar { padding: 0.3rem 0.6rem; }
+
+.usage-bar-compact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: baseline;
+    column-gap: 0.6rem;
+    font-size: 0.8rem;
+}
+.usage-bar-compact--sub {
+    margin-top: 0.25rem;
+}
+.usage-bar-compact .usage-bar-label {
+    font-size: inherit;
+}
+.usage-bar-compact .usage-bar-util {
+    font-size: inherit;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.usage-bar-compact .usage-bar-reset,
+.usage-bar-compact .usage-bar-remaining {
+    font-size: inherit;
+    font-weight: 400;
+    color: var(--muted);
+    white-space: nowrap;
+    text-align: right;
     font-variant-numeric: tabular-nums;
 }
 

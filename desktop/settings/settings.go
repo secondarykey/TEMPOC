@@ -39,10 +39,17 @@ type Settings struct {
 	// AlwaysOnTop keeps the main window above other windows (default off). The
 	// title-bar pin toggles it; persisting it here restores the state on restart.
 	AlwaysOnTop bool `json:"alwaysOnTop"`
+	// SizeMode is a desktop-only display density: "normal" | "small" | "compact".
+	// It scales bar/text/padding sizing and, in "compact", collapses each usage
+	// window to a single line. Selected via the General section select.
+	SizeMode string `json:"sizeMode"`
 }
 
 // Default returns the same default values as the Chrome extension
-// (src/options.js `defaults` / src/content.js module-level vars).
+// (src/options.js `defaults` / src/content.js module-level vars), except
+// RefreshInterval: the extension rides the visible usage page's own polling,
+// but the desktop interceptor window is hidden, so claude.ai stops polling on
+// its own and the app must re-fetch itself — auto-refresh defaults to on.
 func Default() Settings {
 	return Settings{
 		ShowDay7:           true,
@@ -65,8 +72,9 @@ func Default() Settings {
 		DecimalPlaces:      2,
 		DurationStyle:      "short",
 		PercentFormat:      "{}%",
-		RefreshInterval:    0,
+		RefreshInterval:    5,
 		UtilizationWarning: 98,
 		UtilizationDanger:  100,
+		SizeMode:           "normal",
 	}
 }

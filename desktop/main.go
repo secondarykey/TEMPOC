@@ -191,10 +191,10 @@ func main() {
 		Width:     520,
 		Height:    340,
 		MinWidth:  360,
-		// Low enough that the window can shrink to fit a single usage bar; the
-		// frontend measures its content and sizes the window to match (clamped to
-		// MIN_WINDOW_H in App.tsx, which mirrors this value).
-		MinHeight: 160,
+		// Low enough that the window can shrink to fit a single compact-mode usage
+		// row; the frontend measures its content and sizes the window to match
+		// (clamped to MIN_WINDOW_H in App.tsx, which mirrors this value).
+		MinHeight: 90,
 		// Fully transparent window: the webview's clear areas are see-through to
 		// whatever is behind the window. The on/off toggle is done in the
 		// frontend by painting (or clearing) an opaque page background — the

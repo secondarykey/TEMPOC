@@ -55,7 +55,15 @@ body { background: transparent; }
     -webkit-user-select: none;
 }
 
-.titlebar-left { display: flex; height: 100%; }
+.titlebar-left { display: flex; align-items: center; height: 100%; }
+
+.titlebar-updated {
+    margin-left: 4px;
+    font-size: 11px;
+    color: var(--text-dim, rgba(255, 255, 255, 0.45));
+    white-space: nowrap;
+    pointer-events: none;
+}
 
 .titlebar-gear,
 .titlebar-refresh {
@@ -111,6 +119,32 @@ body { background: transparent; }
     margin: 0;
     color: var(--muted);
     font-size: 0.9rem;
+    text-align: center;
+    line-height: 1.7;
+}
+
+.app-placeholder-hint {
+    opacity: 0.7;
+    font-size: 0.8rem;
+}
+
+/* Animated ellipsis so the startup wait doesn't look frozen: cycles
+   "" → "." → ".." → "..." once per ~1.2s. Width is reserved so the text
+   above it doesn't shift as the dots come and go. */
+.loading-dots::after {
+    content: '';
+    display: inline-block;
+    width: 1.2em;
+    text-align: left;
+    animation: loading-dots 1.2s steps(1, end) infinite;
+}
+
+@keyframes loading-dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
 }
 
 /* ── Usage bars ────────────────────────────────────────────────────── */

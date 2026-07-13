@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Events, Window } from '@wailsio/runtime'
 import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
@@ -35,7 +35,7 @@ function GearIcon() {
 // Custom title bar for the frameless window: the header itself is the drag
 // region; the gear button and window controls opt out with
 // --wails-draggable: no-drag. The gear toggles the settings view.
-function TitleBar({ settingsOpen, onToggleSettings, onRefresh, onTop, onToggleOnTop }: { settingsOpen: boolean; onToggleSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void }) {
+function TitleBar({ settingsOpen, onToggleSettings, onRefresh, onTop, onToggleOnTop, lastUpdatedLabel }: { settingsOpen: boolean; onToggleSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void; lastUpdatedLabel: string | null }) {
   return (
     <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
       <div className="titlebar-left" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
@@ -55,6 +55,11 @@ function TitleBar({ settingsOpen, onToggleSettings, onRefresh, onTop, onToggleOn
         >
           <RefreshIcon />
         </button>
+        {lastUpdatedLabel && (
+          <span className="titlebar-updated" title="When the displayed usage was last fetched">
+            Updated {lastUpdatedLabel}
+          </span>
+        )}
       </div>
       <div className="titlebar-controls" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
@@ -390,6 +395,29 @@ function formatRemaining(ms: number, durationStyle: string, locale: string): str
   }
 }
 
+// Format how long ago the usage data was last received, as a localized
+// relative string (e.g. "5 sec. ago", "2 min. ago"). Uses the same `now` tick
+// that drives the Elapsed bars, so it stays fresh without re-fetching. Falls
+// back to a plain English string when Intl.RelativeTimeFormat is unavailable.
+function formatLastUpdated(sinceMs: number, locale: string): string {
+  const sec = Math.max(0, Math.floor(sinceMs / 1000));
+  const pick = (): [number, Intl.RelativeTimeFormatUnit] => {
+    if (sec < 60) return [sec, 'second'];
+    const min = Math.floor(sec / 60);
+    if (min < 60) return [min, 'minute'];
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return [hr, 'hour'];
+    return [Math.floor(hr / 24), 'day'];
+  };
+  const [value, unit] = pick();
+  try {
+    const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' });
+    return rtf.format(-value, unit);
+  } catch {
+    return value === 0 ? 'just now' : `${value} ${unit}${value === 1 ? '' : 's'} ago`;
+  }
+}
+
 // Format the window's reset moment as a localized date/time (ported from
 // content.js: month/day/weekday + hour/minute). This is the value that isn't
 // shown on Claude's own usage page — knowing exactly which day and hour the
@@ -522,6 +550,7 @@ function UsageBar({
 
 function App() {
   const [usage, setUsage] = useState<UsagePayload | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [settings, setSettings] = useState<Settings>(() => new Settings());
@@ -537,6 +566,7 @@ function App() {
   useEffect(() => {
     const off = Events.On('tempoc:usage', (e: any) => {
       setUsage(e.data as UsagePayload);
+      setLastUpdated(Date.now());
     });
     // Recompute elapsed-time progress once per second.
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -545,6 +575,34 @@ function App() {
       if (typeof off === 'function') off();
     };
   }, []);
+
+  // Auto-refresh when a window's reset moment passes. Claude keeps reporting the
+  // stale 100% until the usage endpoint is hit again, so the instant `now`
+  // crosses any window's resets_at we trigger the same refresh the toolbar
+  // button does, flipping the bar to the fresh 0%. Guarded per reset boundary:
+  // right after a reset the server may briefly still return the old resets_at
+  // (still in the past), so we retry a bounded number of times, spaced out, and
+  // stop firing once the returned resets_at advances into the future (new key).
+  const resetFireRef = useRef<Map<string, { attempts: number; last: number }>>(new Map());
+  useEffect(() => {
+    if (!usage) return;
+    const MAX_ATTEMPTS = 5;
+    const RETRY_MS = 8000;
+    const windows = [usage.five_hour, usage.seven_day, usage.weekly_scoped];
+    let fire = false;
+    for (const w of windows) {
+      if (!w?.resets_at) continue;
+      const end = new Date(w.resets_at).getTime();
+      if (Number.isNaN(end) || now < end) continue;
+      const rec = resetFireRef.current.get(w.resets_at) ?? { attempts: 0, last: 0 };
+      if (rec.attempts >= MAX_ATTEMPTS || now - rec.last < RETRY_MS) continue;
+      rec.attempts += 1;
+      rec.last = now;
+      resetFireRef.current.set(w.resets_at, rec);
+      fire = true;
+    }
+    if (fire) Events.Emit('tempoc:refresh');
+  }, [now, usage]);
 
   // Apply/remove the opaque page background based on the transparency setting.
   useEffect(() => {
@@ -575,6 +633,9 @@ function App() {
     });
   }, []);
 
+  const lastUpdatedLabel =
+    lastUpdated != null ? formatLastUpdated(now - lastUpdated, resolveLocale(settings)) : null;
+
   return (
     <div className="root">
       <TitleBar
@@ -583,6 +644,7 @@ function App() {
         onRefresh={() => Events.Emit('tempoc:refresh')}
         onTop={settings.alwaysOnTop}
         onToggleOnTop={() => updateSettings({ alwaysOnTop: !settings.alwaysOnTop })}
+        lastUpdatedLabel={lastUpdatedLabel}
       />
       <main className="app">
         {settingsOpen ? (
@@ -597,7 +659,11 @@ function App() {
             />
           )
         ) : !usage ? (
-          <p className="app-placeholder">Waiting for usage data… (log in to Claude if prompted)</p>
+          <p className="app-placeholder">
+            Waiting for usage data<span className="loading-dots" aria-hidden="true" />
+            <br />
+            <span className="app-placeholder-hint">(log in to Claude if prompted)</span>
+          </p>
         ) : (
           <div className="usage-bars">
             {settings.showHour5 && (

@@ -515,39 +515,29 @@ function UsageBar({
   const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
 
   // Compact mode: a single line per window,
-  //   "label | reset time (remaining) | utilization% / elapsed%",
-  // instead of the track/marker/foot layout. The middle and value columns have
-  // fixed widths (style.css --compact-reset-col / --compact-val-col) so the
-  // cells line up across every row — including across cards, since each card
-  // is its own grid. The secondary (weekly_scoped) row shares the primary's
-  // timeline, so its reset/remaining/elapsed repeat the primary's values.
+  //   "label | reset date | remaining | utilization% | elapsed%",
+  // instead of the track/marker/foot layout. Every column after the label has
+  // a fixed width (style.css --compact-*-col) so the cells line up across
+  // every row — including across cards, since each card is its own grid. The
+  // secondary (weekly_scoped) row shares the primary's timeline, so its
+  // date/remaining/elapsed repeat the primary's values.
   if (sizeMode === 'compact') {
     const locale = resolveLocale(settings);
-    const resetCell = (remain: boolean) =>
-      started && resets
-        ? formatResetDate(resets, locale) +
-          (remain ? ` (${formatRemaining(remainMs, settings.durationStyle, locale)})` : '')
-        : 'not started';
-    const valCell = (u: number, c: string) => (
-      <span className="usage-bar-compact-val">
+    const row = (lbl: string, u: number, c: string, remain: boolean, sub?: boolean) => (
+      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`}>
+        <span className="usage-bar-label">{lbl}</span>
+        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : 'not started'}</span>
+        <span className="usage-bar-compact-remain">
+          {started && remain ? formatRemaining(remainMs, settings.durationStyle, locale) : ''}
+        </span>
         <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
-        <span className="usage-bar-compact-elapsed">/{started ? formatPercent(elapsed, settings) : '—'}</span>
-      </span>
+        <span className="usage-bar-compact-elapsed">{started ? formatPercent(elapsed, settings) : '—'}</span>
+      </div>
     );
     return (
       <div className="usage-bar">
-        <div className="usage-bar-compact">
-          <span className="usage-bar-label">{label}</span>
-          <span className="usage-bar-reset">{resetCell(showRemain)}</span>
-          {valCell(util, color)}
-        </div>
-        {secondary && (
-          <div className="usage-bar-compact usage-bar-compact--sub">
-            <span className="usage-bar-label">{secondary.label}</span>
-            <span className="usage-bar-reset">{resetCell(pickCfg(secondary.kind, settings).showRemain)}</span>
-            {valCell(secUtil, secColor)}
-          </div>
-        )}
+        {row(label, util, color, showRemain)}
+        {secondary && row(secondary.label, secUtil, secColor, pickCfg(secondary.kind, settings).showRemain, true)}
       </div>
     );
   }

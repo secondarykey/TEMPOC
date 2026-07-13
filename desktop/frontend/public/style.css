@@ -55,7 +55,10 @@ body { background: transparent; }
     -webkit-user-select: none;
 }
 
-.titlebar-gear {
+.titlebar-left { display: flex; height: 100%; }
+
+.titlebar-gear,
+.titlebar-refresh {
     height: 100%;
     width: 40px;
     display: flex;
@@ -67,7 +70,8 @@ body { background: transparent; }
     cursor: pointer;
     transition: color 0.15s ease;
 }
-.titlebar-gear:hover { color: var(--text); }
+.titlebar-gear:hover,
+.titlebar-refresh:hover { color: var(--text); }
 .titlebar-gear.is-active { color: var(--text); }
 
 .titlebar-controls { display: flex; height: 100%; }
@@ -159,6 +163,11 @@ body { background: transparent; }
 }
 .usage-bar-head--sub .usage-bar-util { font-size: 1.05rem; }
 
+/* Non-clipping wrapper so the marker + △ can overhang the clipped track. */
+.usage-bar-track-wrap {
+    position: relative;
+}
+
 .usage-bar-track {
     position: relative;
     height: 14px;
@@ -178,12 +187,36 @@ body { background: transparent; }
 .usage-bar-marker {
     position: absolute;
     top: -2px;
-    bottom: -2px;
+    height: 18px;
     width: 2px;
     background: #fff;
     box-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
     transform: translateX(-1px);
     transition: left 1s linear;
+}
+
+/* △ / ▽ pointing at the marker line from below and above. */
+.usage-bar-marker::after,
+.usage-bar-marker::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 3.5px solid transparent;
+    border-right: 3.5px solid transparent;
+    filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.8));
+}
+
+/* Upward-pointing △ just below the marker line. */
+.usage-bar-marker::after {
+    top: calc(100% - 4px);
+    border-bottom: 4px solid #fff;
+}
+
+/* Downward-pointing ▽ just above the marker line. */
+.usage-bar-marker::before {
+    bottom: calc(100% - 4px);
+    border-top: 4px solid #fff;
 }
 
 .usage-bar-foot {

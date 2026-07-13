@@ -36,6 +36,9 @@ type Settings struct {
 	Locale string `json:"locale"`
 	// Transparent makes the window background fully see-through (default off).
 	Transparent bool `json:"transparent"`
+	// AlwaysOnTop keeps the main window above other windows (default off). The
+	// title-bar pin toggles it; persisting it here restores the state on restart.
+	AlwaysOnTop bool `json:"alwaysOnTop"`
 }
 
 // Default returns the same default values as the Chrome extension

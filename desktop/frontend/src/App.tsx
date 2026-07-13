@@ -12,6 +12,17 @@ function PinIcon() {
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  );
+}
+
 function GearIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -24,31 +35,34 @@ function GearIcon() {
 // Custom title bar for the frameless window: the header itself is the drag
 // region; the gear button and window controls opt out with
 // --wails-draggable: no-drag. The gear toggles the settings view.
-function TitleBar({ settingsOpen, onToggleSettings }: { settingsOpen: boolean; onToggleSettings: () => void }) {
-  const [onTop, setOnTop] = useState(false);
-  const toggleOnTop = () => {
-    const next = !onTop;
-    setOnTop(next);
-    Window.SetAlwaysOnTop(next);
-  };
+function TitleBar({ settingsOpen, onToggleSettings, onRefresh, onTop, onToggleOnTop }: { settingsOpen: boolean; onToggleSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void }) {
   return (
     <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
-      <button
-        className={`titlebar-gear${settingsOpen ? ' is-active' : ''}`}
-        style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}
-        aria-label="Settings"
-        title="Settings"
-        onClick={onToggleSettings}
-      >
-        <GearIcon />
-      </button>
+      <div className="titlebar-left" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
+        <button
+          className={`titlebar-gear${settingsOpen ? ' is-active' : ''}`}
+          aria-label="Settings"
+          title="Settings"
+          onClick={onToggleSettings}
+        >
+          <GearIcon />
+        </button>
+        <button
+          className="titlebar-refresh"
+          aria-label="Refresh"
+          title="Refresh usage"
+          onClick={onRefresh}
+        >
+          <RefreshIcon />
+        </button>
+      </div>
       <div className="titlebar-controls" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
           className={`pin${onTop ? ' is-active' : ''}`}
           aria-label="Always on top"
           aria-pressed={onTop}
           title={onTop ? 'Always on top: on' : 'Always on top: off'}
-          onClick={toggleOnTop}
+          onClick={onToggleOnTop}
         >
           <PinIcon />
         </button>
@@ -467,8 +481,10 @@ function UsageBar({
         <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, resolveLocale(settings)) : ''}</span>
         <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
       </div>
-      <div className="usage-bar-track">
-        <div className="usage-bar-fill" style={{ width: `${util}%`, background: color }} />
+      <div className="usage-bar-track-wrap">
+        <div className="usage-bar-track">
+          <div className="usage-bar-fill" style={{ width: `${util}%`, background: color }} />
+        </div>
         {started && (
           <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} title={`Elapsed ${formatPercent(elapsed, settings)}`} />
         )}
@@ -481,8 +497,10 @@ function UsageBar({
             <span className="usage-bar-reset" />
             <span className="usage-bar-util" style={{ color: secColor }}>{formatUtil(secUtil)}</span>
           </div>
-          <div className="usage-bar-track">
-            <div className="usage-bar-fill" style={{ width: `${secUtil}%`, background: secColor }} />
+          <div className="usage-bar-track-wrap">
+            <div className="usage-bar-track">
+              <div className="usage-bar-fill" style={{ width: `${secUtil}%`, background: secColor }} />
+            </div>
             {started && <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} />}
           </div>
         </>
@@ -533,6 +551,12 @@ function App() {
     document.documentElement.classList.toggle('is-transparent', settings.transparent);
   }, [settings.transparent]);
 
+  // Apply the persisted always-on-top state (restored on restart). Gated on
+  // settingsLoaded so we act on the saved value, not the default-false initial.
+  useEffect(() => {
+    if (settingsLoaded) Window.SetAlwaysOnTop(settings.alwaysOnTop);
+  }, [settingsLoaded, settings.alwaysOnTop]);
+
   // The nested weekly_scoped bar needs extra height; grow the window to fit it.
   const weeklyBarVisible =
     settings.showDay7 &&
@@ -553,7 +577,13 @@ function App() {
 
   return (
     <div className="root">
-      <TitleBar settingsOpen={settingsOpen} onToggleSettings={() => setSettingsOpen((v) => !v)} />
+      <TitleBar
+        settingsOpen={settingsOpen}
+        onToggleSettings={() => setSettingsOpen((v) => !v)}
+        onRefresh={() => Events.Emit('tempoc:refresh')}
+        onTop={settings.alwaysOnTop}
+        onToggleOnTop={() => updateSettings({ alwaysOnTop: !settings.alwaysOnTop })}
+      />
       <main className="app">
         {settingsOpen ? (
           settingsLoaded && (

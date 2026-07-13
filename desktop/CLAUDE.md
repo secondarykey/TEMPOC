@@ -75,7 +75,15 @@ postMessage の `type` で分岐:
 
 ### 自動再取得（refreshInterval）
 
-`inject.js` 内で `setInterval(__tempocRefetch, ms)`。`ms` は Go が起動時に `settings.RefreshInterval*60000` を `__TEMPOC_REFRESH_MS__` プレースホルダへ文字列置換して埋め込む。**傍受スクリプトは傍受ウィンドウに再注入できない**（上記 ExecJS の制約）ため、`refreshInterval` の変更は**次回起動時**に反映される。
+`inject.js` 内で `setInterval(__tempocClickRefresh, ms)`。`ms` は Go が起動時に `settings.RefreshInterval*60000` を `__TEMPOC_REFRESH_MS__` プレースホルダへ文字列置換して埋め込む。**傍受スクリプトは傍受ウィンドウに再注入できない**（上記 ExecJS の制約）ため、`refreshInterval` の変更は**次回起動時**に反映される。
+
+繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタン `_r_bb_` をクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。ボタンが無ければ `__tempocRefetch` にフォールバック。ただし**初回1回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `setTimeout(__tempocRefetch, 1500)` の直叩きのまま。
+
+### 手動更新（タイトルバーの更新ボタン）
+
+タイトルバーの歯車の隣の更新ボタン → `Events.Emit('tempoc:refresh')` → Go `app.Event.On("tempoc:refresh")` → `claude.win.ExecJS("window.__tempocClickRefresh && ...")`。`inject.js` の `__tempocClickRefresh()` が claude.ai の使用量更新ボタン（`document.getElementById("_r_bb_")`）を `click()` して API を再リクエストさせ、パッチ済み fetch が最新レスポンスを傍受する。ボタンが無ければ `__tempocRefetch()`（直接 API を叩く）へフォールバック。
+
+**ExecJS を効かせる仕掛け**: 通常 `ExecJS` は `runtimeLoaded`（`@wailsio/runtime` の `wails:runtime:ready` ハンドシェイクでのみ true）待ちで claude.ai では永久に実行されない。そこで `inject.js` が document-start で **生文字列 `"wails:runtime:ready"` を `chrome.webview.postMessage`** し、Wails 側の `HandleMessage` に `runtimeLoaded=true` を立てさせる（JSON ではなく生文字列でないと内部処理へルーティングされない）。副作用は `WindowRuntimeReady` イベント発火と `SetResizable`（ウィンドウスタイルのみ）だけで、claude.ai へ Wails ランタイム JS は注入されない。これにより Go→傍受ページの一方向 ExecJS が使えるようになる。
 
 ## 傍受ウィンドウの表示制御（`claudeCtl`）
 
@@ -84,6 +92,14 @@ postMessage の `type` で分岐:
 - ログインが必要（`auth-required`）→ 自動表示
 - 使用量データ受信（認証済み）→ 自動的に隠す（デバッグでピン留め中は維持）
 - 設定画面の「Claude interceptor window」Toggle → 手動表示/非表示（`Events.Emit('tempoc:toggle-claude')` → Go `app.Event.On`）
+
+### クローズ対策（破棄させない）
+
+傍受ウィンドウを × で閉じて**破棄**すると、`inject.js` は再注入できない（下記 ExecJS 制約）ため傍受が二度と復旧しない。これを防ぐため:
+
+- `claude.win.RegisterHook(events.Common.WindowClosing, ...)` で close を**フック**し、`e.Cancel()` + `claudeCtl.hideOnClose()`（ピン解除 + `Hide()`）に置換 → 破棄されず非表示になるだけ。フックはリスナーより先に走るので、Wails 既定の破棄リスナーを先取りしてキャンセルできる。
+- 例外はアプリ終了時。`main` は `appQuitting`（`atomic.Bool`）で判定し、真なら close を通す（`cleanup()` が全ウィンドウに `Close()` を呼ぶため）。
+- **メインウィンドウを閉じたらアプリ全体を終了**する（`mainWin.OnWindowEvent(events.Common.WindowClosing, ...)` → `appQuitting.Store(true)` + `app.Quit()`）。これが無いと、hide-on-close の傍受ウィンドウだけが登録済みウィンドウとして残り、UI 不在のままプロセスが終了しない（`PostQuitMessage` が呼ばれない）。
 
 ## メインウィンドウ UI
 
@@ -97,7 +113,7 @@ postMessage の `type` で分岐:
 
 ### 最前面表示（always on top）
 
-タイトルバーのピンボタン → `Window.SetAlwaysOnTop(bool)`。状態は React ローカルで、**未永続化・起動時 OFF**（設定には保存していない）。
+タイトルバーのピンボタン → `settings.alwaysOnTop` をトグル（`updateSettings` で永続化）。`App` の `useEffect` が `settingsLoaded` 後に `Window.SetAlwaysOnTop(settings.alwaysOnTop)` を適用するため、**設定として保存され次回起動時も復元**される。
 
 ### 透明ウィンドウ（On/Off）
 
@@ -135,6 +151,7 @@ diff = util - elapsed
 |---|---|---|
 | `locale` | `""`(Auto) | 日時・残り時間の表記ロケール。空は `navigator.language` に従う。設定画面の Language セレクタ（Auto / English / 日本語） |
 | `transparent` | `false` | ウィンドウ透明の On/Off（設定画面 General のチェックボックス） |
+| `alwaysOnTop` | `false` | 最前面表示の On/Off（タイトルバーのピン。永続化・起動時復元） |
 | `showWeeklyScoped` | `true` | weekly_scoped バーの表示 |
 | `weeklyScopedWarning` / `weeklyScopedDanger` | `0` / `10` | weekly_scoped の色閾値 |
 | `weeklyScopedColorEnabled` | `true` | weekly_scoped の色分け有効 |

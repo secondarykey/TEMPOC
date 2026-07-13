@@ -21,6 +21,20 @@
   post({ type: "debug", msg: "inject: fetch patched" });
   console.debug("[TEMPOC] inject: fetch patched");
 
+  // Announce the Wails runtime handshake so Go's WebviewWindow.ExecJS() will
+  // actually run on this page. ExecJS is gated on runtimeLoaded, which normally
+  // only flips true when @wailsio/runtime sends this message — claude.ai never
+  // does. Sending the literal string ourselves flips the gate so the frontend's
+  // refresh button can drive us via ExecJS (see main.go "tempoc:refresh").
+  // Must be the raw string (not JSON) so Wails routes it to HandleMessage.
+  try {
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.postMessage("wails:runtime:ready");
+    }
+  } catch (e) {
+    // ignore
+  }
+
   // If Claude bounced us to the login page, ask Go to reveal the window so the
   // user can sign in.
   if (/^\/login\b/.test(window.location.pathname)) {
@@ -132,16 +146,39 @@
       });
   };
 
+  // Refresh by clicking claude.ai's own usage refresh button (id "_r_bb_"),
+  // which re-requests the usage API — our patched fetch then intercepts the
+  // fresh response. Preferred over calling the API directly so we exactly mirror
+  // the site's own request (headers/CSRF/endpoint stay correct). Falls back to
+  // __tempocRefetch if the button isn't present (e.g. Claude changed the id or
+  // the modal isn't mounted). Used by both the manual refresh button (driven
+  // from Go via ExecJS) and the auto-refresh interval below.
+  window.__tempocClickRefresh = function () {
+    var btn = document.getElementById("_r_bb_");
+    if (btn) {
+      post({ type: "debug", msg: "refresh: clicking usage button" });
+      btn.click();
+    } else {
+      post({ type: "debug", msg: "refresh: button not found, refetching" });
+      window.__tempocRefetch();
+    }
+  };
+
   // 初回注入後、少し待ってから能動取得を1回試みる（SPA描画完了を待つ）。
+  // 初回はまだ更新ボタン（_r_bb_）が DOM に無い可能性が高いので、直叩きの
+  // __tempocRefetch で確実に1回取得する。
   setTimeout(window.__tempocRefetch, 1500);
 
   // __TEMPOC_REFRESH_MS__ is string-replaced by Go (main.go) at window-creation
   // time with settings.RefreshInterval*60000 (0 = disabled). Because this
   // script is only pushed into the Claude window once, at startup, changing
   // the refresh interval in the Settings UI only takes effect on next app
-  // launch.
+  // launch. Repeated auto-refreshes go through the site's own button
+  // (__tempocClickRefresh) rather than hitting the API directly, so recurring
+  // traffic mirrors normal usage; it falls back to __tempocRefetch if the
+  // button isn't there.
   var refreshMs = __TEMPOC_REFRESH_MS__;
   if (refreshMs > 0) {
-    setInterval(window.__tempocRefetch, refreshMs);
+    setInterval(window.__tempocClickRefresh, refreshMs);
   }
 })();

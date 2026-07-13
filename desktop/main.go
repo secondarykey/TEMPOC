@@ -7,11 +7,19 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"changeme/settings"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
+
+// appQuitting is set while the whole application is shutting down. The
+// interceptor window's close hook consults it: normally it swallows a close
+// (hiding the window instead of destroying it), but during shutdown it must let
+// the real close through so the process can exit.
+var appQuitting atomic.Bool
 
 // Wails embeds the built frontend (frontend/dist) into the binary.
 // See https://pkg.go.dev/embed for more information.
@@ -71,6 +79,18 @@ func (c *claudeCtl) autoHide() {
 	if !pinned {
 		c.win.Hide()
 	}
+}
+
+// hideOnClose is the close-button handler. Destroying the interceptor window
+// would permanently stop usage interception — inject.js is installed only at
+// window-creation time and cannot be re-injected into a fresh window (see the
+// ExecJS caveat below). So instead of letting the X destroy it, we hide it (and
+// drop the debug pin); the user can bring it back via the settings toggle.
+func (c *claudeCtl) hideOnClose() {
+	c.mu.Lock()
+	c.pinned = false
+	c.mu.Unlock()
+	c.win.Hide()
 }
 
 // toggle flips visibility on user request (the debug button). Showing pins it
@@ -165,7 +185,7 @@ func main() {
 
 	// Main UI window: the TEMPOC usage bars (served from frontend/dist).
 	// Frameless — the title bar and window controls are drawn in React.
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:     "TEMPOC",
 		Frameless: true,
 		Width:     520,
@@ -207,6 +227,37 @@ func main() {
 		HTML:            claudeBootstrapHTML,
 		JS:              resolvedInjectJS,
 		DevToolsEnabled: true,
+	})
+
+	// Closing the main window quits the whole app. Without this, the hidden
+	// interceptor window would remain the only registered window, so the process
+	// would keep running with no visible UI and never post its quit message.
+	// Setting appQuitting first lets the interceptor's close hook (below) allow
+	// its real close during the ensuing shutdown.
+	mainWin.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
+		appQuitting.Store(true)
+		app.Quit()
+	})
+
+	// Intercept the interceptor window's close: hide it instead of destroying
+	// it, so usage interception keeps working (unless the app is shutting down).
+	// Registered as a hook (hooks run before listeners) so cancelling here
+	// pre-empts Wails' default listener that would otherwise destroy the window.
+	claude.win.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		if appQuitting.Load() {
+			return
+		}
+		e.Cancel()
+		claude.hideOnClose()
+	})
+
+	// Manual refresh: the main UI's refresh button emits this. Drive the
+	// interceptor page to click claude.ai's own usage refresh button, which
+	// re-requests the usage API; our patched fetch intercepts the fresh
+	// response and pushes it back to the UI. Relies on inject.js having enabled
+	// ExecJS via the faked wails:runtime:ready handshake.
+	app.Event.On("tempoc:refresh", func(*application.CustomEvent) {
+		claude.win.ExecJS("window.__tempocClickRefresh && window.__tempocClickRefresh();")
 	})
 
 	// Debug toggle: the main UI emits this to show/hide the Claude window.

@@ -514,31 +514,30 @@ function UsageBar({
   const secUtil = secondary ? clamp(secondary.data?.utilization ?? 0) : 0;
   const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
 
-  // Compact mode: a single line per window,
-  //   "label | reset date | remaining | utilization% | elapsed%",
-  // instead of the track/marker/foot layout. Every column after the label has
-  // a fixed width (style.css --compact-*-col) so the cells line up across
-  // every row — including across cards, since each card is its own grid. The
-  // secondary (weekly_scoped) row shares the primary's timeline, so its
-  // date/remaining/elapsed repeat the primary's values.
+  // Compact mode: a single line per window, "label | utilization% | elapsed%",
+  // instead of the track/marker/foot layout. The reset date and remaining time
+  // are tucked into the row's title tooltip rather than shown as columns, so
+  // the row stays as small as possible. The fixed value columns (style.css
+  // --compact-*-col) keep cells lined up across every row — including across
+  // cards, since each card is its own grid. The secondary (weekly_scoped) row
+  // shares the primary's timeline, so its tooltip/elapsed repeat the primary's.
   if (sizeMode === 'compact') {
     const locale = resolveLocale(settings);
-    const row = (lbl: string, u: number, c: string, remain: boolean, sub?: boolean) => {
-      const remainStr = started && remain ? formatRemaining(remainMs, settings.durationStyle, locale) : '';
-      return (
-        <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`}>
-          <span className="usage-bar-label" title={lbl}>{lbl}</span>
-          <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : 'not started'}</span>
-          <span className="usage-bar-compact-remain" title={remainStr || undefined}>{remainStr}</span>
-          <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
-          <span className="usage-bar-compact-elapsed">{started ? formatPercent(elapsed, settings) : '—'}</span>
-        </div>
-      );
-    };
+    const resetInfo =
+      started && resets
+        ? `Resets ${formatResetDate(resets, locale)} (${formatRemaining(remainMs, settings.durationStyle, locale)})`
+        : 'not started';
+    const row = (lbl: string, u: number, c: string, sub?: boolean) => (
+      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={resetInfo}>
+        <span className="usage-bar-label" title={lbl}>{lbl}</span>
+        <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
+        <span className="usage-bar-compact-elapsed">{started ? formatPercent(elapsed, settings) : '—'}</span>
+      </div>
+    );
     return (
       <div className="usage-bar">
-        {row(label, util, color, showRemain)}
-        {secondary && row(secondary.label, secUtil, secColor, pickCfg(secondary.kind, settings).showRemain, true)}
+        {row(label, util, color)}
+        {secondary && row(secondary.label, secUtil, secColor, true)}
       </div>
     );
   }

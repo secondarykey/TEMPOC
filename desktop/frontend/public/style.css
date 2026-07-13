@@ -298,14 +298,11 @@ body { background: transparent; }
 
 .usage-bar-compact {
     display: grid;
-    /* label | reset date | remaining | utilization% | elapsed%. Fixed-width
-       columns keep cells lined up across all rows and cards (each card is its
-       own grid); the flexible one is "remaining", not the label, so the label
-       doesn't get truncated first (it still carries a title tooltip in case a
-       narrow window clips it). Tweak the --compact-*-col vars. */
+    /* label | utilization% | elapsed%. The reset date and remaining time live
+       only in the row's title tooltip. Fixed value columns keep cells lined up
+       across all rows and cards (each card is its own grid); tweak the
+       --compact-*-col vars. */
     grid-template-columns:
-        var(--compact-label-col, 9rem)
-        var(--compact-date-col, 8.5rem)
         minmax(0, 1fr)
         var(--compact-util-col, 3.2rem)
         var(--compact-elapsed-col, 4rem);
@@ -324,8 +321,6 @@ body { background: transparent; }
     font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
-.usage-bar-compact .usage-bar-reset,
-.usage-bar-compact-remain,
 .usage-bar-compact-elapsed {
     font-size: inherit;
     font-weight: 400;
@@ -333,12 +328,6 @@ body { background: transparent; }
     white-space: nowrap;
     text-align: right;
     font-variant-numeric: tabular-nums;
-}
-/* The flexible column: shrinks first on narrow windows, so clip gracefully
-   (the full text is still reachable via the title tooltip). */
-.usage-bar-compact-remain {
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 .usage-bar-compact .usage-bar-util {
     text-align: right;

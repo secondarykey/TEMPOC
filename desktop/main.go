@@ -30,8 +30,9 @@ var injectJS string
 // API through to the frontend. Kept loose (json.RawMessage) as the frontend
 // reads utilization / resets_at directly.
 type UsagePayload struct {
-	SevenDay json.RawMessage `json:"seven_day"`
-	FiveHour json.RawMessage `json:"five_hour"`
+	SevenDay     json.RawMessage `json:"seven_day"`
+	FiveHour     json.RawMessage `json:"five_hour"`
+	WeeklyScoped json.RawMessage `json:"weekly_scoped,omitempty"`
 }
 
 // claudeBootstrapHTML is the initial document for the Claude window. Booting in
@@ -42,10 +43,11 @@ const claudeBootstrapHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><t
 // usageMessage is the shape of the JSON string posted from inject.js via
 // window.chrome.webview.postMessage.
 type usageMessage struct {
-	Type     string          `json:"type"`
-	Msg      string          `json:"msg"`
-	SevenDay json.RawMessage `json:"seven_day"`
-	FiveHour json.RawMessage `json:"five_hour"`
+	Type         string          `json:"type"`
+	Msg          string          `json:"msg"`
+	SevenDay     json.RawMessage `json:"seven_day"`
+	FiveHour     json.RawMessage `json:"five_hour"`
+	WeeklyScoped json.RawMessage `json:"weekly_scoped"`
 }
 
 // claudeCtl controls the visibility of the interception window. It is hidden by
@@ -150,8 +152,9 @@ func main() {
 			case "usage":
 				log.Printf("tempoc: received usage payload from %s", originInfo.Origin)
 				app.Event.Emit("tempoc:usage", UsagePayload{
-					SevenDay: msg.SevenDay,
-					FiveHour: msg.FiveHour,
+					SevenDay:     msg.SevenDay,
+					FiveHour:     msg.FiveHour,
+					WeeklyScoped: msg.WeeklyScoped,
 				})
 				// Data is flowing, so we're authenticated — hide the window
 				// (unless the user pinned it open for debugging).

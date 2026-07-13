@@ -152,6 +152,13 @@ body { background: transparent; }
     font-variant-numeric: tabular-nums;
 }
 
+/* Nested secondary window (e.g. weekly_scoped) inside the same card. */
+.usage-bar-head--sub {
+    margin-top: 0.8rem;
+    margin-bottom: 0.6rem;
+}
+.usage-bar-head--sub .usage-bar-util { font-size: 1.05rem; }
+
 .usage-bar-track {
     position: relative;
     height: 14px;

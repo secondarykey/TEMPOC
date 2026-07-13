@@ -17,6 +17,14 @@ type Settings struct {
 	Hour5ColorEnabled  bool   `json:"hour5ColorEnabled"`
 	ShowRemainDay7     bool   `json:"showRemainDay7"`
 	ShowRemainHour5    bool   `json:"showRemainHour5"`
+	// weekly_scoped is an additional window that may or may not exist in the
+	// API response. Its bar/settings only take effect when the data is present.
+	ShowWeeklyScoped         bool   `json:"showWeeklyScoped"`
+	WeeklyScopedDanger       int    `json:"weeklyScopedDanger"`
+	WeeklyScopedWarning      int    `json:"weeklyScopedWarning"`
+	WeeklyScopedColorEnabled bool   `json:"weeklyScopedColorEnabled"`
+	ShowRemainWeeklyScoped   bool   `json:"showRemainWeeklyScoped"`
+	WeeklyScopedLabel        string `json:"weeklyScopedLabel"`
 	DecimalPlaces      int    `json:"decimalPlaces"`
 	DurationStyle      string `json:"durationStyle"`
 	PercentFormat      string `json:"percentFormat"`
@@ -44,6 +52,13 @@ func Default() Settings {
 		Hour5ColorEnabled:  true,
 		ShowRemainDay7:     true,
 		ShowRemainHour5:    false,
+
+		ShowWeeklyScoped:         true,
+		WeeklyScopedDanger:       10,
+		WeeklyScopedWarning:      0,
+		WeeklyScopedColorEnabled: true,
+		ShowRemainWeeklyScoped:   true,
+		WeeklyScopedLabel:        "Weekly (scoped)",
 		DecimalPlaces:      2,
 		DurationStyle:      "short",
 		PercentFormat:      "{}%",

@@ -61,13 +61,17 @@ claude.ai のような**第三者ページに JS を注入する**には、Wails
 `inject.js` から `window.chrome.webview.postMessage(JSON.stringify(...))`（`window.chrome.webview` は WebView2 が全ページに提供）。Go 側は `application.Options.RawMessageHandler(window, message, originInfo)` で受信（`wails:` で始まらない全メッセージが届く）。`originInfo.Origin` に `claude.ai` が含まれるか検証してから処理する。
 
 postMessage の `type` で分岐:
-- `usage` — `seven_day`/`five_hour` を `app.Event.Emit("tempoc:usage", ...)` でフロントへ。以後 `Events.On("tempoc:usage")` で受信
+- `usage` — `seven_day`/`five_hour`/`weekly_scoped` を `app.Event.Emit("tempoc:usage", ...)` でフロントへ。以後 `Events.On("tempoc:usage")` で受信
 - `auth-required` — `/login` へリダイレクトされた（未認証）→ 傍受ウィンドウを表示
 - `debug` — ログ出力用
 
 ### 対象 API
 
-`/api/organizations/{id}/usage`（正規表現 `^/api/organizations/[^/]+/usage$`）。戻り値は `seven_day` / `five_hour`、各々 `utilization`（%）と `resets_at`（ISO or null）。
+`/api/organizations/{id}/usage`（正規表現 `^/api/organizations/[^/]+/usage$`）。各ウィンドウは `utilization`（%）と `resets_at`（ISO or null）を持つ。
+
+- `seven_day` / `five_hour` — レスポンスのトップレベル。それぞれ 7日 / 5時間ウィンドウ
+- `weekly_scoped` — トップレベルではなく `limits` 配列の要素（`kind === "weekly_scoped"`）。存在しない場合がある（新しめ・一時的な可能性あり）。group は "weekly" のため**時間枠は 7日**として扱う
+- `inject.js` の `findLimit()` が `limits` から `kind` で抽出、`normalizeWindow()` が使用量を正規化する。`limits` 要素は使用量を `percent` で持つため `percent` → `utilization` に変換（トップレベルの `utilization` にもフォールバック）。5時間/7日もトップレベルが無ければ `limits` から拾う
 
 ### 自動再取得（refreshInterval）
 
@@ -105,7 +109,7 @@ postMessage の `type` で分岐:
 
 ### 使用量バー（`UsageBar`）
 
-上段を **タイトル｜リセット日時｜使用率** の 3 カラムグリッド（列幅固定で上下バーが揃う）。バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植:
+上段を **タイトル｜リセット日時｜使用率** の 3 カラムグリッド（列幅固定で上下バーが揃う）。バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）:
 
 ```
 colorEnabled=false                                   → accent
@@ -117,6 +121,10 @@ diff = util - elapsed
 ```
 色: accent `#7dd3fc` / warning `#fbbf24` / danger `#ef4444`。
 
+- **使用率の表記**: `utilization` は API 上つねに整数（`percent`）なので `formatUtil()` で `100%` のように整数表示する（`decimalPlaces` / `percentFormat` は適用しない）。一方 **Elapsed（経過%）は計算値**なので `decimalPlaces` / `percentFormat` を適用（`formatPercent()`）。
+- **weekly_scoped のネスト表示**: `seven_day` と `weekly_scoped` はリセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけ。そこで **Weekly limit カード（`seven_day`）の中に副バーとしてネスト**する（`UsageBar` の `secondary` prop）。タイムライン（リセット日時・経過マーカー・残り時間）は主バーと共有し、副バーはラベル・使用率・色のみ独立。表示は `showDay7 && showWeeklyScoped` かつデータ存在時のみ。5時間バーは独立カードのまま。
+- **ウィンドウ高さの動的調整**: 副バー（weekly_scoped）が表示されるとき `Window.SetSize(520, 396)`、それ以外は `340`（`App` の `useEffect` が `weeklyBarVisible` を監視）。
+
 ## 設定（Chrome 拡張から移植 + 追加）
 
 `settings/settings.go` の `Settings`。永続化先は `%APPDATA%\TEMPOC\settings.json`（`os.UserConfigDir()`）。フロントは起動時に `SettingsService.Get()` で読み込み、`App` の state に保持して `UsageBar` に渡す。変更時は state 更新（即時反映）＋ `SettingsService.Set()`（保存）。
@@ -127,8 +135,13 @@ diff = util - elapsed
 |---|---|---|
 | `locale` | `""`(Auto) | 日時・残り時間の表記ロケール。空は `navigator.language` に従う。設定画面の Language セレクタ（Auto / English / 日本語） |
 | `transparent` | `false` | ウィンドウ透明の On/Off（設定画面 General のチェックボックス） |
+| `showWeeklyScoped` | `true` | weekly_scoped バーの表示 |
+| `weeklyScopedWarning` / `weeklyScopedDanger` | `0` / `10` | weekly_scoped の色閾値 |
+| `weeklyScopedColorEnabled` | `true` | weekly_scoped の色分け有効 |
+| `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
+| `weeklyScopedLabel` | `"Weekly (scoped)"` | weekly_scoped 副バーのラベル（設定画面で変更可） |
 
-設定画面（歯車）は 5-Hour / 7-Day / General の 3 セクション + dual-range スライダー + Claude interceptor toggle。
+設定画面（歯車）は 5-Hour / 7-Day / (weekly_scoped 存在時のみ) Weekly (scoped) / General の各セクション + dual-range スライダー + Claude interceptor toggle。weekly_scoped セクションは **データが存在するときだけ表示**され、5h/7d と同じ設定に加え Label（名称）入力を持つ（`SettingsView` の `hasWeeklyScoped` prop で制御）。
 
 ### 設定を追加する手順
 

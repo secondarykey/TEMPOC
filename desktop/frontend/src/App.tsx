@@ -132,9 +132,11 @@ function DualRange({
 function SettingsView({
   settings,
   onUpdate,
+  hasWeeklyScoped,
 }: {
   settings: Settings;
   onUpdate: (patch: Partial<Settings>) => void;
+  hasWeeklyScoped: boolean;
 }) {
   const toggleClaude = () => {
     Events.Emit('tempoc:toggle-claude');
@@ -189,6 +191,41 @@ function SettingsView({
           onChange={(w, d) => onUpdate({ day7Warning: w, day7Danger: d })}
         />
       </section>
+
+      {hasWeeklyScoped && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Weekly (scoped) Window</h3>
+          <label className="settings-row">
+            <span>Label</span>
+            <input
+              type="text"
+              className="settings-text-input"
+              value={settings.weeklyScopedLabel}
+              placeholder="Weekly (scoped)"
+              onChange={(e) => onUpdate({ weeklyScopedLabel: e.target.value })}
+            />
+          </label>
+          <label className="settings-check-row">
+            <span>Show</span>
+            <input type="checkbox" checked={settings.showWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
+          </label>
+          <label className="settings-check-row">
+            <span>Show remaining time</span>
+            <input type="checkbox" checked={settings.showRemainWeeklyScoped} onChange={(e) => onUpdate({ showRemainWeeklyScoped: e.target.checked })} />
+          </label>
+          <label className="settings-check-row">
+            <span>Color threshold</span>
+            <input type="checkbox" checked={settings.weeklyScopedColorEnabled} onChange={(e) => onUpdate({ weeklyScopedColorEnabled: e.target.checked })} />
+          </label>
+          <DualRange
+            min={-50}
+            max={50}
+            warning={settings.weeklyScopedWarning}
+            danger={settings.weeklyScopedDanger}
+            onChange={(w, d) => onUpdate({ weeklyScopedWarning: w, weeklyScopedDanger: d })}
+          />
+        </section>
+      )}
 
       <section className="settings-section">
         <h3 className="settings-section-title">General</h3>
@@ -279,17 +316,21 @@ function SettingsView({
 }
 
 type UsageWindow = { utilization?: number; resets_at?: string | null };
+type WindowKind = 'five_hour' | 'seven_day' | 'weekly_scoped';
 type UsagePayload = {
   seven_day?: UsageWindow;
   five_hour?: UsageWindow;
+  // weekly_scoped is a newer window Claude added; may be absent/temporary.
+  weekly_scoped?: UsageWindow;
 };
 
 // Length of each usage window in milliseconds. The window start is derived by
 // subtracting this from resets_at (the window end), matching the Chrome
-// extension's calculation.
-const WINDOW_MS: Record<'five_hour' | 'seven_day', number> = {
+// extension's calculation. weekly_scoped is treated as a 7-day window.
+const WINDOW_MS: Record<WindowKind, number> = {
   five_hour: 5 * 60 * 60 * 1000,
   seven_day: 7 * 24 * 60 * 60 * 1000,
+  weekly_scoped: 7 * 24 * 60 * 60 * 1000,
 };
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
@@ -301,6 +342,13 @@ const resolveLocale = (settings: Settings): string => settings.locale || navigat
 function formatPercent(n: number, settings: Settings): string {
   const fmt = settings.percentFormat || '{}%';
   return fmt.replace('{}', n.toFixed(settings.decimalPlaces));
+}
+
+// Utilisation from the API is a whole percent (no decimals), so it's always
+// shown as an integer like "100%" — independent of the decimalPlaces setting
+// (which still applies to the computed Elapsed percentage).
+function formatUtil(n: number): string {
+  return `${Math.round(n)}%`;
 }
 
 // Format a remaining duration using Intl.DurationFormat (ported from
@@ -346,21 +394,50 @@ function formatResetDate(d: Date, locale: string): string {
   }
 }
 
-// A single usage window rendered as a progress bar: the coloured fill is the
-// usage utilisation, and the vertical marker is how far through the time
-// window we are. Color logic ported exactly from content.js's redraw().
+// Per-window color thresholds / remaining-time preference.
+function pickCfg(kind: WindowKind, s: Settings) {
+  if (kind === 'five_hour')
+    return { colorEnabled: s.hour5ColorEnabled, danger: s.hour5Danger, warning: s.hour5Warning, showRemain: s.showRemainHour5 };
+  if (kind === 'seven_day')
+    return { colorEnabled: s.day7ColorEnabled, danger: s.day7Danger, warning: s.day7Warning, showRemain: s.showRemainDay7 };
+  return {
+    colorEnabled: s.weeklyScopedColorEnabled,
+    danger: s.weeklyScopedDanger,
+    warning: s.weeklyScopedWarning,
+    showRemain: s.showRemainWeeklyScoped,
+  };
+}
+
+// Color of the utilisation fill, ported exactly from content.js's redraw().
+function computeColor(util: number, elapsed: number, kind: WindowKind, s: Settings): string {
+  const cfg = pickCfg(kind, s);
+  if (!cfg.colorEnabled) return COLORS.accent;
+  if (util >= s.utilizationDanger) return COLORS.danger;
+  const diff = util - elapsed;
+  if (diff > cfg.danger) return COLORS.danger;
+  if (diff > cfg.warning || util >= s.utilizationWarning) return COLORS.warning;
+  return COLORS.accent;
+}
+
+// A usage window rendered as a progress bar: the coloured fill is the usage
+// utilisation, and the vertical marker is how far through the time window we
+// are. An optional `secondary` window (e.g. weekly_scoped) is nested inside the
+// same card, sharing this window's timeline (reset time / elapsed / remaining);
+// only its label and utilisation differ.
 function UsageBar({
   label,
   kind,
   data,
   now,
   settings,
+  secondary,
 }: {
   label: string;
-  kind: 'five_hour' | 'seven_day';
+  kind: WindowKind;
   data: UsageWindow | undefined;
   now: number;
   settings: Settings;
+  secondary?: { label: string; kind: WindowKind; data: UsageWindow | undefined };
 }) {
   const util = clamp(data?.utilization ?? 0);
   const resets = data?.resets_at ? new Date(data.resets_at) : null;
@@ -376,33 +453,19 @@ function UsageBar({
     remainMs = end - now;
   }
 
-  const colorEnabled = kind === 'seven_day' ? settings.day7ColorEnabled : settings.hour5ColorEnabled;
-  const danger = kind === 'seven_day' ? settings.day7Danger : settings.hour5Danger;
-  const warning = kind === 'seven_day' ? settings.day7Warning : settings.hour5Warning;
-  const showRemain = kind === 'seven_day' ? settings.showRemainDay7 : settings.showRemainHour5;
+  const color = computeColor(util, elapsed, kind, settings);
+  const showRemain = pickCfg(kind, settings).showRemain;
 
-  let color: string;
-  if (!colorEnabled) {
-    color = COLORS.accent;
-  } else if (util >= settings.utilizationDanger) {
-    color = COLORS.danger;
-  } else {
-    const diff = util - elapsed;
-    if (diff > danger) {
-      color = COLORS.danger;
-    } else if (diff > warning || util >= settings.utilizationWarning) {
-      color = COLORS.warning;
-    } else {
-      color = COLORS.accent;
-    }
-  }
+  // secondary shares this window's elapsed timeline; only label/util/color differ.
+  const secUtil = secondary ? clamp(secondary.data?.utilization ?? 0) : 0;
+  const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
 
   return (
     <div className="usage-bar">
       <div className="usage-bar-head">
         <span className="usage-bar-label">{label}</span>
         <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, resolveLocale(settings)) : ''}</span>
-        <span className="usage-bar-util" style={{ color }}>{formatPercent(util, settings)}</span>
+        <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
       </div>
       <div className="usage-bar-track">
         <div className="usage-bar-fill" style={{ width: `${util}%`, background: color }} />
@@ -410,6 +473,21 @@ function UsageBar({
           <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} title={`Elapsed ${formatPercent(elapsed, settings)}`} />
         )}
       </div>
+
+      {secondary && (
+        <>
+          <div className="usage-bar-head usage-bar-head--sub">
+            <span className="usage-bar-label">{secondary.label}</span>
+            <span className="usage-bar-reset" />
+            <span className="usage-bar-util" style={{ color: secColor }}>{formatUtil(secUtil)}</span>
+          </div>
+          <div className="usage-bar-track">
+            <div className="usage-bar-fill" style={{ width: `${secUtil}%`, background: secColor }} />
+            {started && <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} />}
+          </div>
+        </>
+      )}
+
       <div className="usage-bar-foot">
         <span>Elapsed {started ? formatPercent(elapsed, settings) : '—'}</span>
         <span>
@@ -455,6 +533,16 @@ function App() {
     document.documentElement.classList.toggle('is-transparent', settings.transparent);
   }, [settings.transparent]);
 
+  // The nested weekly_scoped bar needs extra height; grow the window to fit it.
+  const weeklyBarVisible =
+    settings.showDay7 &&
+    settings.showWeeklyScoped &&
+    !!usage?.weekly_scoped &&
+    (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null);
+  useEffect(() => {
+    Window.SetSize(520, weeklyBarVisible ? 396 : 340);
+  }, [weeklyBarVisible]);
+
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => {
       const next = new Settings({ ...prev, ...patch });
@@ -468,7 +556,16 @@ function App() {
       <TitleBar settingsOpen={settingsOpen} onToggleSettings={() => setSettingsOpen((v) => !v)} />
       <main className="app">
         {settingsOpen ? (
-          settingsLoaded && <SettingsView settings={settings} onUpdate={updateSettings} />
+          settingsLoaded && (
+            <SettingsView
+              settings={settings}
+              onUpdate={updateSettings}
+              hasWeeklyScoped={
+                !!usage?.weekly_scoped &&
+                (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null)
+              }
+            />
+          )
         ) : !usage ? (
           <p className="app-placeholder">Waiting for usage data… (log in to Claude if prompted)</p>
         ) : (
@@ -477,7 +574,20 @@ function App() {
               <UsageBar label="Current session" kind="five_hour" data={usage.five_hour} now={now} settings={settings} />
             )}
             {settings.showDay7 && (
-              <UsageBar label="Weekly limit" kind="seven_day" data={usage.seven_day} now={now} settings={settings} />
+              <UsageBar
+                label="Weekly limit"
+                kind="seven_day"
+                data={usage.seven_day}
+                now={now}
+                settings={settings}
+                secondary={
+                  settings.showWeeklyScoped &&
+                  usage.weekly_scoped &&
+                  (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null)
+                    ? { label: settings.weeklyScopedLabel || 'Weekly (scoped)', kind: 'weekly_scoped', data: usage.weekly_scoped }
+                    : undefined
+                }
+              />
             )}
           </div>
         )}

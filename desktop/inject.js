@@ -46,16 +46,39 @@
     }
   }
 
+  // Find a usage window by kind inside the `limits` array (the API's newer
+  // shape). Returns the matching limit object (which carries utilization /
+  // resets_at) or null.
+  function findLimit(data, kind) {
+    if (!data || !Array.isArray(data.limits)) return null;
+    for (var i = 0; i < data.limits.length; i++) {
+      if (data.limits[i] && data.limits[i].kind === kind) return data.limits[i];
+    }
+    return null;
+  }
+
+  // Normalize a window object to { utilization, resets_at }. The `limits`
+  // entries carry the usage as `percent`, while the legacy top-level
+  // seven_day/five_hour objects use `utilization` — accept either.
+  function normalizeWindow(o) {
+    if (!o) return undefined;
+    var util = o.percent != null ? o.percent : o.utilization;
+    return { utilization: util, resets_at: o.resets_at };
+  }
+
   function handleUsageResponse(response) {
     response
       .clone()
       .json()
       .then(function (data) {
         console.debug("[TEMPOC] usage intercepted", data);
+        // weekly_scoped lives as an entry in the `limits` array (its `kind`),
+        // not as a top-level key. Fall back to a top-level key just in case.
         post({
           type: "usage",
-          seven_day: data.seven_day,
-          five_hour: data.five_hour,
+          seven_day: normalizeWindow(data.seven_day || findLimit(data, "seven_day")),
+          five_hour: normalizeWindow(data.five_hour || findLimit(data, "five_hour")),
+          weekly_scoped: normalizeWindow(findLimit(data, "weekly_scoped") || data.weekly_scoped),
         });
       })
       .catch(function () {

@@ -56,7 +56,7 @@ function TitleBar({ settingsOpen, onToggleSettings, onRefresh, onTop, onToggleOn
           <RefreshIcon />
         </button>
         {lastUpdatedLabel && (
-          <span className="titlebar-updated" title="When the displayed usage was last fetched">
+          <span className="titlebar-updated" style={{ '--wails-draggable': 'drag' } as React.CSSProperties} title="When the displayed usage was last fetched">
             Updated {lastUpdatedLabel}
           </span>
         )}
@@ -615,15 +615,75 @@ function App() {
     if (settingsLoaded) Window.SetAlwaysOnTop(settings.alwaysOnTop);
   }, [settingsLoaded, settings.alwaysOnTop]);
 
-  // The nested weekly_scoped bar needs extra height; grow the window to fit it.
-  const weeklyBarVisible =
-    settings.showDay7 &&
-    settings.showWeeklyScoped &&
+  const weeklyScopedHasData =
     !!usage?.weekly_scoped &&
     (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null);
+
+  // Measure the natural height of the usage content via a ResizeObserver so the
+  // window can fit however many bars are shown: one bar is much shorter than
+  // two, and the nested weekly sub-bar adds a little. The ref is attached to the
+  // .usage-bars container; when it unmounts (settings view / placeholder) the
+  // last measurement is retained but unused, since those views size differently.
+  const [contentHeight, setContentHeight] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const measureRef = useCallback((node: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (node) {
+      const ro = new ResizeObserver(() => setContentHeight(node.scrollHeight));
+      ro.observe(node);
+      observerRef.current = ro;
+      setContentHeight(node.scrollHeight);
+    }
+  }, []);
+
+  // Target native window height. Settings is a fixed tall screen; the usage view
+  // fits its measured content plus the fixed chrome around it: #root padding
+  // (10) + title bar (34) + .app vertical padding (~52) ≈ 96px. Clamped to the
+  // window's MinHeight so a shrink never desyncs from what the OS applies.
+  const CHROME_PX = 96;
+  const MIN_WINDOW_H = 160;
+  const usageTarget =
+    contentHeight > 0 ? Math.max(MIN_WINDOW_H, Math.round(contentHeight + CHROME_PX)) : 0;
+  const targetHeight = settingsOpen ? 800 : usageTarget;
+
+  // Wails' Window.SetSize is instant, so we tween it ourselves frame-by-frame
+  // for a smooth resize. The first application (and a target of 0, i.e. not yet
+  // measured) is snapped without animation.
+  const heightRef = useRef<number>(340);
+  const animRef = useRef<number | null>(null);
+  const resizedOnceRef = useRef<boolean>(false);
   useEffect(() => {
-    Window.SetSize(520, weeklyBarVisible ? 396 : 340);
-  }, [weeklyBarVisible]);
+    if (targetHeight <= 0) return;
+    if (animRef.current != null) {
+      cancelAnimationFrame(animRef.current);
+      animRef.current = null;
+    }
+    const from = heightRef.current;
+    if (!resizedOnceRef.current || from === targetHeight) {
+      resizedOnceRef.current = true;
+      heightRef.current = targetHeight;
+      Window.SetSize(520, targetHeight);
+      return;
+    }
+    const duration = 220;
+    const start = performance.now();
+    const step = (t: number) => {
+      const p = Math.min(1, (t - start) / duration);
+      const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
+      const h = Math.round(from + (targetHeight - from) * eased);
+      heightRef.current = h;
+      Window.SetSize(520, h);
+      animRef.current = p < 1 ? requestAnimationFrame(step) : null;
+    };
+    animRef.current = requestAnimationFrame(step);
+    return () => {
+      if (animRef.current != null) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+    };
+  }, [targetHeight]);
 
   const updateSettings = useCallback((patch: Partial<Settings>) => {
     setSettings((prev) => {
@@ -652,10 +712,7 @@ function App() {
             <SettingsView
               settings={settings}
               onUpdate={updateSettings}
-              hasWeeklyScoped={
-                !!usage?.weekly_scoped &&
-                (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null)
-              }
+              hasWeeklyScoped={weeklyScopedHasData}
             />
           )
         ) : !usage ? (
@@ -665,11 +722,11 @@ function App() {
             <span className="app-placeholder-hint">(log in to Claude if prompted)</span>
           </p>
         ) : (
-          <div className="usage-bars">
+          <div className="usage-bars" ref={measureRef}>
             {settings.showHour5 && (
               <UsageBar label="Current session" kind="five_hour" data={usage.five_hour} now={now} settings={settings} />
             )}
-            {settings.showDay7 && (
+            {settings.showDay7 ? (
               <UsageBar
                 label="Weekly limit"
                 kind="seven_day"
@@ -677,13 +734,22 @@ function App() {
                 now={now}
                 settings={settings}
                 secondary={
-                  settings.showWeeklyScoped &&
-                  usage.weekly_scoped &&
-                  (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null)
+                  settings.showWeeklyScoped && weeklyScopedHasData
                     ? { label: settings.weeklyScopedLabel || 'Weekly (scoped)', kind: 'weekly_scoped', data: usage.weekly_scoped }
                     : undefined
                 }
               />
+            ) : (
+              settings.showWeeklyScoped &&
+              weeklyScopedHasData && (
+                <UsageBar
+                  label={settings.weeklyScopedLabel || 'Weekly (scoped)'}
+                  kind="weekly_scoped"
+                  data={usage.weekly_scoped}
+                  now={now}
+                  settings={settings}
+                />
+              )
             )}
           </div>
         )}

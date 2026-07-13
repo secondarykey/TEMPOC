@@ -62,7 +62,8 @@ body { background: transparent; }
     font-size: 11px;
     color: var(--text-dim, rgba(255, 255, 255, 0.45));
     white-space: nowrap;
-    pointer-events: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .titlebar-gear,

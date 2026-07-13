@@ -523,17 +523,18 @@ function UsageBar({
   // date/remaining/elapsed repeat the primary's values.
   if (sizeMode === 'compact') {
     const locale = resolveLocale(settings);
-    const row = (lbl: string, u: number, c: string, remain: boolean, sub?: boolean) => (
-      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`}>
-        <span className="usage-bar-label">{lbl}</span>
-        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : 'not started'}</span>
-        <span className="usage-bar-compact-remain">
-          {started && remain ? formatRemaining(remainMs, settings.durationStyle, locale) : ''}
-        </span>
-        <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
-        <span className="usage-bar-compact-elapsed">{started ? formatPercent(elapsed, settings) : '—'}</span>
-      </div>
-    );
+    const row = (lbl: string, u: number, c: string, remain: boolean, sub?: boolean) => {
+      const remainStr = started && remain ? formatRemaining(remainMs, settings.durationStyle, locale) : '';
+      return (
+        <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`}>
+          <span className="usage-bar-label" title={lbl}>{lbl}</span>
+          <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : 'not started'}</span>
+          <span className="usage-bar-compact-remain" title={remainStr || undefined}>{remainStr}</span>
+          <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
+          <span className="usage-bar-compact-elapsed">{started ? formatPercent(elapsed, settings) : '—'}</span>
+        </div>
+      );
+    };
     return (
       <div className="usage-bar">
         {row(label, util, color, showRemain)}

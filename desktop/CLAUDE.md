@@ -197,7 +197,7 @@ diff = util - elapsed
 | `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
 | `weeklyScopedLabel` | `"Weekly (scoped)"` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可） |
 
-設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / 5-Hour / 7-Day / (weekly_scoped 存在時のみ) Weekly (scoped) / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped セクションは **データが存在するときだけ表示**され、5h/7d と同じ設定に加え Label（名称）入力を持つ（`hasWeeklyScoped` prop で制御。設定ウィンドウ自身も `tempoc:usage` を購読して導出）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
+設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / Formatting / 5-Hour / 7-Day / (weekly_scoped 存在時のみ) Weekly (scoped) / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped セクションは **データが存在するときだけ表示**され、5h/7d と同じ設定に加え Label（名称）入力を持つ（`hasWeeklyScoped` prop で制御。設定ウィンドウ自身も `tempoc:usage` を購読して導出）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
 
 ### 設定を追加する手順
 

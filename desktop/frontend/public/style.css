@@ -456,13 +456,12 @@ body { background: transparent; }
 .settings-check-row:last-of-type,
 .settings-row:last-of-type { border-bottom: none; }
 
-.settings-row--nogap { border-bottom: none; gap: 0.5rem; justify-content: flex-start; }
-
-.settings-row--refresh {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.2rem;
-    padding: 0.35rem 0;
+/* Right-hand group of a settings-row when it holds several controls
+   (e.g. Auto-refresh: checkbox + number input + unit). */
+.settings-row-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }
 
 .settings-help-text {

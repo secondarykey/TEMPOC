@@ -88,6 +88,14 @@ export function SettingsView({
     <div className="settings">
       <section className="settings-section">
         <h3 className="settings-section-title">General</h3>
+        <label className="settings-row">
+          <span>Size mode</span>
+          <select value={settings.sizeMode || 'normal'} onChange={(e) => onUpdate({ sizeMode: e.target.value })}>
+            <option value="normal">Normal</option>
+            <option value="small">Small</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
         <label className="settings-check-row">
           <span>Transparent window</span>
           <input
@@ -96,6 +104,31 @@ export function SettingsView({
             onChange={(e) => onUpdate({ transparent: e.target.checked })}
           />
         </label>
+        <label className="settings-row">
+          <span>Auto-refresh</span>
+          <span className="settings-row-controls">
+            <input
+              type="checkbox"
+              checked={settings.refreshInterval > 0}
+              onChange={(e) => onUpdate({ refreshInterval: e.target.checked ? 5 : 0 })}
+            />
+            <input
+              type="number"
+              className="settings-number-input"
+              min={1}
+              max={60}
+              value={settings.refreshInterval > 0 ? settings.refreshInterval : 5}
+              disabled={settings.refreshInterval <= 0}
+              onChange={(e) => onUpdate({ refreshInterval: Number(e.target.value) })}
+            />
+            <span className="settings-unit">min</span>
+          </span>
+        </label>
+        <div className="settings-help-text">Takes effect on next app launch.</div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">Formatting</h3>
         <label className="settings-row">
           <span>Language</span>
           <select value={settings.locale} onChange={(e) => onUpdate({ locale: e.target.value })}>
@@ -110,14 +143,6 @@ export function SettingsView({
             <option value="narrow">Narrow (3d 4h)</option>
             <option value="short">Short (3 days 4 hr.)</option>
             <option value="long">Long (3 days 4 hours)</option>
-          </select>
-        </label>
-        <label className="settings-row">
-          <span>Size mode</span>
-          <select value={settings.sizeMode || 'normal'} onChange={(e) => onUpdate({ sizeMode: e.target.value })}>
-            <option value="normal">Normal</option>
-            <option value="small">Small</option>
-            <option value="compact">Compact</option>
           </select>
         </label>
         <label className="settings-row">
@@ -138,27 +163,6 @@ export function SettingsView({
             onChange={(e) => onUpdate({ percentFormat: e.target.value || '{}%' })}
           />
         </label>
-        <div className="settings-row settings-row--refresh">
-          <label className="settings-row settings-row--nogap">
-            <span>Auto-refresh</span>
-            <input
-              type="checkbox"
-              checked={settings.refreshInterval > 0}
-              onChange={(e) => onUpdate({ refreshInterval: e.target.checked ? 5 : 0 })}
-            />
-            <input
-              type="number"
-              className="settings-number-input"
-              min={1}
-              max={60}
-              value={settings.refreshInterval > 0 ? settings.refreshInterval : 5}
-              disabled={settings.refreshInterval <= 0}
-              onChange={(e) => onUpdate({ refreshInterval: Number(e.target.value) })}
-            />
-            <span className="settings-unit">min</span>
-          </label>
-          <div className="settings-help-text">Takes effect on next app launch.</div>
-        </div>
       </section>
 
       <section className="settings-section">

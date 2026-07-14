@@ -87,87 +87,6 @@ export function SettingsView({
   return (
     <div className="settings">
       <section className="settings-section">
-        <h3 className="settings-section-title">5-Hour Window</h3>
-        <label className="settings-check-row">
-          <span>Show</span>
-          <input type="checkbox" checked={settings.showHour5} onChange={(e) => onUpdate({ showHour5: e.target.checked })} />
-        </label>
-        <label className="settings-check-row">
-          <span>Show remaining time</span>
-          <input type="checkbox" checked={settings.showRemainHour5} onChange={(e) => onUpdate({ showRemainHour5: e.target.checked })} />
-        </label>
-        <label className="settings-check-row">
-          <span>Color threshold</span>
-          <input type="checkbox" checked={settings.hour5ColorEnabled} onChange={(e) => onUpdate({ hour5ColorEnabled: e.target.checked })} />
-        </label>
-        <DualRange
-          min={-50}
-          max={50}
-          warning={settings.hour5Warning}
-          danger={settings.hour5Danger}
-          onChange={(w, d) => onUpdate({ hour5Warning: w, hour5Danger: d })}
-        />
-      </section>
-
-      <section className="settings-section">
-        <h3 className="settings-section-title">7-Day Window</h3>
-        <label className="settings-check-row">
-          <span>Show</span>
-          <input type="checkbox" checked={settings.showDay7} onChange={(e) => onUpdate({ showDay7: e.target.checked })} />
-        </label>
-        <label className="settings-check-row">
-          <span>Show remaining time</span>
-          <input type="checkbox" checked={settings.showRemainDay7} onChange={(e) => onUpdate({ showRemainDay7: e.target.checked })} />
-        </label>
-        <label className="settings-check-row">
-          <span>Color threshold</span>
-          <input type="checkbox" checked={settings.day7ColorEnabled} onChange={(e) => onUpdate({ day7ColorEnabled: e.target.checked })} />
-        </label>
-        <DualRange
-          min={-50}
-          max={50}
-          warning={settings.day7Warning}
-          danger={settings.day7Danger}
-          onChange={(w, d) => onUpdate({ day7Warning: w, day7Danger: d })}
-        />
-      </section>
-
-      {hasWeeklyScoped && (
-        <section className="settings-section">
-          <h3 className="settings-section-title">Weekly (scoped) Window</h3>
-          <label className="settings-row">
-            <span>Label</span>
-            <input
-              type="text"
-              className="settings-text-input"
-              value={settings.weeklyScopedLabel}
-              placeholder="Weekly (scoped)"
-              onChange={(e) => onUpdate({ weeklyScopedLabel: e.target.value })}
-            />
-          </label>
-          <label className="settings-check-row">
-            <span>Show</span>
-            <input type="checkbox" checked={settings.showWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
-          </label>
-          <label className="settings-check-row">
-            <span>Show remaining time</span>
-            <input type="checkbox" checked={settings.showRemainWeeklyScoped} onChange={(e) => onUpdate({ showRemainWeeklyScoped: e.target.checked })} />
-          </label>
-          <label className="settings-check-row">
-            <span>Color threshold</span>
-            <input type="checkbox" checked={settings.weeklyScopedColorEnabled} onChange={(e) => onUpdate({ weeklyScopedColorEnabled: e.target.checked })} />
-          </label>
-          <DualRange
-            min={-50}
-            max={50}
-            warning={settings.weeklyScopedWarning}
-            danger={settings.weeklyScopedDanger}
-            onChange={(w, d) => onUpdate({ weeklyScopedWarning: w, weeklyScopedDanger: d })}
-          />
-        </section>
-      )}
-
-      <section className="settings-section">
         <h3 className="settings-section-title">General</h3>
         <label className="settings-check-row">
           <span>Transparent window</span>
@@ -251,6 +170,87 @@ export function SettingsView({
           onChange={(w, d) => onUpdate({ utilizationWarning: w, utilizationDanger: d })}
         />
       </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">5-Hour Window</h3>
+        <label className="settings-check-row">
+          <span>Show</span>
+          <input type="checkbox" checked={settings.showHour5} onChange={(e) => onUpdate({ showHour5: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Show remaining time</span>
+          <input type="checkbox" checked={settings.showRemainHour5} onChange={(e) => onUpdate({ showRemainHour5: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Color threshold</span>
+          <input type="checkbox" checked={settings.hour5ColorEnabled} onChange={(e) => onUpdate({ hour5ColorEnabled: e.target.checked })} />
+        </label>
+        <DualRange
+          min={-50}
+          max={50}
+          warning={settings.hour5Warning}
+          danger={settings.hour5Danger}
+          onChange={(w, d) => onUpdate({ hour5Warning: w, hour5Danger: d })}
+        />
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">7-Day Window</h3>
+        <label className="settings-check-row">
+          <span>Show</span>
+          <input type="checkbox" checked={settings.showDay7} onChange={(e) => onUpdate({ showDay7: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Show remaining time</span>
+          <input type="checkbox" checked={settings.showRemainDay7} onChange={(e) => onUpdate({ showRemainDay7: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>Color threshold</span>
+          <input type="checkbox" checked={settings.day7ColorEnabled} onChange={(e) => onUpdate({ day7ColorEnabled: e.target.checked })} />
+        </label>
+        <DualRange
+          min={-50}
+          max={50}
+          warning={settings.day7Warning}
+          danger={settings.day7Danger}
+          onChange={(w, d) => onUpdate({ day7Warning: w, day7Danger: d })}
+        />
+      </section>
+
+      {hasWeeklyScoped && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Weekly (scoped) Window</h3>
+          <label className="settings-row">
+            <span>Label</span>
+            <input
+              type="text"
+              className="settings-text-input"
+              value={settings.weeklyScopedLabel}
+              placeholder="Weekly (scoped)"
+              onChange={(e) => onUpdate({ weeklyScopedLabel: e.target.value })}
+            />
+          </label>
+          <label className="settings-check-row">
+            <span>Show</span>
+            <input type="checkbox" checked={settings.showWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
+          </label>
+          <label className="settings-check-row">
+            <span>Show remaining time</span>
+            <input type="checkbox" checked={settings.showRemainWeeklyScoped} onChange={(e) => onUpdate({ showRemainWeeklyScoped: e.target.checked })} />
+          </label>
+          <label className="settings-check-row">
+            <span>Color threshold</span>
+            <input type="checkbox" checked={settings.weeklyScopedColorEnabled} onChange={(e) => onUpdate({ weeklyScopedColorEnabled: e.target.checked })} />
+          </label>
+          <DualRange
+            min={-50}
+            max={50}
+            warning={settings.weeklyScopedWarning}
+            danger={settings.weeklyScopedDanger}
+            onChange={(w, d) => onUpdate({ weeklyScopedWarning: w, weeklyScopedDanger: d })}
+          />
+        </section>
+      )}
 
       <div className="settings-row settings-debug-row">
         <div>

@@ -81,7 +81,17 @@ body { background: transparent; }
 }
 .titlebar-gear:hover,
 .titlebar-refresh:hover { color: var(--text); }
-.titlebar-gear.is-active { color: var(--text); }
+
+/* Settings window's title bar label (SettingsWindow.tsx), left-aligned next
+   to the drag region like the usage window's gear/refresh cluster. */
+.titlebar-title {
+    margin-left: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    -webkit-user-select: none;
+    user-select: none;
+}
 
 .titlebar-controls { display: flex; height: 100%; }
 
@@ -386,6 +396,28 @@ body { background: transparent; }
     transition: background 0.15s ease, border-color 0.15s ease;
 }
 .settings-btn:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.3); }
+
+/* Settings window footer (SettingsWindow.tsx): pinned below the scrolling
+   .app content by .root's flex-column layout (same mechanism as .titlebar
+   at the top), so Apply/Close stay visible regardless of scroll position. */
+.settings-footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem 1.5rem;
+    border-top: 1px solid var(--glass-border);
+}
+
+.settings-apply {
+    background: var(--color-accent, #7dd3fc);
+    border-color: transparent;
+    color: #06070f;
+    font-weight: 600;
+}
+.settings-apply:hover { background: var(--color-accent, #7dd3fc); border-color: transparent; }
+.settings-apply:disabled { opacity: 0.35; cursor: default; }
 
 /* ── Settings form sections ───────────────────────────────────────── */
 .settings-section {

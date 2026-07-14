@@ -265,6 +265,30 @@ func main() {
 		DevToolsEnabled: true,
 	})
 
+	// Third window: the settings screen, split out of the main window so
+	// editing settings doesn't resize/reflow the usage view behind it. Like
+	// the interceptor window, it's a separate JS context — the frontend can't
+	// share React state with the main window, so it edits a local draft and
+	// only calls SettingsService.Set (and notifies the main window) when the
+	// user clicks Apply. Hidden at startup (nobody needs it until the gear is
+	// clicked) and unpinned from any specific usage-data state, unlike
+	// claude.win's auto-show-on-auth-required behaviour.
+	settingsWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:     "TEMPOC Settings",
+		Frameless: true,
+		Width:     520,
+		Height:    800, // same fixed height the old in-window settings view used
+		MinWidth:  420,
+		MinHeight: 400,
+		Hidden:    true,
+		// Deliberately opaque (unlike mainWin's transparent background): the
+		// transparency toggle only ever applies to the usage view, and an
+		// unconditionally solid background avoids a white flash while the
+		// webview paints its first frame.
+		BackgroundColour: application.NewRGBA(6, 7, 15, 255),
+		URL:              "/?window=settings",
+	})
+
 	// Closing the main window quits the whole app. Without this, the hidden
 	// interceptor window would remain the only registered window, so the process
 	// would keep running with no visible UI and never post its quit message.
@@ -285,6 +309,19 @@ func main() {
 		}
 		e.Cancel()
 		claude.hideOnClose()
+	})
+
+	// Same hide-on-close treatment for the settings window: it has no
+	// re-injection constraint like claude.win, but destroying it would still
+	// tear down its React state (the in-progress draft) for no benefit —
+	// hiding keeps a Show() cheap and lets the eventual reload-on-open handler
+	// (tempoc:open-settings, front end) reset the draft instead.
+	settingsWin.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		if appQuitting.Load() {
+			return
+		}
+		e.Cancel()
+		settingsWin.Hide()
 	})
 
 	// Login request: the main UI's "Log in to Claude" button emits this after
@@ -312,6 +349,19 @@ func main() {
 	// Debug toggle: the main UI emits this to show/hide the Claude window.
 	app.Event.On("tempoc:toggle-claude", func(*application.CustomEvent) {
 		claude.toggle()
+	})
+
+	// Open the settings window: the main UI's gear button emits this.
+	// SetAlwaysOnTop is re-applied here (rather than relying on whatever it
+	// was set to at window creation) so the settings window keeps up with the
+	// main window's pin state — otherwise, if the user pins the main window
+	// after startup, the settings window would still be a normal window and
+	// could end up hidden behind the now-topmost main window.
+	app.Event.On("tempoc:open-settings", func(*application.CustomEvent) {
+		if cfgNow, err := settingsRepo.Load(); err == nil {
+			settingsWin.SetAlwaysOnTop(cfgNow.AlwaysOnTop)
+		}
+		settingsWin.Show()
 	})
 
 	// Run the application. This blocks until the application has been exited.

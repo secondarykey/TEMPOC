@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Events, Window } from '@wailsio/runtime'
 import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
-import { SettingsView } from './SettingsWindow'
+import SettingsWindow from './SettingsWindow'
 import { COLORS } from './theme'
 
 function PinIcon() {
@@ -36,16 +36,17 @@ function GearIcon() {
 
 // Custom title bar for the frameless window: the header itself is the drag
 // region; the gear button and window controls opt out with
-// --wails-draggable: no-drag. The gear toggles the settings view.
-function TitleBar({ settingsOpen, onToggleSettings, onRefresh, onTop, onToggleOnTop, lastUpdatedLabel }: { settingsOpen: boolean; onToggleSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void; lastUpdatedLabel: string | null }) {
+// --wails-draggable: no-drag. The gear opens the (now separate) settings
+// window rather than toggling an in-window view.
+function TitleBar({ onOpenSettings, onRefresh, onTop, onToggleOnTop, lastUpdatedLabel }: { onOpenSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void; lastUpdatedLabel: string | null }) {
   return (
     <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
       <div className="titlebar-left" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
-          className={`titlebar-gear${settingsOpen ? ' is-active' : ''}`}
+          className="titlebar-gear"
           aria-label="Settings"
           title="Settings"
-          onClick={onToggleSettings}
+          onClick={onOpenSettings}
         >
           <GearIcon />
         </button>
@@ -330,11 +331,10 @@ function UsageBar({
   );
 }
 
-function App() {
+function MainWindow() {
   const [usage, setUsage] = useState<UsagePayload | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
-  const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [settings, setSettings] = useState<Settings>(() => new Settings());
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   // True while the interceptor reports Claude wants a login (it lands on
@@ -359,12 +359,21 @@ function App() {
     const offAuth = Events.On('tempoc:auth-required', () => {
       setAuthRequired(true);
     });
+    // The settings window emits this after Apply commits a new draft via
+    // SettingsService.Set. Re-fetching (rather than receiving the value in
+    // the event payload) keeps the settings window as the sole writer and
+    // the main window a plain reader, and reuses the existing settings-driven
+    // useEffects (transparency, always-on-top, sizing) below as the apply path.
+    const offSettingsApplied = Events.On('tempoc:settings-applied', () => {
+      SettingsService.Get().then(setSettings);
+    });
     // Recompute elapsed-time progress once per second.
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       clearInterval(id);
       if (typeof off === 'function') off();
       if (typeof offAuth === 'function') offAuth();
+      if (typeof offSettingsApplied === 'function') offSettingsApplied();
     };
   }, []);
 
@@ -443,7 +452,7 @@ function App() {
   const MIN_WINDOW_H = 90;
   const usageTarget =
     contentHeight > 0 ? Math.max(MIN_WINDOW_H, Math.round(contentHeight + CHROME_PX[sizeMode])) : 0;
-  const targetHeight = settingsOpen ? 800 : usageTarget;
+  const targetHeight = usageTarget;
 
   // The usage view only resizes horizontally by hand — vertical size always
   // tracks measured content (above), so the user's bottom-edge drag is locked
@@ -542,23 +551,14 @@ function App() {
   return (
     <div className={`root${rootModeClass}`}>
       <TitleBar
-        settingsOpen={settingsOpen}
-        onToggleSettings={() => setSettingsOpen((v) => !v)}
+        onOpenSettings={() => Events.Emit('tempoc:open-settings')}
         onRefresh={() => Events.Emit('tempoc:refresh')}
         onTop={settings.alwaysOnTop}
         onToggleOnTop={() => updateSettings({ alwaysOnTop: !settings.alwaysOnTop })}
         lastUpdatedLabel={lastUpdatedLabel}
       />
       <main className="app">
-        {settingsOpen ? (
-          settingsLoaded && (
-            <SettingsView
-              settings={settings}
-              onUpdate={updateSettings}
-              hasWeeklyScoped={weeklyScopedHasData}
-            />
-          )
-        ) : authRequired ? (
+        {authRequired ? (
           // Takes precedence over any stale usage data: once the interceptor
           // reports the session is gone (401 or a /login redirect), the bars
           // would only show outdated numbers, so fall back to the login prompt.
@@ -610,6 +610,14 @@ function App() {
       </main>
     </div>
   );
+}
+
+// Every window loaded by this app shares one entry point (main.tsx), so the
+// settings window (main.go's settingsWin, loaded at "/?window=settings")
+// is routed here by URL query rather than needing its own HTML entry.
+function App() {
+  const isSettingsWindow = new URLSearchParams(location.search).get('window') === 'settings';
+  return isSettingsWindow ? <SettingsWindow /> : <MainWindow />;
 }
 
 export default App

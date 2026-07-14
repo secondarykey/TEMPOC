@@ -1,4 +1,6 @@
-import { Events } from '@wailsio/runtime'
+import { useEffect, useState } from 'react'
+import { Events, Window } from '@wailsio/runtime'
+import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
 import { COLORS } from './theme'
 
@@ -84,8 +86,6 @@ export function SettingsView({
 
   return (
     <div className="settings">
-      <h2 className="settings-title">Settings</h2>
-
       <section className="settings-section">
         <h3 className="settings-section-title">5-Hour Window</h3>
         <label className="settings-check-row">
@@ -259,6 +259,106 @@ export function SettingsView({
         </div>
         <button className="settings-btn" onClick={toggleClaude}>Toggle</button>
       </div>
+    </div>
+  );
+}
+
+// Custom title bar for the settings window, mirroring App.tsx's TitleBar
+// (same .titlebar / .titlebar-controls classes and drag-region pattern) but
+// with a plain text label instead of the usage window's icon buttons, and a
+// single close control — there's nothing to pin or refresh here.
+function SettingsTitleBar() {
+  return (
+    <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
+      <div className="titlebar-left" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
+        <span className="titlebar-title">Settings</span>
+      </div>
+      <div className="titlebar-controls" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
+        <button aria-label="Close" className="close" onClick={() => Window.Close()}>&#x2715;</button>
+      </div>
+    </header>
+  );
+}
+
+// Root component for the settings window (a separate JS context from the
+// main window — see App.tsx's router). Settings are edited as a local draft
+// and only committed via SettingsService.Set when the user clicks Apply;
+// closing (or the main window's Windows-close semantics, which just hide
+// this window per main.go) discards any unsaved draft. The main window
+// picks up the change by re-fetching settings on tempoc:settings-applied.
+export default function SettingsWindow() {
+  const [draft, setDraft] = useState<Settings>(() => new Settings());
+  const [loaded, setLoaded] = useState(false);
+  // Flag-based dirty tracking (set true on first edit) rather than a
+  // deep-equal comparison against the last-loaded settings — simpler, and
+  // "the user touched something" is all the Apply button needs to know.
+  const [dirty, setDirty] = useState(false);
+  const [hasWeeklyScoped, setHasWeeklyScoped] = useState(false);
+
+  useEffect(() => {
+    const reload = () => {
+      SettingsService.Get().then((s) => {
+        setDraft(s);
+        setDirty(false);
+        setLoaded(true);
+      });
+    };
+    // Hidden -> Show (main.go's settingsWin) does not remount this
+    // component, so the initial load alone wouldn't catch settings changed
+    // elsewhere (e.g. the main window's always-on-top pin) between closes.
+    // Reloading on every tempoc:open-settings also implements the discard-
+    // on-close behaviour: the draft is always reset to the saved value the
+    // next time the window is opened.
+    reload();
+    const offOpen = Events.On('tempoc:open-settings', reload);
+    // Same condition as MainWindow's weeklyScopedHasData (App.tsx): the
+    // Weekly (scoped) section only appears once real data has been seen.
+    const offUsage = Events.On('tempoc:usage', (e: any) => {
+      const usage = e.data as { weekly_scoped?: { utilization?: number; resets_at?: string | null } };
+      setHasWeeklyScoped(
+        !!usage?.weekly_scoped &&
+          (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null)
+      );
+    });
+    return () => {
+      if (typeof offOpen === 'function') offOpen();
+      if (typeof offUsage === 'function') offUsage();
+    };
+  }, []);
+
+  const updateDraft = (patch: Partial<Settings>) => {
+    setDraft((prev) => new Settings({ ...prev, ...patch }));
+    setDirty(true);
+  };
+
+  const apply = async () => {
+    try {
+      // Read the current saved value first and carry its alwaysOnTop
+      // forward instead of the draft's: the main window's pin button saves
+      // alwaysOnTop immediately (it's the only setting written outside this
+      // draft/apply flow), so applying a draft opened before a pin toggle
+      // would otherwise silently revert the pin.
+      const current = await SettingsService.Get();
+      const next = new Settings({ ...draft, alwaysOnTop: current.alwaysOnTop });
+      await SettingsService.Set(next);
+      setDraft(next);
+      setDirty(false);
+      Events.Emit('tempoc:settings-applied');
+    } catch (err) {
+      console.error('tempoc: failed to apply settings', err);
+    }
+  };
+
+  return (
+    <div className="root">
+      <SettingsTitleBar />
+      <main className="app">
+        {loaded && <SettingsView settings={draft} onUpdate={updateDraft} hasWeeklyScoped={hasWeeklyScoped} />}
+      </main>
+      <footer className="settings-footer">
+        <button className="settings-btn" onClick={() => Window.Close()}>Close</button>
+        <button className="settings-btn settings-apply" disabled={!dirty || !loaded} onClick={apply}>Apply</button>
+      </footer>
     </div>
   );
 }

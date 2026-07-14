@@ -59,7 +59,8 @@ type usageMessage struct {
 }
 
 // claudeCtl controls the visibility of the interception window. It is hidden by
-// default, auto-shown when Claude needs a login, auto-hidden once usage data
+// default, shown when the user clicks the frontend's "Log in to Claude" button
+// (offered after an auth-required notification), auto-hidden once usage data
 // starts flowing, and can be pinned open by the user for debugging.
 type claudeCtl struct {
 	win    *application.WebviewWindow
@@ -67,7 +68,9 @@ type claudeCtl struct {
 	pinned bool // user explicitly opened it for debugging
 }
 
-// showForAuth reveals the window because the user needs to log in.
+// showForAuth reveals the window so the user can log in (triggered by the
+// frontend's login button). Deliberately does not pin: once the login succeeds
+// and usage data flows, autoHide tucks the window away again.
 func (c *claudeCtl) showForAuth() { c.win.Show() }
 
 // autoHide tucks the window away once usage data is flowing, unless the user
@@ -169,10 +172,12 @@ func main() {
 			case "debug":
 				log.Printf("tempoc[debug]: %s", msg.Msg)
 			case "auth-required":
-				// Claude redirected to its login page — surface the window so
-				// the user can sign in.
-				log.Printf("tempoc: login required, showing Claude window")
-				claude.showForAuth()
+				// Claude redirected to its login page. Don't pop the window up
+				// on our own — tell the frontend, which shows a "Log in to
+				// Claude" button; clicking it emits tempoc:login (handled
+				// below) to reveal the window.
+				log.Printf("tempoc: login required, notifying frontend")
+				app.Event.Emit("tempoc:auth-required", nil)
 			case "usage":
 				log.Printf("tempoc: received usage payload from %s", originInfo.Origin)
 				app.Event.Emit("tempoc:usage", UsagePayload{
@@ -215,8 +220,8 @@ func main() {
 		URL:              "/",
 	})
 
-	// Second window: claude.ai's usage page, kept visible so the user can log
-	// in manually.
+	// Second window: claude.ai's usage page, loaded hidden in the background
+	// to intercept the usage API.
 	//
 	// injectJS is installed via WebView2's AddScriptToExecuteOnDocumentCreated,
 	// which Wails only wires up (chromium.Init) when a window is created in HTML
@@ -230,8 +235,9 @@ func main() {
 	// handshake fires — that never happens on a third-party page like claude.ai,
 	// so every ExecJS call would be queued forever and never execute.)
 	//
-	// Hidden by default: it only exists to intercept the usage API. It is shown
-	// automatically when a login is required, and can be toggled for debugging.
+	// Hidden by default: it only exists to intercept the usage API. When a
+	// login is required it is shown via the frontend's "Log in to Claude"
+	// button (tempoc:login), and it can be toggled for debugging.
 	claude.win = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:           "Claude (TEMPOC interceptor)",
 		Width:           900,
@@ -262,6 +268,14 @@ func main() {
 		}
 		e.Cancel()
 		claude.hideOnClose()
+	})
+
+	// Login request: the main UI's "Log in to Claude" button emits this after
+	// an auth-required notification. Show the interceptor window (unpinned, so
+	// the usual autoHide tucks it away again once the login completes and
+	// usage data starts flowing).
+	app.Event.On("tempoc:login", func(*application.CustomEvent) {
+		claude.showForAuth()
 	})
 
 	// Manual refresh: the main UI's refresh button emits this. Drive the

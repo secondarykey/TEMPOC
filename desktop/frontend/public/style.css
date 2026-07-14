@@ -123,9 +123,23 @@ body { background: transparent; }
     line-height: 1.7;
 }
 
-.app-placeholder-hint {
-    opacity: 0.7;
-    font-size: 0.8rem;
+/* Explicit login entry point: shown in place of the waiting placeholder when
+   the interceptor reports Claude wants a login (auth-required). */
+.login-button {
+    margin-top: 0.9rem;
+    padding: 0.45rem 1.2rem;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--text);
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.login-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: #7dd3fc;
 }
 
 /* Animated ellipsis so the startup wait doesn't look frozen: cycles

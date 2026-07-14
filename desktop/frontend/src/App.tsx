@@ -599,6 +599,10 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState<boolean>(false);
   const [settings, setSettings] = useState<Settings>(() => new Settings());
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  // True while the interceptor reports Claude wants a login (it lands on
+  // /login). Shows the "Log in to Claude" button; cleared as soon as usage
+  // data flows again.
+  const [authRequired, setAuthRequired] = useState(false);
 
   useEffect(() => {
     SettingsService.Get().then((s) => {
@@ -611,12 +615,18 @@ function App() {
     const off = Events.On('tempoc:usage', (e: any) => {
       setUsage(e.data as UsagePayload);
       setLastUpdated(Date.now());
+      // Data is flowing, so the session is authenticated.
+      setAuthRequired(false);
+    });
+    const offAuth = Events.On('tempoc:auth-required', () => {
+      setAuthRequired(true);
     });
     // Recompute elapsed-time progress once per second.
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => {
       clearInterval(id);
       if (typeof off === 'function') off();
+      if (typeof offAuth === 'function') offAuth();
     };
   }, []);
 
@@ -811,11 +821,19 @@ function App() {
             />
           )
         ) : !usage ? (
-          <p className="app-placeholder">
-            Waiting for usage data<span className="loading-dots" aria-hidden="true" />
-            <br />
-            <span className="app-placeholder-hint">(log in to Claude if prompted)</span>
-          </p>
+          authRequired ? (
+            <div className="app-placeholder">
+              Login required
+              <br />
+              <button className="login-button" onClick={() => Events.Emit('tempoc:login')}>
+                Log in to Claude
+              </button>
+            </div>
+          ) : (
+            <p className="app-placeholder">
+              Waiting for usage data<span className="loading-dots" aria-hidden="true" />
+            </p>
+          )
         ) : (
           <div className="usage-bars" ref={measureRef}>
             {settings.showHour5 && (

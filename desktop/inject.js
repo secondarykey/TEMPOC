@@ -35,11 +35,41 @@
     // ignore
   }
 
-  // If Claude bounced us to the login page, ask Go to reveal the window so the
-  // user can sign in.
-  if (/^\/login\b/.test(window.location.pathname)) {
-    post({ type: "auth-required" });
-    console.debug("[TEMPOC] login page detected");
+  // ログイン状態の遷移を常駐監視する。ログインの完了/失効は claude.ai 内の
+  // SPA 遷移（新しいドキュメントを作らない）なので、document-start 注入の
+  // このスクリプトは再実行されない。pathname をポーリングして /login への
+  // 出入りを検知する:
+  //   /login に入った → auth-required を Go へ（フロントがログインボタンを出す）
+  //   /login から出た → ログイン成功なので使用量を能動取得（失敗に備えリトライ付き）
+  // Google OAuth 等のフルページ遷移で戻るケースは新ドキュメントでスクリプト
+  // 自体が再実行されるため、この監視がなくても初回取得が走る。
+  var loginPath = /^\/login\b/;
+  var lastPath = null; // null 始まり: 初回チェックでも「/login に入った」を検知する
+  function watchAuthTransition() {
+    var path = window.location.pathname;
+    if (path === lastPath) return;
+    var wasLogin = lastPath != null && loginPath.test(lastPath);
+    var isLogin = loginPath.test(path);
+    lastPath = path;
+    if (isLogin && !wasLogin) {
+      post({ type: "auth-required" });
+      console.debug("[TEMPOC] login page detected");
+    } else if (wasLogin && !isLogin) {
+      post({ type: "debug", msg: "login completed, refetching" });
+      refetchWithRetry(3, 3000);
+    }
+  }
+
+  // ログイン直後は org/usage の取得が失敗し得るため、成功するまで
+  // 最大 attempts 回、delayMs 間隔で __tempocRefetch を試す。
+  function refetchWithRetry(attempts, delayMs) {
+    window.__tempocRefetch().then(function (ok) {
+      if (!ok && attempts > 1) {
+        setTimeout(function () {
+          refetchWithRetry(attempts - 1, delayMs);
+        }, delayMs);
+      }
+    });
   }
 
   var usagePattern = /^\/api\/organizations\/[^/]+\/usage$/;
@@ -123,26 +153,31 @@
 
   // タイミング対策: パッチ前に既に使用量APIが呼ばれていた場合に備え、
   // 自分で使用量APIを叩いて取得を試みる。organization_id は
-  // /api/organizations から取得する。
+  // /api/organizations から取得する。成否の boolean で resolve する Promise を
+  // 返す（refetchWithRetry がリトライ判定に使う）。
   window.__tempocRefetch = function () {
-    originalFetch("/api/organizations", { credentials: "include" })
+    return originalFetch("/api/organizations", { credentials: "include" })
       .then(function (r) {
         return r.json();
       })
       .then(function (orgs) {
         if (!Array.isArray(orgs) || orgs.length === 0) {
           post({ type: "debug", msg: "refetch: no organizations" });
-          return;
+          return false;
         }
         var orgId = orgs[0].uuid || orgs[0].id;
         console.debug("[TEMPOC] refetch usage for org", orgId);
         return originalFetch(
           "/api/organizations/" + orgId + "/usage",
           { credentials: "include" }
-        ).then(handleUsageResponse);
+        ).then(function (r) {
+          handleUsageResponse(r);
+          return r.ok;
+        });
       })
       .catch(function (e) {
         post({ type: "debug", msg: "refetch failed: " + e });
+        return false;
       });
   };
 
@@ -166,8 +201,15 @@
 
   // 初回注入後、少し待ってから能動取得を1回試みる（SPA描画完了を待つ）。
   // 初回はまだ更新ボタン（_r_bb_）が DOM に無い可能性が高いので、直叩きの
-  // __tempocRefetch で確実に1回取得する。
+  // __tempocRefetch で確実に1回取得する。未ログインでこのドキュメントが
+  // /login のときは失敗するが、上の watchAuthTransition がログイン完了を
+  // 検知して取り直す。
   setTimeout(window.__tempocRefetch, 1500);
+
+  // ログイン遷移ウォッチャーを起動（即時1回 + 1秒ポーリング）。即時実行で
+  // document-start 時点の /login も従来どおり遅延なく auth-required になる。
+  watchAuthTransition();
+  setInterval(watchAuthTransition, 1000);
 
   // The refresh-interval placeholder below (do NOT spell it out in comments —
   // Go string-replaces every occurrence of the token) is filled in by main.go

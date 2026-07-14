@@ -62,8 +62,17 @@ claude.ai のような**第三者ページに JS を注入する**には、Wails
 
 postMessage の `type` で分岐:
 - `usage` — `seven_day`/`five_hour`/`weekly_scoped` を `app.Event.Emit("tempoc:usage", ...)` でフロントへ。以後 `Events.On("tempoc:usage")` で受信
-- `auth-required` — `/login` へリダイレクトされた（未認証）→ 傍受ウィンドウを表示
+- `auth-required` — `/login` にいる（未認証）→ `app.Event.Emit("tempoc:auth-required")` でフロントへ通知。フロントは「Log in to Claude」ボタンを表示し、クリックで `Events.Emit('tempoc:login')` → Go が傍受ウィンドウを表示する（勝手には出さない）
 - `debug` — ログ出力用
+
+### ログイン遷移の検知（pathname ウォッチャー）
+
+ログインの完了/失効は claude.ai 内の **SPA 遷移**（新しいドキュメントを作らない）なので、document-created 注入スクリプトは再実行されない。そこで `inject.js` は `location.pathname` を1秒間隔でポーリングし:
+
+- `/login` に**入った** → `auth-required` を post（SPA 遷移でのセッション切れも拾える）
+- `/login` から**出た** → ログイン成功なので `__tempocRefetch()` で使用量を能動取得（失敗時は最大3回・3秒間隔でリトライ。`__tempocRefetch` は成否 boolean の Promise を返す）
+
+これが無いと、ログインページ上で失敗した初回取得（1.5秒後の `__tempocRefetch`）以降、誰も usage API を叩かず、ユーザーが手動で usage ページを開くまで無反応になる。Google OAuth 等のフルページ遷移で戻るケースは新ドキュメントでスクリプト自体が再実行されるため、ウォッチャー無しでも初回取得が走る。
 
 ### 対象 API
 
@@ -89,7 +98,7 @@ postMessage の `type` で分岐:
 
 既定は `Hidden: true`（傍受専用）。
 
-- ログインが必要（`auth-required`）→ 自動表示
+- ログインが必要（`auth-required`）→ フロントが「Log in to Claude」ボタンを表示し、クリック（`tempoc:login`）で表示（ピン留めなし）。自動では表示しない
 - 使用量データ受信（認証済み）→ 自動的に隠す（デバッグでピン留め中は維持）
 - 設定画面の「Claude interceptor window」Toggle → 手動表示/非表示（`Events.Emit('tempoc:toggle-claude')` → Go `app.Event.On`）
 

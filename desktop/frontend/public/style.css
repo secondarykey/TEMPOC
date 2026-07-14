@@ -517,6 +517,12 @@ body { background: transparent; }
     border-radius: 6px;
     outline: none;
 }
+/* The select's translucent background makes Chromium render the option
+   popup light; give options an opaque dark background explicitly. */
+.settings select option {
+    background: var(--ink);
+    color: var(--text);
+}
 .settings select:focus,
 .settings-text-input:focus,
 .settings-number-input:focus { border-color: var(--muted); }

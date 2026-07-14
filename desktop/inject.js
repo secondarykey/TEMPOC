@@ -237,13 +237,30 @@
       });
   };
 
-  // Refresh by clicking claude.ai's own usage refresh button (id "_r_bb_"),
-  // which re-requests the usage API — our patched fetch then intercepts the
+  // claude.ai の使用量更新ボタンを探す。以前は id "_r_bb_" を直接参照して
+  // いたが、これは React の自動生成 ID でデプロイやマウント順によって変わる
+  // （実際 "_r_h7_" に変わりボタンを見失った）。usage モーダル
+  // （[role="dialog"]）内の aria-label="Refresh" ボタンを構造で特定する。
+  // 日本語 UI の aria-label（「更新」）にも対応し、旧 ID は最後の保険。
+  function findRefreshButton() {
+    var dlg = document.querySelector('[role="dialog"]');
+    if (dlg) {
+      var btns = dlg.querySelectorAll("button[aria-label]");
+      for (var i = 0; i < btns.length; i++) {
+        var label = btns[i].getAttribute("aria-label") || "";
+        if (/^refresh$/i.test(label) || label === "更新") return btns[i];
+      }
+    }
+    return document.getElementById("_r_bb_");
+  }
+
+  // Refresh by clicking claude.ai's own usage refresh button, which
+  // re-requests the usage API — our patched fetch then intercepts the
   // fresh response. Preferred over calling the API directly so we exactly mirror
   // the site's own request (headers/CSRF/endpoint stay correct). Falls back to
-  // __tempocRefetch if the button isn't present (e.g. Claude changed the id or
-  // the modal isn't mounted). Used by both the manual refresh button (driven
-  // from Go via ExecJS) and the auto-refresh interval below.
+  // __tempocRefetch if the button isn't present (e.g. the modal isn't
+  // mounted). Used by both the manual refresh button (driven from Go via
+  // ExecJS) and the auto-refresh interval below.
   window.__tempocClickRefresh = function () {
     // ログインページでは何もしない。特に下のモーダル復元リロードが走ると
     // ユーザーがメールアドレスや確認コードを入力している最中にページが
@@ -253,9 +270,9 @@
       post({ type: "debug", msg: "refresh: on login page, skipped" });
       return;
     }
-    var btn = document.getElementById("_r_bb_");
+    var btn = findRefreshButton();
     if (btn) {
-      post({ type: "debug", msg: "refresh: clicking usage button" });
+      post({ type: "debug", msg: "refresh: clicking usage button (#" + (btn.id || "?") + ")" });
       btn.click();
       return;
     }
@@ -279,7 +296,7 @@
   };
 
   // 初回注入後、少し待ってから能動取得を1回試みる（SPA描画完了を待つ）。
-  // 初回はまだ更新ボタン（_r_bb_）が DOM に無い可能性が高いので、直叩きの
+  // 初回はまだ更新ボタンが DOM に無い可能性が高いので、直叩きの
   // __tempocRefetch で確実に1回取得する。未ログインでこのドキュメントが
   // /login のときは失敗するが、上の watchAuthTransition がログイン完了を
   // 検知して取り直す。

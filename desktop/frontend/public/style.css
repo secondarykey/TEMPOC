@@ -370,17 +370,6 @@ body { background: transparent; }
     color: var(--muted);
 }
 
-.settings-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    background: var(--glass);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius);
-    padding: 0.85rem 1rem;
-}
-
 .settings-row-label { font-size: 0.9rem; color: var(--text); }
 .settings-row-desc { font-size: 0.76rem; color: var(--muted); margin-top: 0.15rem; }
 

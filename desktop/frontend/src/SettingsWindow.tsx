@@ -96,7 +96,7 @@ export function SettingsView({
             <option value="compact">Compact</option>
           </select>
         </label>
-        <label className="settings-check-row">
+        <label className="settings-row">
           <span>Transparent window</span>
           <input
             type="checkbox"

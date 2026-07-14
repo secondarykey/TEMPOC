@@ -8,7 +8,7 @@ It works by loading claude.ai inside a hidden WebView, intercepting the usage AP
 
 The app needs an authenticated claude.ai session inside its WebView to read your usage. When no session exists, the main window shows a **Log in to Claude** button; clicking it opens a window with claude.ai's own login page. Once you finish logging in, the window hides itself and the bars appear — you never need to open the usage page manually.
 
-The login window shows the current URL in two places: a read-only address bar overlaid at the top of the page, and the native window title.
+The login window shows the current URL in two places: a read-only address bar overlaid along the bottom of the page, and the native window title.
 
 ## Trust: how do you know the login page is real?
 

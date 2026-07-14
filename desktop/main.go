@@ -199,6 +199,12 @@ func main() {
 		// row; the frontend measures its content and sizes the window to match
 		// (clamped to MIN_WINDOW_H in App.tsx, which mirrors this value).
 		MinHeight: 90,
+		// Restore the persisted always-on-top state natively at creation. The
+		// frontend also applies it (for the runtime pin toggle), but its very
+		// early startup call proved unreliable — the pin icon showed "on" while
+		// the window wasn't actually topmost — so the native option is the
+		// authoritative restore path.
+		AlwaysOnTop: cfg.AlwaysOnTop,
 		// Fully transparent window: the webview's clear areas are see-through to
 		// whatever is behind the window. The on/off toggle is done in the
 		// frontend by painting (or clearing) an opaque page background — the

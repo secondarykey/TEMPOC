@@ -91,21 +91,20 @@
       post({ type: "auth-required" });
       console.debug("[TEMPOC] login page detected");
     } else if (wasLogin && !isLogin) {
-      post({ type: "debug", msg: "login completed, refetching" });
-      refetchWithRetry(3, 3000);
-    }
-  }
-
-  // ログイン直後は org/usage の取得が失敗し得るため、成功するまで
-  // 最大 attempts 回、delayMs 間隔で __tempocRefetch を試す。
-  function refetchWithRetry(attempts, delayMs) {
-    window.__tempocRefetch().then(function (ok) {
-      if (!ok && attempts > 1) {
-        setTimeout(function () {
-          refetchWithRetry(attempts - 1, delayMs);
-        }, delayMs);
+      // ログイン成功。SPA は /new に着地してハッシュ（#settings/usage）が
+      // 失われるため、usage ページを開き直してモーダルを復元する。
+      // リロード後は再注入スクリプトの初回取得がデータを届け、以後の
+      // 自動更新はサイト自身の更新ボタンのクリックで行える（API 直叩きは
+      // 極力使わない方針）。ハッシュが残っている稀なケースはモーダルが
+      // 開いているので直接取得だけで足りる。
+      if (window.location.hash === "#settings/usage") {
+        post({ type: "debug", msg: "login completed, refetching" });
+        window.__tempocRefetch();
+      } else {
+        post({ type: "debug", msg: "login completed, opening usage page" });
+        window.location.replace("https://claude.ai/new#settings/usage");
       }
-    });
+    }
   }
 
   var usagePattern = /^\/api\/organizations\/[^/]+\/usage$/;
@@ -246,14 +245,37 @@
   // the modal isn't mounted). Used by both the manual refresh button (driven
   // from Go via ExecJS) and the auto-refresh interval below.
   window.__tempocClickRefresh = function () {
+    // ログインページでは何もしない。特に下のモーダル復元リロードが走ると
+    // ユーザーがメールアドレスや確認コードを入力している最中にページが
+    // 消えてしまう。ログイン完了は watchAuthTransition が拾って usage
+    // ページを開き直すので、ここで動く必要もない。
+    if (loginPath.test(window.location.pathname)) {
+      post({ type: "debug", msg: "refresh: on login page, skipped" });
+      return;
+    }
     var btn = document.getElementById("_r_bb_");
     if (btn) {
       post({ type: "debug", msg: "refresh: clicking usage button" });
       btn.click();
-    } else {
-      post({ type: "debug", msg: "refresh: button not found, refetching" });
-      window.__tempocRefetch();
+      return;
     }
+    // ボタンが無い最有力の理由は usage モーダルが開いていないこと
+    // （ログイン等の SPA 遷移でハッシュが失われる）。その場合は usage
+    // ページを開き直してモーダルを復元する — リロード後の初回取得が
+    // データを届け、次回以降はボタンが押せる。リロードループ防止:
+    // 復元後（ハッシュが正しいのにボタンが無い = ID 変更等）は直叩きに
+    // フォールバックし、二度と開き直さない。claude.ai 以外（OAuth 中の
+    // 別サイト）では何もしない方が安全なので直叩き側に落とす。
+    if (
+      window.location.hostname === "claude.ai" &&
+      window.location.hash !== "#settings/usage"
+    ) {
+      post({ type: "debug", msg: "refresh: modal lost, reopening usage page" });
+      window.location.replace("https://claude.ai/new#settings/usage");
+      return;
+    }
+    post({ type: "debug", msg: "refresh: button not found, refetching" });
+    window.__tempocRefetch();
   };
 
   // 初回注入後、少し待ってから能動取得を1回試みる（SPA描画完了を待つ）。

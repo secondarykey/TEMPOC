@@ -71,7 +71,7 @@ postMessage の `type` で分岐:
 ログインの完了/失効は claude.ai 内の **SPA 遷移**（新しいドキュメントを作らない）なので、document-created 注入スクリプトは再実行されない。そこで `inject.js` は `location.pathname` を1秒間隔でポーリングし:
 
 - `/login` に**入った** → `auth-required` を post（SPA 遷移でのセッション切れも拾える）
-- `/login` から**出た** → ログイン成功なので `__tempocRefetch()` で使用量を能動取得（失敗時は最大3回・3秒間隔でリトライ。`__tempocRefetch` は成否 boolean の Promise を返す）
+- `/login` から**出た** → ログイン成功。SPA は `/new` に着地してハッシュが失われるため、**usage URL（`/new#settings/usage`）を開き直してモーダルを復元**する。リロード後は再注入スクリプトの初回取得がデータを届け、以後の自動更新はサイトの更新ボタン経由になる。ハッシュが残っている稀なケースのみ `__tempocRefetch()`（成否 boolean の Promise を返す）で直接取得
 
 同じ1秒ティックで**アドレスバー**も駆動する: `location.href` をページ最下部の読み取り専用オーバーレイ（最上部だと claude.ai の上部ナビに視覚的に被ってボタンが狙いにくい）（`pointer-events: none`、SPA が body を再描画しても `isConnected` チェックで再生成）に表示し、href 変化時は `location` メッセージでネイティブタイトルにも反映する。アプリ内描画は偽装可能なため厳密な証明にはならない — ユーザー向けの検証手段（F12 DevTools 等）は `README.md` の Trust 節に記載。
 
@@ -97,7 +97,7 @@ postMessage の `type` で分岐:
 
 `inject.js` 内で `setInterval(__tempocClickRefresh, ms)`。`ms` は Go が起動時に `settings.RefreshInterval*60000` を `__TEMPOC_REFRESH_MS__` プレースホルダへ文字列置換して埋め込む。**傍受スクリプトは傍受ウィンドウに再注入できない**（上記 ExecJS の制約）ため、`refreshInterval` の変更は**次回起動時**に反映される。
 
-繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタン `_r_bb_` をクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。ボタンが無ければ `__tempocRefetch` にフォールバック。ただし**初回1回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `setTimeout(__tempocRefetch, 1500)` の直叩きのまま。
+繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタン `_r_bb_` をクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。**API 直叩きは極力使わない**方針: ボタンが無い場合、まず「usage モーダルが開いていない（SPA 遷移でハッシュ喪失）」を疑い、claude.ai 上でハッシュが `#settings/usage` でなければ **usage URL を開き直してモーダルを復元**する（リロード後の初回取得がデータを届け、以後はボタンが押せる）。ハッシュが正しいのにボタンが無い（ID 変更等）ときだけ `__tempocRefetch` にフォールバック — この分岐が再リロードしないことでリロードループを防ぐ。ただし**初回1回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `setTimeout(__tempocRefetch, 1500)` の直叩きのまま。また **`/login` 上では `__tempocClickRefresh` は何もしない** — モーダル復元リロードが走るとログイン入力中のユーザーの画面が消えるため（ログイン完了後の復帰は watchAuthTransition が担う）。
 
 ### 手動更新（タイトルバーの更新ボタン）
 

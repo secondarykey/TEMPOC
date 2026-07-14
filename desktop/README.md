@@ -1,59 +1,33 @@
-# Welcome to Your New Wails3 Project!
+# TEMPOC Desktop
 
-Congratulations on generating your Wails3 application! This README will guide you through the next steps to get your project up and running.
+A standalone desktop app (Wails v3, Windows / WebView2) that shows elapsed-time progress bars for Claude's 5-hour and 7-day usage windows — including exactly when each window resets, which claude.ai itself doesn't display.
 
-## Getting Started
+It works by loading claude.ai inside a hidden WebView, intercepting the usage API responses, and rendering the bars in its own compact, frameless window. All of the Chrome extension's settings are available, plus desktop-only options (locale, always-on-top, transparent window, size modes).
 
-1. Navigate to your project directory in the terminal.
+## Logging in
 
-2. To run your application in development mode, use the following command:
+The app needs an authenticated claude.ai session inside its WebView to read your usage. When no session exists, the main window shows a **Log in to Claude** button; clicking it opens a window with claude.ai's own login page. Once you finish logging in, the window hides itself and the bars appear — you never need to open the usage page manually.
 
-   ```
-   wails3 dev
-   ```
+The login window shows the current URL in two places: a read-only address bar overlaid at the top of the page, and the native window title.
 
-   This will start your application and enable hot-reloading for both frontend and backend changes.
+## Trust: how do you know the login page is real?
 
-3. To build your application for production, use:
+Honestly: **an embedded login window can never fully prove itself.** The address bar and window title are rendered by this app, so a malicious app could fake them — that's a limitation of every embedded WebView, not just this one. TEMPOC can't use the usual answer (logging in via your system browser) because the session cookie must live inside the app's WebView for usage interception to work at all.
 
-   ```
-   wails3 build
-   ```
+What you *can* rely on:
 
-   This will create a production-ready executable in the `build` directory.
+- **Verify it yourself with DevTools.** Press **F12** in the login window. DevTools is drawn by Chromium itself, not by this app, and shows the real URL, certificate, and network traffic. If you're skeptical, this is the check that actually proves something.
+- **Audit the code.** This project is open source. Your credentials are typed into claude.ai's own page and sent over TLS directly to claude.ai — they never pass through this app's code. The injected script ([`inject.js`](inject.js)) is a few hundred lines; you can read exactly what it touches (the usage API responses, and nothing you type).
+- **No password is at stake.** claude.ai login is passwordless (an emailed one-time code) or Google/Apple SSO. Nothing long-lived is ever typed into this window.
+- **The session is the app's job anyway.** By design, TEMPOC holds your claude.ai session — that's the only way it can read your usage. So "is the login page real?" reduces to "do I trust this app?", which is answered by the two points above, not by any bar the app draws.
 
-## Exploring Wails3 Features
+## Development
 
-Now that you have your project set up, it's time to explore the features that Wails3 offers:
+```bash
+cd desktop
+wails3 dev               # run in development mode
+wails3 build             # production build (see build/)
+wails3 generate bindings # required after changing Go services/types
+```
 
-1. **Check out the examples**: The best way to learn is by example. Visit the `examples` directory in the `v3/examples` directory to see various sample applications.
-
-2. **Run an example**: To run any of the examples, navigate to the example's directory and use:
-
-   ```
-   go run .
-   ```
-
-   Note: Some examples may be under development during the alpha phase.
-
-3. **Explore the documentation**: Visit the [Wails3 documentation](https://v3.wails.io/) for in-depth guides and API references.
-
-4. **Join the community**: Have questions or want to share your progress? Join the [Wails Discord](https://discord.gg/JDdSxwjhGf) or visit the [Wails discussions on GitHub](https://github.com/wailsapp/wails/discussions).
-
-## Project Structure
-
-Take a moment to familiarize yourself with your project structure:
-
-- `frontend/`: Contains your frontend code (HTML, CSS, JavaScript/TypeScript)
-- `main.go`: The entry point of your Go backend
-- `app.go`: Define your application structure and methods here
-- `wails.json`: Configuration file for your Wails project
-
-## Next Steps
-
-1. Modify the frontend in the `frontend/` directory to create your desired UI.
-2. Add backend functionality in `main.go`.
-3. Use `wails3 dev` to see your changes in real-time.
-4. When ready, build your application with `wails3 build`.
-
-Happy coding with Wails3! If you encounter any issues or have questions, don't hesitate to consult the documentation or reach out to the Wails community.
+For architecture details (the two-window design, the usage-interception mechanism, settings, known constraints), see [`CLAUDE.md`](CLAUDE.md).

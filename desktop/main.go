@@ -159,13 +159,30 @@ func main() {
 		// call whose payload does not start with "wails:" — including messages
 		// posted from the claude.ai page by inject.js.
 		RawMessageHandler: func(window application.Window, message string, originInfo *application.OriginInfo) {
-			if originInfo == nil || !strings.Contains(originInfo.Origin, "claude.ai") {
+			if originInfo == nil {
 				return
 			}
 
 			var msg usageMessage
 			if err := json.Unmarshal([]byte(message), &msg); err != nil {
 				log.Printf("tempoc: failed to parse raw message: %v", err)
+				return
+			}
+
+			// location is accepted from ANY origin (unlike everything else):
+			// during OAuth the interceptor window legitimately sits on e.g.
+			// accounts.google.com, and the title should say so rather than
+			// keep the last claude.ai URL. Spoofing is prevented by requiring
+			// the reported URL to start with the message's actual WebView2
+			// origin — a page can only put its own URL in the title.
+			if msg.Type == "location" {
+				if msg.Msg != "" && strings.HasPrefix(msg.Msg, originInfo.Origin) {
+					claude.win.SetTitle(msg.Msg + " — TEMPOC interceptor")
+				}
+				return
+			}
+
+			if !strings.Contains(originInfo.Origin, "claude.ai") {
 				return
 			}
 			switch msg.Type {

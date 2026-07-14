@@ -62,6 +62,7 @@ claude.ai のような**第三者ページに JS を注入する**には、Wails
 
 postMessage の `type` で分岐:
 - `usage` — `seven_day`/`five_hour`/`weekly_scoped` を `app.Event.Emit("tempoc:usage", ...)` でフロントへ。以後 `Events.On("tempoc:usage")` で受信
+- `location` — href 変化時に送信。Go が傍受ウィンドウのネイティブタイトルに URL を反映（`SetTitle`）。これだけは claude.ai 以外のオリジンからも受け付ける（OAuth 中は accounts.google.com 等にいるため）。ただし**報告 URL がメッセージの実オリジン（`originInfo.Origin`）で始まる場合のみ**反映 — ページは自分の URL しかタイトルに出せない
 - `auth-required` — 未認証を検知（`/login` にいる、または API が 401/403 を返した）→ `app.Event.Emit("tempoc:auth-required")` でフロントへ通知。フロントは usage データが残っていてもログイン前表示（「Log in to Claude」ボタン）に戻し、クリックで `Events.Emit('tempoc:login')` → Go が傍受ウィンドウを表示する（勝手には出さない）。このとき `/login` 以外の古い SPA 画面のままなら ExecJS で usage URL へ読み込み直し、claude.ai にログインページへ誘導させる
 - `debug` — ログ出力用
 
@@ -71,6 +72,8 @@ postMessage の `type` で分岐:
 
 - `/login` に**入った** → `auth-required` を post（SPA 遷移でのセッション切れも拾える）
 - `/login` から**出た** → ログイン成功なので `__tempocRefetch()` で使用量を能動取得（失敗時は最大3回・3秒間隔でリトライ。`__tempocRefetch` は成否 boolean の Promise を返す）
+
+同じ1秒ティックで**アドレスバー**も駆動する: `location.href` をページ最上部の読み取り専用オーバーレイ（`pointer-events: none`、SPA が body を再描画しても `isConnected` チェックで再生成）に表示し、href 変化時は `location` メッセージでネイティブタイトルにも反映する。アプリ内描画は偽装可能なため厳密な証明にはならない — ユーザー向けの検証手段（F12 DevTools 等）は `README.md` の Trust 節に記載。
 
 ページ遷移を伴わないログアウト（別ブラウザからのログアウト等でセッションだけ失効するケース）は pathname では検知できないため、**API レスポンスからも未認証を検知して `auth-required` を post** する:
 

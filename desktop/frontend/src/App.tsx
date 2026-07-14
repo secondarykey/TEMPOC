@@ -75,7 +75,9 @@ function TitleBar({ onOpenSettings, onRefresh, onTop, onToggleOnTop, lastUpdated
           <PinIcon />
         </button>
         <button aria-label="Minimise" onClick={() => Window.Minimise()}>&#x2015;</button>
-        <button aria-label="Close" className="close" onClick={() => Window.Close()}>&#x2715;</button>
+        {/* tempoc:quit (not Window.Close()) so Go can save the window position
+            while the frameless window still reports reliable coordinates. */}
+        <button aria-label="Close" className="close" onClick={() => Events.Emit('tempoc:quit')}>&#x2715;</button>
       </div>
     </header>
   );

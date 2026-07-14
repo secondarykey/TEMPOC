@@ -44,6 +44,7 @@ Chrome 拡張は claude.ai のページ内に content script を注入して `wi
 | `inject.js` | claude.ai に注入される素の JS。`window.fetch` を monkeypatch し使用量を postMessage |
 | `settings/settings.go` | 設定モデル（`Settings` 構造体 + `Default()`）。Wails 非依存 |
 | `settings/repository.go` | 設定の永続化（`os.UserConfigDir()/TEMPOC/settings.json`） |
+| `settings/windowstate.go` | ウィンドウ位置の永続化（`windowstate.json`）。Wails 非依存 |
 | `settings_service.go` | `SettingsService`（`Get()` / `Set()`）。フロントにバインド |
 | `frontend/src/App.tsx` | URL クエリルーター（`?window=settings` で分岐）+ メインウィンドウ UI（タイトルバー・使用量バー） |
 | `frontend/src/SettingsWindow.tsx` | 設定ウィンドウ UI（`SettingsView`・ドラフト管理・Apply/Close） |
@@ -138,6 +139,19 @@ postMessage の `type` で分岐:
 - 右: 最前面トグル（ピン）｜最小化｜閉じる
 - ヘッダー全体が `--wails-draggable: drag`、ボタン類は `no-drag`
 - `#root` に 5px パディング（リサイズハンドル領域確保。skill 準拠）
+- **✕ は `Window.Close()` ではなく `Events.Emit('tempoc:quit')`** — Frameless は `WindowClosing` 時点で `Position()` が不正値を返すことがあるため、ウィンドウが生きているうちに Go が位置を保存してから `app.Quit()` する（下記「ウィンドウ位置の保存・復元」）
+
+### ウィンドウ位置の保存・復元
+
+メインウィンドウの位置は終了時に保存し、次回起動時に復元する。保存先は `%APPDATA%\TEMPOC\windowstate.json`（`settings/windowstate.go`）。**settings.json とは別ファイル** — ウィンドウ状態はユーザーが編集する設定ではなく、Settings に含めると設定ウィンドウのドラフト/Apply が古い座標で上書きし得るため分離している。
+
+- **保存**: タイトルバー ✕ → `tempoc:quit` → Go が `mainWin.Position()` を保存して終了（正経路）。Alt+F4 / OS シャットダウンは `WindowClosing` でのベストエフォート保存（Frameless では不正値の可能性あり）。`sync.Once` で1回だけ。最小化中（約 -32000）は保存しない
+- **復元は二段階**: (1) 起動時に保存座標を `X`/`Y` + `InitialPosition: application.WindowXY` で渡す（`WindowXY` を明示しないとゼロ値 `WindowCentered` が勝ち X/Y が無視される）。保存が無ければ従来どおり中央。(2) `WindowRuntimeReady` で `ScreenNearestDipPoint` により最寄りモニタの `WorkArea` へクランプ（モニタ取り外し対策。スクリーン情報は `Run()` 前は取れない）
+- 未保存の判定はセンチネル `settings.UnsetPos`（-9999）。負の座標はマルチモニタで正当なため `0`/`<0` では判定しない
+
+### セカンダリウィンドウの初回表示位置
+
+設定ウィンドウ・傍受ウィンドウは**初回 Show 時にメインウィンドウと同じモニタ**に配置する（`placeOnMainScreen`: メイン位置 +48,+48 をそのモニタの WorkArea にクランプ）。2回目以降の Show ではユーザーが動かした位置を尊重する（`sync.Once`）。
 
 ### 最前面表示（always on top）
 
@@ -182,7 +196,7 @@ diff = util - elapsed
 
 **前提**: Wails alpha2.114 ではフロントから発行した `Events.Emit` は Go 側リスナーと（発行元を含む）全ウィンドウの両方に配信される。設定ウィンドウ↔メインウィンドウの通知に Go 中継コードは不要。
 
-イベント: `tempoc:open-settings`（メインの歯車 → Go が設定ウィンドウを `Show()`、設定ウィンドウ front はドラフト再読込）/ `tempoc:settings-applied`（設定ウィンドウの Apply → メインが `Get()` で再読込）。
+イベント: `tempoc:open-settings`（メインの歯車 → Go が設定ウィンドウを `Show()`、設定ウィンドウ front はドラフト再読込）/ `tempoc:settings-applied`（設定ウィンドウの Apply → メインが `Get()` で再読込）/ `tempoc:quit`（メインの ✕ → Go が位置保存してから終了）。
 
 拡張と同一のキー（`showDay7`/`showHour5`、`day7Danger`/`day7Warning`、`day7ColorEnabled`、`hour5*`、`showRemainDay7`/`showRemainHour5`、`decimalPlaces`、`durationStyle`、`percentFormat`、`refreshInterval`、`utilizationWarning`/`utilizationDanger`）に加え、デスクトップ独自:
 

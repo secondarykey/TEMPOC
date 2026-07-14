@@ -43,6 +43,43 @@ type UsagePayload struct {
 	WeeklyScoped json.RawMessage `json:"weekly_scoped,omitempty"`
 }
 
+// clampToWorkArea moves (x, y) so a w×h window stays inside a screen work
+// area. Right/bottom are clamped before left/top so that the top-left corner
+// wins (stays reachable) when the window is larger than the area.
+func clampToWorkArea(x, y, w, h int, area application.Rect) (int, int) {
+	if x+w > area.X+area.Width {
+		x = area.X + area.Width - w
+	}
+	if y+h > area.Y+area.Height {
+		y = area.Y + area.Height - h
+	}
+	if x < area.X {
+		x = area.X
+	}
+	if y < area.Y {
+		y = area.Y
+	}
+	return x, y
+}
+
+// placeOnMainScreen positions win on the same screen as mainWin — offset a
+// little from the main window and clamped to that screen's work area — so
+// secondary windows open on the monitor the user is actually working on
+// instead of wherever the OS defaults to. Callers invoke this only before a
+// window's first Show(); after that the user's own placement is respected
+// across hide/show cycles. Must run after app.Run() (ScreenNearestDipPoint
+// returns nil earlier), which holds for all event-handler callers.
+func placeOnMainScreen(mainWin, win *application.WebviewWindow) {
+	mx, my := mainWin.Position()
+	mw, mh := mainWin.Size()
+	ww, wh := win.Size()
+	x, y := mx+48, my+48
+	if screen := application.ScreenNearestDipPoint(application.Point{X: mx + mw/2, Y: my + mh/2}); screen != nil {
+		x, y = clampToWorkArea(x, y, ww, wh, screen.WorkArea)
+	}
+	win.SetPosition(x, y)
+}
+
 // claudeBootstrapHTML is the initial document for the Claude window. Booting in
 // HTML mode is what makes Wails register injectJS as a document-created script;
 // the page then redirects itself to the real usage URL.
@@ -135,6 +172,12 @@ func main() {
 		log.Printf("tempoc: failed to load settings, using defaults: %v", err)
 		cfg = settings.Default()
 	}
+	// Saved native window geometry (separate file from user settings — see
+	// settings.WindowState). Restored in two phases: the coordinates go into
+	// the window options here, and are clamped to the actual screens once the
+	// window is up (WindowRuntimeReady below).
+	winState := settings.LoadWindowState()
+
 	refreshMs := cfg.RefreshInterval * 60000
 	// ReplaceAll, not Replace(n=1): the placeholder must be substituted wherever
 	// it appears — a single-occurrence replace once hit a mention of the token
@@ -209,14 +252,27 @@ func main() {
 		},
 	})
 
+	// Phase 1 of the main-window position restore. InitialPosition's zero
+	// value is WindowCentered, which silently ignores X/Y — WindowXY must be
+	// explicit for saved coordinates to apply. Coordinates that ended up
+	// off-screen (monitor unplugged since last run) are corrected in phase 2
+	// (WindowRuntimeReady below), where screen information is available.
+	mainInitialPos := application.WindowCentered
+	if winState.MainX != settings.UnsetPos || winState.MainY != settings.UnsetPos {
+		mainInitialPos = application.WindowXY
+	}
+
 	// Main UI window: the TEMPOC usage bars (served from frontend/dist).
 	// Frameless — the title bar and window controls are drawn in React.
 	mainWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:     "TEMPOC",
-		Frameless: true,
-		Width:     520,
-		Height:    340,
-		MinWidth:  360,
+		Title:           "TEMPOC",
+		Frameless:       true,
+		X:               winState.MainX,
+		Y:               winState.MainY,
+		InitialPosition: mainInitialPos,
+		Width:           520,
+		Height:          340,
+		MinWidth:        360,
 		// Low enough that the window can shrink to fit a single compact-mode usage
 		// row; the frontend measures its content and sizes the window to match
 		// (clamped to MIN_WINDOW_H in App.tsx, which mirrors this value).
@@ -289,12 +345,57 @@ func main() {
 		URL:              "/?window=settings",
 	})
 
+	// Phase 2 of the main-window position restore: once this window's runtime
+	// is up (screen information is unavailable before app.Run(), and
+	// ApplicationStarted doesn't guarantee this window's readiness), clamp the
+	// saved position into the nearest screen's work area so a monitor removed
+	// since the last run can't strand the window off-screen.
+	mainWin.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		if winState.MainX == settings.UnsetPos && winState.MainY == settings.UnsetPos {
+			return
+		}
+		w, h := mainWin.Size()
+		screen := application.ScreenNearestDipPoint(application.Point{X: winState.MainX + w/2, Y: winState.MainY + h/2})
+		if screen == nil {
+			return
+		}
+		if x, y := clampToWorkArea(winState.MainX, winState.MainY, w, h, screen.WorkArea); x != winState.MainX || y != winState.MainY {
+			mainWin.SetPosition(x, y)
+		}
+	})
+
+	// Save the main window position exactly once per run, for restore on next
+	// launch. A minimized window reports around -32000; don't persist that.
+	var savePosOnce sync.Once
+	saveMainPos := func() {
+		x, y := mainWin.Position()
+		if x <= -30000 || y <= -30000 {
+			return
+		}
+		if err := settings.SaveWindowState(settings.WindowState{MainX: x, MainY: y}); err != nil {
+			log.Printf("tempoc: failed to save window state: %v", err)
+		}
+	}
+
+	// Quit from the titlebar ✕: the frontend emits this instead of calling
+	// Window.Close() so the position can be captured while the window is still
+	// fully alive — during WindowClosing a frameless window may already report
+	// bogus coordinates.
+	app.Event.On("tempoc:quit", func(*application.CustomEvent) {
+		savePosOnce.Do(saveMainPos)
+		appQuitting.Store(true)
+		app.Quit()
+	})
+
 	// Closing the main window quits the whole app. Without this, the hidden
 	// interceptor window would remain the only registered window, so the process
 	// would keep running with no visible UI and never post its quit message.
 	// Setting appQuitting first lets the interceptor's close hook (below) allow
 	// its real close during the ensuing shutdown.
+	// The position save here is best effort, for close paths that bypass
+	// tempoc:quit (Alt+F4, OS shutdown) — see the frameless caveat above.
 	mainWin.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
+		savePosOnce.Do(saveMainPos)
 		appQuitting.Store(true)
 		app.Quit()
 	})
@@ -332,7 +433,12 @@ func main() {
 	// /login), the window may still render a stale SPA page; reload it to the
 	// usage URL so claude.ai bounces to its login page. The document-created
 	// script survives the navigation, so interception keeps working.
+	// Secondary windows open on the main window's monitor the first time they
+	// are shown; afterwards the user's own placement survives hide/show.
+	var placeClaudeOnce, placeSettingsOnce sync.Once
+
 	app.Event.On("tempoc:login", func(*application.CustomEvent) {
+		placeClaudeOnce.Do(func() { placeOnMainScreen(mainWin, claude.win) })
 		claude.showForAuth()
 		claude.win.ExecJS(`if (!/^\/login\b/.test(location.pathname)) { location.replace("https://claude.ai/new#settings/usage"); }`)
 	})
@@ -348,6 +454,9 @@ func main() {
 
 	// Debug toggle: the main UI emits this to show/hide the Claude window.
 	app.Event.On("tempoc:toggle-claude", func(*application.CustomEvent) {
+		if !claude.win.IsVisible() {
+			placeClaudeOnce.Do(func() { placeOnMainScreen(mainWin, claude.win) })
+		}
 		claude.toggle()
 	})
 
@@ -361,6 +470,7 @@ func main() {
 		if cfgNow, err := settingsRepo.Load(); err == nil {
 			settingsWin.SetAlwaysOnTop(cfgNow.AlwaysOnTop)
 		}
+		placeSettingsOnce.Do(func() { placeOnMainScreen(mainWin, settingsWin) })
 		settingsWin.Show()
 	})
 

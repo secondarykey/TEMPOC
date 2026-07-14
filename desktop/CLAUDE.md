@@ -183,7 +183,7 @@ diff = util - elapsed
 ### 設定を追加する手順
 
 1. `settings/settings.go` の `Settings` にフィールド追加（+ 必要なら `Default()`）
-2. `desktop/` で `wails3 generate bindings`（`frontend/bindings/changeme/settings/` が再生成される）
+2. `desktop/` で `wails3 generate bindings -ts`（`frontend/bindings/changeme/settings/` が再生成される）
 3. `App.tsx` の設定画面に UI を追加し、描画側へ反映
 
 ## 開発・ビルド
@@ -191,12 +191,14 @@ diff = util - elapsed
 ```bash
 cd desktop
 wails3 dev               # 開発起動（GUI・ブロッキング）
-wails3 generate bindings # Go の Service/型を変更したら必須
+wails3 generate bindings -ts # Go の Service/型を変更したら（dev を使わない場合）
 go build ./...           # Go のコンパイル確認
 cd frontend && npx tsc --noEmit   # フロントの型チェック
 ```
 
-- Go の Service やバインド対象の型を変えたら **必ず `wails3 generate bindings`**。忘れると無言で壊れる
+- **`wails3 dev` は bindings を内部で自動再生成する**（`build/Taskfile.yml` の `generate:bindings`、`-clean=true -ts`）。dev の前に手動で generate する必要はない
+- 手動で generate する場合（`npx tsc --noEmit` の前など）は **`-ts` を付ける**（dev と同一フォーマット＝TypeScript クラス）。**`-i` は付けない** — interface 生成になり、`new Settings()`（App.tsx）が `TS2693: 'Settings' only refers to a type` で壊れる。引数なし（JS 生成）でもコンパイルは通るが、dev と生成物が入れ替わり続けるので避ける
+- Go の Service やバインド対象の型を変えたら bindings の再生成を忘れない。忘れると無言で壊れる
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
 
 ## 既知の制約・注意

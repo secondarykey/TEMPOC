@@ -35,10 +35,12 @@
     // ignore
   }
 
-  // アドレスバー: 現在の location.href をページ最上部に常時表示する
+  // アドレスバー: 現在の location.href をページ最下部に常時表示する
   // 読み取り専用オーバーレイ。アプリ内描画なので厳密な証明にはならない
   // （desktop/README.md の Trust 節を参照）が、どの URL に認証情報を
   // 入れているかを可視化する。pointer-events: none でページ操作は妨げない。
+  // 最下部なのは claude.ai の上部ナビゲーションと視覚的に重ならないため
+  // （クリックは透過するが、被ると下のボタンが狙いにくい）。
   var addressBarEl = null;
   function updateAddressBar() {
     if (!addressBarEl || !addressBarEl.isConnected) {
@@ -46,12 +48,12 @@
       addressBarEl = document.createElement("div");
       addressBarEl.id = "__tempoc-address-bar";
       addressBarEl.style.cssText =
-        "position:fixed;top:0;left:0;right:0;height:22px;" +
+        "position:fixed;bottom:0;left:0;right:0;height:22px;" +
         "z-index:2147483647;pointer-events:none;box-sizing:border-box;" +
         "padding:0 10px;background:rgba(6,7,15,0.88);color:#9aa6c0;" +
         "font:11px/22px Consolas,monospace;white-space:nowrap;" +
         "overflow:hidden;text-overflow:ellipsis;" +
-        "border-bottom:1px solid rgba(255,255,255,0.15)";
+        "border-top:1px solid rgba(255,255,255,0.15)";
       document.body.appendChild(addressBarEl);
     }
     if (addressBarEl.textContent !== window.location.href) {

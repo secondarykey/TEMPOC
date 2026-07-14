@@ -73,7 +73,7 @@ postMessage の `type` で分岐:
 - `/login` に**入った** → `auth-required` を post（SPA 遷移でのセッション切れも拾える）
 - `/login` から**出た** → ログイン成功なので `__tempocRefetch()` で使用量を能動取得（失敗時は最大3回・3秒間隔でリトライ。`__tempocRefetch` は成否 boolean の Promise を返す）
 
-同じ1秒ティックで**アドレスバー**も駆動する: `location.href` をページ最上部の読み取り専用オーバーレイ（`pointer-events: none`、SPA が body を再描画しても `isConnected` チェックで再生成）に表示し、href 変化時は `location` メッセージでネイティブタイトルにも反映する。アプリ内描画は偽装可能なため厳密な証明にはならない — ユーザー向けの検証手段（F12 DevTools 等）は `README.md` の Trust 節に記載。
+同じ1秒ティックで**アドレスバー**も駆動する: `location.href` をページ最下部の読み取り専用オーバーレイ（最上部だと claude.ai の上部ナビに視覚的に被ってボタンが狙いにくい）（`pointer-events: none`、SPA が body を再描画しても `isConnected` チェックで再生成）に表示し、href 変化時は `location` メッセージでネイティブタイトルにも反映する。アプリ内描画は偽装可能なため厳密な証明にはならない — ユーザー向けの検証手段（F12 DevTools 等）は `README.md` の Trust 節に記載。
 
 ページ遷移を伴わないログアウト（別ブラウザからのログアウト等でセッションだけ失効するケース）は pathname では検知できないため、**API レスポンスからも未認証を検知して `auth-required` を post** する:
 

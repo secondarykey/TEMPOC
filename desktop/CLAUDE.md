@@ -42,7 +42,7 @@ Chrome 拡張は claude.ai のページ内に content script を注入して `wi
 | `frontend/src/App.tsx` | UI 全体（タイトルバー・使用量バー・設定画面） |
 | `frontend/src/main.tsx` | React エントリ。`import '@wailsio/runtime'`（Frameless のドラッグに必須） |
 | `frontend/public/style.css` | スタイル |
-| `frontend/bindings/changeme/` | `wails3 generate bindings` の生成物（コミット対象） |
+| `frontend/bindings/changeme/` | `wails3 generate bindings` の生成物（git 管理外。無ければ `desktop/` で `wails3 generate bindings` を実行して生成） |
 
 ## 使用量の傍受の仕組み（重要な設計判断）
 

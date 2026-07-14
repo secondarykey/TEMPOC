@@ -298,14 +298,14 @@ body { background: transparent; }
 
 .usage-bar-compact {
     display: grid;
-    /* label | utilization% | elapsed%. The reset date and remaining time live
-       only in the row's title tooltip. Fixed value columns keep cells lined up
-       across all rows and cards (each card is its own grid); tweak the
-       --compact-*-col vars. */
+    /* label | elapsed% | utilization% (utilization last, at the right edge).
+       The reset date and remaining time live only in the row's title tooltip.
+       Fixed value columns keep cells lined up across all rows and cards (each
+       card is its own grid); tweak the --compact-*-col vars. */
     grid-template-columns:
         minmax(0, 1fr)
-        var(--compact-util-col, 3.2rem)
-        var(--compact-elapsed-col, 4rem);
+        var(--compact-elapsed-col, 4rem)
+        var(--compact-util-col, 3.2rem);
     align-items: baseline;
     column-gap: 0.6rem;
     font-size: 0.8rem;

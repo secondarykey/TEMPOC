@@ -514,13 +514,15 @@ function UsageBar({
   const secUtil = secondary ? clamp(secondary.data?.utilization ?? 0) : 0;
   const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
 
-  // Compact mode: a single line per window, "label | utilization% | elapsed%",
-  // instead of the track/marker/foot layout. The reset date and remaining time
+  // Compact mode: a single line per window, "label | elapsed% | utilization%"
+  // (utilization last, at the eye-catching right edge), instead of the
+  // track/marker/foot layout. The reset date and remaining time
   // are tucked into the row's title tooltip rather than shown as columns, so
   // the row stays as small as possible. The fixed value columns (style.css
   // --compact-*-col) keep cells lined up across every row — including across
   // cards, since each card is its own grid. The secondary (weekly_scoped) row
-  // shares the primary's timeline, so its tooltip/elapsed repeat the primary's.
+  // shares the primary's timeline: its tooltip repeats the primary's and its
+  // elapsed cell stays empty.
   if (sizeMode === 'compact') {
     const locale = resolveLocale(settings);
     const resetInfo =
@@ -530,8 +532,10 @@ function UsageBar({
     const row = (lbl: string, u: number, c: string, sub?: boolean) => (
       <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={resetInfo}>
         <span className="usage-bar-label" title={lbl}>{lbl}</span>
+        {/* The sub row (weekly_scoped) shares the primary's timeline, so
+            repeating its elapsed% is just noise — leave the cell empty. */}
+        <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatPercent(elapsed, settings) : '—'}</span>
         <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
-        <span className="usage-bar-compact-elapsed">{started ? formatPercent(elapsed, settings) : '—'}</span>
       </div>
     );
     return (

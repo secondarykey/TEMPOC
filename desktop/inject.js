@@ -169,8 +169,10 @@
   // __tempocRefetch で確実に1回取得する。
   setTimeout(window.__tempocRefetch, 1500);
 
-  // __TEMPOC_REFRESH_MS__ is string-replaced by Go (main.go) at window-creation
-  // time with settings.RefreshInterval*60000 (0 = disabled). Because this
+  // The refresh-interval placeholder below (do NOT spell it out in comments —
+  // Go string-replaces every occurrence of the token) is filled in by main.go
+  // at window-creation time with settings.RefreshInterval*60000 (0 = disabled).
+  // Because this
   // script is only pushed into the Claude window once, at startup, changing
   // the refresh interval in the Settings UI only takes effect on next app
   // launch. Repeated auto-refreshes go through the site's own button

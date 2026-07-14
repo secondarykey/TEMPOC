@@ -133,7 +133,11 @@ func main() {
 		cfg = settings.Default()
 	}
 	refreshMs := cfg.RefreshInterval * 60000
-	resolvedInjectJS := strings.Replace(injectJS, "__TEMPOC_REFRESH_MS__", strconv.Itoa(refreshMs), 1)
+	// ReplaceAll, not Replace(n=1): the placeholder must be substituted wherever
+	// it appears — a single-occurrence replace once hit a mention of the token
+	// in an inject.js comment instead of the code, leaving the real assignment
+	// as an undefined identifier and silently killing auto-refresh.
+	resolvedInjectJS := strings.ReplaceAll(injectJS, "__TEMPOC_REFRESH_MS__", strconv.Itoa(refreshMs))
 
 	var app *application.App
 	app = application.New(application.Options{

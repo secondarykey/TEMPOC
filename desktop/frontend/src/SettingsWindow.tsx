@@ -220,6 +220,10 @@ export function SettingsView({
       {hasWeeklyScoped && (
         <section className="settings-section">
           <h3 className="settings-section-title">Weekly (scoped) Window</h3>
+          <label className="settings-check-row">
+            <span>Show</span>
+            <input type="checkbox" checked={settings.showWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
+          </label>
           <label className="settings-row">
             <span>Label</span>
             <input
@@ -229,10 +233,6 @@ export function SettingsView({
               placeholder="Weekly (scoped)"
               onChange={(e) => onUpdate({ weeklyScopedLabel: e.target.value })}
             />
-          </label>
-          <label className="settings-check-row">
-            <span>Show</span>
-            <input type="checkbox" checked={settings.showWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
           </label>
           <label className="settings-check-row">
             <span>Show remaining time</span>

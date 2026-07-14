@@ -35,6 +35,40 @@
     // ignore
   }
 
+  // アドレスバー: 現在の location.href をページ最上部に常時表示する
+  // 読み取り専用オーバーレイ。アプリ内描画なので厳密な証明にはならない
+  // （desktop/README.md の Trust 節を参照）が、どの URL に認証情報を
+  // 入れているかを可視化する。pointer-events: none でページ操作は妨げない。
+  var addressBarEl = null;
+  function updateAddressBar() {
+    if (!addressBarEl || !addressBarEl.isConnected) {
+      if (!document.body) return; // document-start 直後は body がまだ無い
+      addressBarEl = document.createElement("div");
+      addressBarEl.id = "__tempoc-address-bar";
+      addressBarEl.style.cssText =
+        "position:fixed;top:0;left:0;right:0;height:22px;" +
+        "z-index:2147483647;pointer-events:none;box-sizing:border-box;" +
+        "padding:0 10px;background:rgba(6,7,15,0.88);color:#9aa6c0;" +
+        "font:11px/22px Consolas,monospace;white-space:nowrap;" +
+        "overflow:hidden;text-overflow:ellipsis;" +
+        "border-bottom:1px solid rgba(255,255,255,0.15)";
+      document.body.appendChild(addressBarEl);
+    }
+    if (addressBarEl.textContent !== window.location.href) {
+      addressBarEl.textContent = window.location.href;
+    }
+  }
+
+  // href（ハッシュ含む）の変化をネイティブのウィンドウタイトルにも反映する。
+  // タイトルバーは OS が描画するため、ページ内オーバーレイより偽装耐性が
+  // 一段高い表示になる（Go 側 "location" ハンドラが SetTitle する）。
+  var lastHref = null;
+  function reportLocation() {
+    if (window.location.href === lastHref) return;
+    lastHref = window.location.href;
+    post({ type: "location", msg: lastHref });
+  }
+
   // ログイン状態の遷移を常駐監視する。ログインの完了/失効は claude.ai 内の
   // SPA 遷移（新しいドキュメントを作らない）なので、document-start 注入の
   // このスクリプトは再実行されない。pathname をポーリングして /login への
@@ -227,10 +261,16 @@
   // 検知して取り直す。
   setTimeout(window.__tempocRefetch, 1500);
 
-  // ログイン遷移ウォッチャーを起動（即時1回 + 1秒ポーリング）。即時実行で
-  // document-start 時点の /login も従来どおり遅延なく auth-required になる。
-  watchAuthTransition();
-  setInterval(watchAuthTransition, 1000);
+  // 1秒ティック: ログイン遷移監視 + アドレスバー描画/更新 + タイトル用の
+  // location 通知。即時1回実行で document-start 時点の /login も従来どおり
+  // 遅延なく auth-required になる（バーは body 出現後のティックから描画）。
+  function tick() {
+    watchAuthTransition();
+    updateAddressBar();
+    reportLocation();
+  }
+  tick();
+  setInterval(tick, 1000);
 
   // The refresh-interval placeholder below (do NOT spell it out in comments —
   // Go string-replaces every occurrence of the token) is filled in by main.go

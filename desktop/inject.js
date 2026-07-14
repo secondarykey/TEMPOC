@@ -142,7 +142,13 @@
         console.debug("[TEMPOC] fetch:", path);
       }
       if (usagePattern.test(path)) {
-        handleUsageResponse(response);
+        if (response.status === 401 || response.status === 403) {
+          // サイト自身の使用量リクエストが認証エラー = ログアウトされた。
+          post({ type: "debug", msg: "usage: unauthorized (" + response.status + ")" });
+          post({ type: "auth-required" });
+        } else {
+          handleUsageResponse(response);
+        }
       }
     } catch (e) {
       // ignore
@@ -158,21 +164,36 @@
   window.__tempocRefetch = function () {
     return originalFetch("/api/organizations", { credentials: "include" })
       .then(function (r) {
-        return r.json();
-      })
-      .then(function (orgs) {
-        if (!Array.isArray(orgs) || orgs.length === 0) {
-          post({ type: "debug", msg: "refetch: no organizations" });
+        // 401/403 はログアウト（セッション失効）。ネットワークエラー等の
+        // 一時障害（下の catch）とは区別し、認証エラーのときだけフロントを
+        // ログイン前表示に戻す。
+        if (r.status === 401 || r.status === 403) {
+          post({ type: "debug", msg: "refetch: unauthorized (" + r.status + ")" });
+          post({ type: "auth-required" });
           return false;
         }
-        var orgId = orgs[0].uuid || orgs[0].id;
-        console.debug("[TEMPOC] refetch usage for org", orgId);
-        return originalFetch(
-          "/api/organizations/" + orgId + "/usage",
-          { credentials: "include" }
-        ).then(function (r) {
-          handleUsageResponse(r);
-          return r.ok;
+        return r.json().then(function (orgs) {
+          if (!Array.isArray(orgs) || orgs.length === 0) {
+            // 実測ではログアウト状態でも 401 ではなく 200 + 空/非配列が
+            // 返ることがある。正規アカウントに組織ゼロは無いので、これも
+            // 未認証として扱う。
+            post({ type: "debug", msg: "refetch: no organizations" });
+            post({ type: "auth-required" });
+            return false;
+          }
+          var orgId = orgs[0].uuid || orgs[0].id;
+          console.debug("[TEMPOC] refetch usage for org", orgId);
+          return originalFetch(
+            "/api/organizations/" + orgId + "/usage",
+            { credentials: "include" }
+          ).then(function (r2) {
+            if (r2.status === 401 || r2.status === 403) {
+              post({ type: "auth-required" });
+              return false;
+            }
+            handleUsageResponse(r2);
+            return r2.ok;
+          });
         });
       })
       .catch(function (e) {

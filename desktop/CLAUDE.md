@@ -62,7 +62,7 @@ claude.ai のような**第三者ページに JS を注入する**には、Wails
 
 postMessage の `type` で分岐:
 - `usage` — `seven_day`/`five_hour`/`weekly_scoped` を `app.Event.Emit("tempoc:usage", ...)` でフロントへ。以後 `Events.On("tempoc:usage")` で受信
-- `auth-required` — `/login` にいる（未認証）→ `app.Event.Emit("tempoc:auth-required")` でフロントへ通知。フロントは「Log in to Claude」ボタンを表示し、クリックで `Events.Emit('tempoc:login')` → Go が傍受ウィンドウを表示する（勝手には出さない）
+- `auth-required` — 未認証を検知（`/login` にいる、または API が 401/403 を返した）→ `app.Event.Emit("tempoc:auth-required")` でフロントへ通知。フロントは usage データが残っていてもログイン前表示（「Log in to Claude」ボタン）に戻し、クリックで `Events.Emit('tempoc:login')` → Go が傍受ウィンドウを表示する（勝手には出さない）。このとき `/login` 以外の古い SPA 画面のままなら ExecJS で usage URL へ読み込み直し、claude.ai にログインページへ誘導させる
 - `debug` — ログ出力用
 
 ### ログイン遷移の検知（pathname ウォッチャー）
@@ -71,6 +71,14 @@ postMessage の `type` で分岐:
 
 - `/login` に**入った** → `auth-required` を post（SPA 遷移でのセッション切れも拾える）
 - `/login` から**出た** → ログイン成功なので `__tempocRefetch()` で使用量を能動取得（失敗時は最大3回・3秒間隔でリトライ。`__tempocRefetch` は成否 boolean の Promise を返す）
+
+ページ遷移を伴わないログアウト（別ブラウザからのログアウト等でセッションだけ失効するケース）は pathname では検知できないため、**API レスポンスからも未認証を検知して `auth-required` を post** する:
+
+- `__tempocRefetch` の `/api/organizations`・usage 取得、およびパッチ済み fetch が傍受するサイト自身の usage リクエストの **401/403**
+- `/api/organizations` が **200 でも空/非配列**のとき（実測ではログアウト状態でこちらが返る。正規アカウントに組織ゼロは無い）
+- `catch`（ネットワークエラー等の一時障害）は認証エラー扱いに**しない**
+
+手動更新ボタン → `__tempocRefetch` が失敗 → ログイン前表示に戻る、という経路もこれでカバーされる。
 
 これが無いと、ログインページ上で失敗した初回取得（1.5秒後の `__tempocRefetch`）以降、誰も usage API を叩かず、ユーザーが手動で usage ページを開くまで無反応になる。Google OAuth 等のフルページ遷移で戻るケースは新ドキュメントでスクリプト自体が再実行されるため、ウォッチャー無しでも初回取得が走る。
 

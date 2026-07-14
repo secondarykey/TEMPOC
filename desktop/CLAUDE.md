@@ -141,13 +141,13 @@ postMessage の `type` で分岐:
 - `#root` に 5px パディング（リサイズハンドル領域確保。skill 準拠）
 - **✕ は `Window.Close()` ではなく `Events.Emit('tempoc:quit')`** — Frameless は `WindowClosing` 時点で `Position()` が不正値を返すことがあるため、ウィンドウが生きているうちに Go が位置を保存してから `app.Quit()` する（下記「ウィンドウ位置の保存・復元」）
 
-### ウィンドウ位置の保存・復元
+### ウィンドウ位置・幅の保存・復元
 
-メインウィンドウの位置は終了時に保存し、次回起動時に復元する。保存先は `%APPDATA%\TEMPOC\windowstate.json`（`settings/windowstate.go`）。**settings.json とは別ファイル** — ウィンドウ状態はユーザーが編集する設定ではなく、Settings に含めると設定ウィンドウのドラフト/Apply が古い座標で上書きし得るため分離している。
+メインウィンドウの位置と幅は終了時に保存し、次回起動時に復元する（高さはコンテンツ追従のため保存しない）。保存先は `%APPDATA%\TEMPOC\windowstate.json`（`settings/windowstate.go`）。**settings.json とは別ファイル** — ウィンドウ状態はユーザーが編集する設定ではなく、Settings に含めると設定ウィンドウのドラフト/Apply が古い座標で上書きし得るため分離している。
 
-- **保存**: タイトルバー ✕ → `tempoc:quit` → Go が `mainWin.Position()` を保存して終了（正経路）。Alt+F4 / OS シャットダウンは `WindowClosing` でのベストエフォート保存（Frameless では不正値の可能性あり）。`sync.Once` で1回だけ。最小化中（約 -32000）は保存しない
-- **復元は二段階**: (1) 起動時に保存座標を `X`/`Y` + `InitialPosition: application.WindowXY` で渡す（`WindowXY` を明示しないとゼロ値 `WindowCentered` が勝ち X/Y が無視される）。保存が無ければ従来どおり中央。(2) `WindowRuntimeReady` で `ScreenNearestDipPoint` により最寄りモニタの `WorkArea` へクランプ（モニタ取り外し対策。スクリーン情報は `Run()` 前は取れない）
-- 未保存の判定はセンチネル `settings.UnsetPos`（-9999）。負の座標はマルチモニタで正当なため `0`/`<0` では判定しない
+- **保存**: タイトルバー ✕ → `tempoc:quit` → Go が `mainWin.Position()`/`Size()` を保存して終了（正経路）。Alt+F4 / OS シャットダウンは `WindowClosing` でのベストエフォート保存（Frameless では不正値の可能性あり）。`sync.Once` で1回だけ。最小化中（約 -32000）は保存しない
+- **復元は二段階**: (1) 起動時に保存座標を `X`/`Y` + `InitialPosition: application.WindowXY` で渡す（`WindowXY` を明示しないとゼロ値 `WindowCentered` が勝ち X/Y が無視される）。保存が無ければ従来どおり中央。幅は MinWidth 未満・4000 超なら既定 520 に戻す。(2) `WindowRuntimeReady` で `ScreenNearestDipPoint` により最寄りモニタの `WorkArea` へ位置をクランプ（モニタ取り外し対策。スクリーン情報は `Run()` 前は取れない）。幅が WorkArea より広い場合もここで既定 520 に戻す（クランプではなくデフォルト復帰）
+- 未保存の判定は、位置はセンチネル `settings.UnsetPos`（-9999。負の座標はマルチモニタで正当なため `0`/`<0` では判定しない）、幅は `0`（幅 0 はあり得ないため）
 
 ### セカンダリウィンドウの初回表示位置
 

@@ -20,6 +20,10 @@ const UnsetPos = -9999
 type WindowState struct {
 	MainX int `json:"mainX"`
 	MainY int `json:"mainY"`
+	// MainW is the main window width. 0 means unset (a width can never
+	// legitimately be zero, so no sentinel is needed). Height is not saved:
+	// the frontend continuously sizes it to fit the bar content.
+	MainW int `json:"mainW"`
 }
 
 // DefaultWindowState returns a state with no saved position.

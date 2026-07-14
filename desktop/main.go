@@ -262,6 +262,16 @@ func main() {
 		mainInitialPos = application.WindowXY
 	}
 
+	// Restore the saved width (height always tracks content). Implausible
+	// values — below the window's MinWidth or beyond any reasonable monitor —
+	// fall back to the default rather than being clamped; a screen-aware check
+	// in phase 2 does the same for widths wider than the actual work area.
+	const defaultMainWidth = 520
+	mainWidth := winState.MainW
+	if mainWidth < 360 || mainWidth > 4000 {
+		mainWidth = defaultMainWidth
+	}
+
 	// Main UI window: the TEMPOC usage bars (served from frontend/dist).
 	// Frameless — the title bar and window controls are drawn in React.
 	mainWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -270,7 +280,7 @@ func main() {
 		X:               winState.MainX,
 		Y:               winState.MainY,
 		InitialPosition: mainInitialPos,
-		Width:           520,
+		Width:           mainWidth,
 		Height:          340,
 		MinWidth:        360,
 		// Low enough that the window can shrink to fit a single compact-mode usage
@@ -351,28 +361,38 @@ func main() {
 	// saved position into the nearest screen's work area so a monitor removed
 	// since the last run can't strand the window off-screen.
 	mainWin.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
-		if winState.MainX == settings.UnsetPos && winState.MainY == settings.UnsetPos {
-			return
-		}
 		w, h := mainWin.Size()
-		screen := application.ScreenNearestDipPoint(application.Point{X: winState.MainX + w/2, Y: winState.MainY + h/2})
+		x, y := mainWin.Position()
+		screen := application.ScreenNearestDipPoint(application.Point{X: x + w/2, Y: y + h/2})
 		if screen == nil {
 			return
 		}
-		if x, y := clampToWorkArea(winState.MainX, winState.MainY, w, h, screen.WorkArea); x != winState.MainX || y != winState.MainY {
-			mainWin.SetPosition(x, y)
+		// A restored width wider than the actual work area falls back to the
+		// default (same policy as the pre-Run sanity check above) instead of
+		// being clamped to the edge.
+		if w > screen.WorkArea.Width {
+			w = defaultMainWidth
+			mainWin.SetSize(w, h)
+		}
+		if winState.MainX == settings.UnsetPos && winState.MainY == settings.UnsetPos {
+			return
+		}
+		if cx, cy := clampToWorkArea(winState.MainX, winState.MainY, w, h, screen.WorkArea); cx != winState.MainX || cy != winState.MainY {
+			mainWin.SetPosition(cx, cy)
 		}
 	})
 
-	// Save the main window position exactly once per run, for restore on next
-	// launch. A minimized window reports around -32000; don't persist that.
+	// Save the main window position and width exactly once per run, for
+	// restore on next launch. A minimized window reports around -32000; don't
+	// persist that.
 	var savePosOnce sync.Once
 	saveMainPos := func() {
 		x, y := mainWin.Position()
 		if x <= -30000 || y <= -30000 {
 			return
 		}
-		if err := settings.SaveWindowState(settings.WindowState{MainX: x, MainY: y}); err != nil {
+		w, _ := mainWin.Size()
+		if err := settings.SaveWindowState(settings.WindowState{MainX: x, MainY: y, MainW: w}); err != nil {
 			log.Printf("tempoc: failed to save window state: %v", err)
 		}
 	}

@@ -159,16 +159,6 @@ export function SettingsView({
           </label>
           <div className="settings-help-text">Takes effect on next app launch.</div>
         </div>
-        <div className="settings-row">
-          <span>Utilization floor</span>
-        </div>
-        <DualRange
-          min={0}
-          max={100}
-          warning={settings.utilizationWarning}
-          danger={settings.utilizationDanger}
-          onChange={(w, d) => onUpdate({ utilizationWarning: w, utilizationDanger: d })}
-        />
       </section>
 
       <section className="settings-section">
@@ -251,6 +241,18 @@ export function SettingsView({
           />
         </section>
       )}
+
+      <section className="settings-section">
+        <h3 className="settings-section-title">Utilization Threshold</h3>
+        <div className="settings-help-text">Forces warning/danger colors when absolute usage reaches these values.</div>
+        <DualRange
+          min={0}
+          max={100}
+          warning={settings.utilizationWarning}
+          danger={settings.utilizationDanger}
+          onChange={(w, d) => onUpdate({ utilizationWarning: w, utilizationDanger: d })}
+        />
+      </section>
 
       <div className="settings-row settings-debug-row">
         <div>

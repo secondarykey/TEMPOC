@@ -820,20 +820,21 @@ function App() {
               hasWeeklyScoped={weeklyScopedHasData}
             />
           )
+        ) : authRequired ? (
+          // Takes precedence over any stale usage data: once the interceptor
+          // reports the session is gone (401 or a /login redirect), the bars
+          // would only show outdated numbers, so fall back to the login prompt.
+          <div className="app-placeholder">
+            Login required
+            <br />
+            <button className="login-button" onClick={() => Events.Emit('tempoc:login')}>
+              Log in to Claude
+            </button>
+          </div>
         ) : !usage ? (
-          authRequired ? (
-            <div className="app-placeholder">
-              Login required
-              <br />
-              <button className="login-button" onClick={() => Events.Emit('tempoc:login')}>
-                Log in to Claude
-              </button>
-            </div>
-          ) : (
-            <p className="app-placeholder">
-              Waiting for usage data<span className="loading-dots" aria-hidden="true" />
-            </p>
-          )
+          <p className="app-placeholder">
+            Waiting for usage data<span className="loading-dots" aria-hidden="true" />
+          </p>
         ) : (
           <div className="usage-bars" ref={measureRef}>
             {settings.showHour5 && (

@@ -273,9 +273,14 @@ func main() {
 	// Login request: the main UI's "Log in to Claude" button emits this after
 	// an auth-required notification. Show the interceptor window (unpinned, so
 	// the usual autoHide tucks it away again once the login completes and
-	// usage data starts flowing).
+	// usage data starts flowing). If the session died without a navigation
+	// (external logout — auth-required came from a 401, not from landing on
+	// /login), the window may still render a stale SPA page; reload it to the
+	// usage URL so claude.ai bounces to its login page. The document-created
+	// script survives the navigation, so interception keeps working.
 	app.Event.On("tempoc:login", func(*application.CustomEvent) {
 		claude.showForAuth()
+		claude.win.ExecJS(`if (!/^\/login\b/.test(location.pathname)) { location.replace("https://claude.ai/new#settings/usage"); }`)
 	})
 
 	// Manual refresh: the main UI's refresh button emits this. Drive the

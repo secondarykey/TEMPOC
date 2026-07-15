@@ -203,6 +203,7 @@ diff = util - elapsed
 | キー | 既定 | 説明 |
 |---|---|---|
 | `locale` | `""`(Auto) | 日時・残り時間の表記ロケール。空は `navigator.language` に従う。設定ウィンドウの Language セレクタ（Auto / English / 日本語） |
+| `theme` | `"system"` | UI テーマ: `system` / `light` / `dark`。`system` は `prefers-color-scheme` で OS 設定に追従（OS 側の切り替えもライブ反映）。`theme.ts` の `applyTheme()` が `<html>` に `data-theme="light\|dark"` を付与し、`style.css` の CSS 変数（`:root` = ダーク既定、`[data-theme="light"]` で上書き）が切り替わる。バー色（`COLORS`）も `var(--color-*)` 参照でテーマ追従。メイン・設定ウィンドウは別 JS コンテキストのため各自 `applyTheme()` を呼ぶ（設定ウィンドウは保存値で描画し、Apply 時に反映） |
 | `transparent` | `false` | ウィンドウ透明の On/Off（設定ウィンドウ General のチェックボックス） |
 | `alwaysOnTop` | `false` | 最前面表示の On/Off（タイトルバーのピン。永続化・起動時復元） |
 | `showWeeklyScoped` | `true` | weekly_scoped バーの表示 |

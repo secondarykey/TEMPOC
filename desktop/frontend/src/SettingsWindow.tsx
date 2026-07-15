@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Events, Window } from '@wailsio/runtime'
 import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
-import { COLORS } from './theme'
+import { COLORS, applyTheme } from './theme'
 
 // A dual-thumb range slider: warning is clamped to stay <= danger and vice
 // versa, with a gradient fill mirroring the extension's options.js
@@ -88,6 +88,14 @@ export function SettingsView({
     <div className="settings">
       <section className="settings-section">
         <h3 className="settings-section-title">General</h3>
+        <label className="settings-row">
+          <span>Theme</span>
+          <select value={settings.theme || 'system'} onChange={(e) => onUpdate({ theme: e.target.value })}>
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
         <label className="settings-row">
           <span>Size mode</span>
           <select value={settings.sizeMode || 'normal'} onChange={(e) => onUpdate({ sizeMode: e.target.value })}>
@@ -307,6 +315,10 @@ export default function SettingsWindow() {
         setDraft(s);
         setDirty(false);
         setLoaded(true);
+        // This window renders with the *saved* theme, not the draft's: like
+        // every other setting, a theme picked in the select only takes effect
+        // on Apply (see apply()), and reopening discards it with the draft.
+        applyTheme(s.theme);
       });
     };
     // Hidden -> Show (main.go's settingsWin) does not remount this
@@ -349,6 +361,9 @@ export default function SettingsWindow() {
       await SettingsService.Set(next);
       setDraft(next);
       setDirty(false);
+      // The main window picks the new theme up via tempoc:settings-applied;
+      // this window is its own JS context, so apply it here too.
+      applyTheme(next.theme);
       Events.Emit('tempoc:settings-applied');
     } catch (err) {
       console.error('tempoc: failed to apply settings', err);

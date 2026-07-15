@@ -3,7 +3,7 @@ import { Events, Window } from '@wailsio/runtime'
 import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
 import SettingsWindow from './SettingsWindow'
-import { COLORS } from './theme'
+import { COLORS, applyTheme } from './theme'
 
 function PinIcon() {
   return (
@@ -411,6 +411,13 @@ function MainWindow() {
   useEffect(() => {
     document.documentElement.classList.toggle('is-transparent', settings.transparent);
   }, [settings.transparent]);
+
+  // Apply the theme setting ("system" follows the OS preference live). Gated
+  // on settingsLoaded so the first paint keeps the CSS default (dark) instead
+  // of flashing the system theme before the saved choice is known.
+  useEffect(() => {
+    if (settingsLoaded) applyTheme(settings.theme);
+  }, [settingsLoaded, settings.theme]);
 
   // Apply the persisted always-on-top state (restored on restart). Gated on
   // settingsLoaded so we act on the saved value, not the default-false initial.

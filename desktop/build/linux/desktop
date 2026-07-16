@@ -1,13 +1,13 @@
 [Desktop Entry]
 Version=1.0
-Name=My Product
-Comment=A desktop application
+Name=TEMPOC
+Comment=TEMPOC - Claude usage window tracker
 # The Exec line includes %u to pass the URL to the application
-Exec=/usr/local/bin/desktop.exe %u
+Exec=/usr/local/bin/desktop %u
 Terminal=false
 Type=Application
-Icon=desktop.exe
+Icon=desktop
 Categories=Utility;
-StartupWMClass=desktop.exe
+StartupWMClass=desktop
 
  

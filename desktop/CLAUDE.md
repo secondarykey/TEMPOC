@@ -235,6 +235,49 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
 - Go の Service やバインド対象の型を変えたら bindings の再生成を忘れない。忘れると無言で壊れる
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
 
+## バージョン管理・アプリ情報
+
+バージョンの**唯一の正は `desktop/version`**（テキスト1行）。`build/config.yml` の `info.version` と `frontend/package.json` の `version` はその写しで、**手で編集しない**。同期は `_cmd/version.go` が行う（`desktop/` から実行）:
+
+```bash
+go run ./_cmd/version.go 1.2.3   # 指定バージョンを全ファイルへ
+go run ./_cmd/version.go -bump   # patch/minor/major を対話選択（Enter=patch）
+go run ./_cmd/version.go         # version の現在値で他ファイルを再同期
+go run ./_cmd/version.go -print  # 現在値を表示するだけ（CI 用）
+```
+
+`frontend/package-lock.json` の `version` は**同期対象に含めていない**。ロック内の依存パッケージのバージョン行と同じインデント（6スペースの `"version": "..."`）で並んでおり、行パターンで置換すると全依存のバージョンを書き潰すため。ビルド時の `npm install`（`npm ci` ではない）が package.json に合わせて自動で書き直すので実害はなく、アプリの中身にも影響しない。
+
+`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`tempoc: starting v0.1.0`）に出る。
+
+### exe のメタデータ（`info:` → 各アセット）
+
+`build/config.yml` の `info:` が一元ソース。値の対応と「ユーザーに何として見えるか」は `.claude/skills/wails3/references/build-assets.md` を参照。**Windows のタスクバー／タスクマネージャの表示名は `description`（FileDescription）であって ProductName ではない**ため、`description` にはアプリの表示名を入れてある。
+
+再生成は**必ず Taskfile 経由**で行う:
+
+```bash
+wails3 task common:update:build-assets   # -name/-binaryname/-config/-dir を APP_NAME 込みで渡してくれる
+```
+
+**素の `wails3 update build-assets` を叩いてはいけない** — フラグが無いと全項目がテンプレート既定値で上書きされ、`windows/wails.exe.manifest` の `com.github.secondarykey.tempoc.desktop`（`productIdentifier` 由来）も失われる。
+
+exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが毎回実行）→ `.syso` を go build がリンク、という順で起こる。したがって `config.yml` を直しただけでは何も変わらず、`update build-assets` → 再ビルドまでやって初めて反映される。
+
+### ⚠️ exe のバージョン情報の確認方法
+
+wails3 の syso はバージョンリソースを**言語ニュートラル（`0000`）**で埋め込む。このため .NET 経由（`(Get-Item x.exe).VersionInfo` / `[System.Diagnostics.FileVersionInfo]`）では**文字列が全て空に見えるが、壊れているわけではない**（FixedFileInfo の `FileMajorPart` 等だけは読める）。エクスプローラ・タスクバーが使うシェルプロパティでは正しく読めるので、検証はシェル経由で行う:
+
+```powershell
+$shell = New-Object -ComObject Shell.Application
+$folder = $shell.Namespace("<絶対パス>\desktop\bin")
+$item = $folder.ParseName("desktop.exe")
+$folder.GetDetailsOf($item, 34)   # File description
+$folder.GetDetailsOf($item, 306)  # Product version
+```
+
+さらに Windows は FileDescription を exe のフルパス単位でキャッシュする（MuiCache / PCA）ため、更新しても古い表示名が残る。詳細と対処は `.claude/skills/wails3/references/pitfalls.md` の 14 を参照。
+
 ## 既知の制約・注意
 
 - **`ExecJS` は傍受ウィンドウ（claude.ai）では使えない**（`runtimeLoaded` が立たない）。ページへの注入は document-created 方式のみ

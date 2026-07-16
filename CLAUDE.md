@@ -30,11 +30,13 @@ This repository holds **two independent modules**. They share no code and have s
 
 The two modules version independently, and **each release tag is namespaced by module** so that one module's tag can never trigger the other's release workflow:
 
-| Module | Tag | Source of truth |
-|---|---|---|
-| `chrome-extension/` | `extension-v*` | `chrome-extension/version` |
-| `desktop/` | `desktop-v*` | not wired up yet |
+| Module | Tag | Source of truth | Bump with |
+|---|---|---|---|
+| `chrome-extension/` | `extension-v*` | `chrome-extension/version` | automatic, on push to `main` |
+| `desktop/` | `desktop-v*` (no release workflow yet) | `desktop/version` | `go run ./_cmd/version.go` from `desktop/` |
 
 Tags of the form `v*` are pre-split extension releases (up to `v1.2.6`). They are left in place but trigger nothing; only `chrome-extension/scripts/versionup.py` still reads them, so that the next version computed after `v1.2.6` is `1.2.7`. Do not add new `v*` tags.
 
-The Chrome extension pipeline is described in [`chrome-extension/CLAUDE.md`](chrome-extension/CLAUDE.md). The desktop app has no version mechanism yet — its `build/config.yml` still carries `wails3 init` placeholders (`My Product` / `My Company` / `0.0.1`), and those placeholders are what a build bakes into the exe today.
+The two pipelines differ in kind, so don't reach for one module's habits in the other. The extension bumps **itself**: any push to `main` touching `chrome-extension/**` runs `versionup.py`, which opens and merges a bump PR and pushes the tag. The desktop app bumps **on demand**: `go run ./_cmd/version.go` mirrors `desktop/version` into `build/config.yml` and `frontend/package.json`, and the exe metadata is baked from `config.yml` at build time — so a version change only reaches users after `wails3 task common:update:build-assets` and a rebuild. Details in each module's guide.
+
+The desktop app has no release workflow yet; `desktop-v*` is reserved for it.

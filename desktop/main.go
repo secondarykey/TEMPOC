@@ -34,6 +34,15 @@ var assets embed.FS
 //go:embed inject.js
 var injectJS string
 
+// version is the desktop app's version, and `version` the single source of
+// truth for it. `go run ./_cmd/version.go <x.y.z>` writes that file and mirrors
+// the value into build/config.yml and frontend/package.json; the exe metadata
+// (ProductVersion etc.) comes from config.yml via `wails3 update build-assets`.
+// The file must sit next to this main.go for go:embed to reach it.
+//
+//go:embed version
+var version string
+
 // UsagePayload carries the seven_day / five_hour objects from claude.ai's usage
 // API through to the frontend. Kept loose (json.RawMessage) as the frontend
 // reads utilization / resets_at directly.
@@ -153,6 +162,10 @@ func init() {
 }
 
 func main() {
+	// The embedded file keeps its trailing newline.
+	version = strings.TrimSpace(version)
+	log.Printf("tempoc: starting v%s", version)
+
 	// claude holds the interception window; wired up after the window exists.
 	claude := &claudeCtl{}
 

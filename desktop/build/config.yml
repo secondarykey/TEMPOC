@@ -4,14 +4,16 @@
 version: '3'
 
 # This information is used to generate the build assets.
+# Do not edit `version` by hand: run `go run ./_cmd/version.go <x.y.z>` from
+# `desktop/`, which keeps `version`, this file and frontend/package.json in sync.
 info:
-  companyName: "My Company" # The name of the company
-  productName: "My Product" # The name of the application
-  productIdentifier: "com.mycompany.myproduct" # The unique product identifier
-  description: "A program that does X" # The application description
-  copyright: "(c) 2025, My Company" # Copyright text
-  comments: "Some Product Comments" # Comments
-  version: "0.0.1" # The application version
+  companyName: "secondarykey" # The name of the company
+  productName: "TEMPOC" # The name of the application
+  productIdentifier: "com.github.secondarykey.tempoc.desktop" # The unique product identifier
+  description: "TEMPOC - Claude usage window tracker" # The application description
+  copyright: "(c) 2026, secondarykey" # Copyright text
+  comments: "Shows elapsed time and reset timing for Claude's 5-hour and 7-day usage windows" # Comments
+  version: "0.1.0" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
   #                               # If not set and Assets.car exists, defaults to "appicon"

@@ -1,0 +1,5 @@
+# Pinned tool versions, loaded by workflows via `cat .github/variables >> "$GITHUB_ENV"`.
+# Keep WAILS_VERSION equal to the wails/v3 requirement in desktop/go.mod: the
+# CLI generates the bindings and the .syso that the module's code is built
+# against, and alpha releases break across versions. Do not use @latest.
+WAILS_VERSION=v3.0.0-alpha2.114

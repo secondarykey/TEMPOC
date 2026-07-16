@@ -27,10 +27,10 @@ Everything in this section is relative to `chrome-extension/`. The loadable exte
 |---|---|
 | `src/` | The extension. This is what "Load unpacked" points at and what the release zip contains |
 | `version` | Single source of truth for the extension version. `scripts/versionup.py` writes it and mirrors it into `src/manifest.json` |
-| `scripts/versionup.py` | Run by `.github/workflows/versionup.yml` on pushes to `main` that touch `chrome-extension/**`. Resolves its paths from its own location, so it works from any cwd |
+| `scripts/versionup.py` | Run by `.github/workflows/versionup-extension.yml` on pushes to `main` that touch `chrome-extension/**`. Resolves its paths from its own location, so it works from any cwd |
 | `store-assets/` | Chrome Web Store listing images. Not part of the zip |
 
-Release tags for this module are `extension-v*` (e.g. `extension-v1.2.7`), and `.github/workflows/release.yml` zips `src/` on those tags. Releases from before the repo split into modules were tagged `v*`; those tags stay as they are and no longer trigger anything, but `versionup.py` still recognises them so that the version after `v1.2.6` is `1.2.7` rather than a re-release of `1.2.6`.
+Release tags for this module are `extension-v*` (e.g. `extension-v1.2.7`), and `.github/workflows/release-extension.yml` zips `src/` on those tags. Releases from before the repo split into modules were tagged `v*`; those tags stay as they are and no longer trigger anything, but `versionup.py` still recognises them so that the version after `v1.2.6` is `1.2.7` rather than a re-release of `1.2.6`.
 
 | File | World | Role |
 |---|---|---|

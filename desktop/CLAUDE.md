@@ -272,6 +272,22 @@ wails3 task common:update:build-assets   # -name/-binaryname/-config/-dir を AP
 
 exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが毎回実行）→ `.syso` を go build がリンク、という順で起こる。したがって `config.yml` を直しただけでは何も変わらず、`update build-assets` → 再ビルドまでやって初めて反映される。
 
+### リリース（`desktop-v*` タグ）
+
+`.github/workflows/release-desktop.yml` が `desktop-v*` タグで起動し、`windows-latest` 上で `wails3 task windows:build` → `bin/tempoc.exe` を zip 化 → **draft** リリースを作る（成果物は `tempoc-desktop-<version>-windows-amd64.zip`）。CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定してあり、**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、alpha 間のズレは壊れる）。
+
+手順（バージョン上げからリリースまで）:
+
+```bash
+cd desktop
+go run ./_cmd/version.go 0.2.0          # version / config.yml / package.json を同期
+wails3 task common:update:build-assets  # config.yml → info.json 等へ反映（これを忘れると exe が旧版のまま）
+git add -A && git commit -m "chore(desktop): bump version to 0.2.0"
+git tag desktop-v0.2.0 && git push origin main --tags
+```
+
+**`update build-assets` を忘れて `info.json` が古いままだと、タグと exe のバージョンが食い違ったまま配布されてしまう**。これを防ぐため、ワークフローの最初のステップで **タグ / `desktop/version` / `build/windows/info.json` の3者が一致するか検証し、ズレていれば直し方を示して落ちる**（ツールチェインのセットアップ前に fail fast する）。
+
 ### ⚠️ exe のバージョン情報の確認方法
 
 wails3 の syso はバージョンリソースを**言語ニュートラル（`0000`）**で埋め込む。このため .NET 経由（`(Get-Item x.exe).VersionInfo` / `[System.Diagnostics.FileVersionInfo]`）では**文字列が全て空に見えるが、壊れているわけではない**（FixedFileInfo の `FileMajorPart` 等だけは読める）。エクスプローラ・タスクバーが使うシェルプロパティでは正しく読めるので、検証はシェル経由で行う:

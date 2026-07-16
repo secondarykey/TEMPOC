@@ -19,7 +19,8 @@ This repository holds **two independent modules**. They share no code and have s
 
 | Path | Role |
 |---|---|
-| `.github/workflows/` | CI for both modules. Workflow names carry the module they serve, and `paths:` filters keep them from firing for the other module |
+| `.github/workflows/` | CI for both modules. Each file is named `<job>-<module>.yml` and its tag pattern / `paths:` filter keeps it from firing for the other module |
+| `.github/variables` | Pinned tool versions shared by workflows (currently `WAILS_VERSION`). Loaded with `grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"` — plain `cat` would choke on the file's comments |
 | `.claude/skills/` | `wails3` (Wails v3 practices) and `tempoc-desktop-verify` (driving the built desktop exe over CDP) |
 | `README.md` | User-facing documentation |
 | `FEATURES.md` | Working notes on planned features |
@@ -30,13 +31,13 @@ This repository holds **two independent modules**. They share no code and have s
 
 The two modules version independently, and **each release tag is namespaced by module** so that one module's tag can never trigger the other's release workflow:
 
-| Module | Tag | Source of truth | Bump with |
-|---|---|---|---|
-| `chrome-extension/` | `extension-v*` | `chrome-extension/version` | automatic, on push to `main` |
-| `desktop/` | `desktop-v*` (no release workflow yet) | `desktop/version` | `go run ./_cmd/version.go` from `desktop/` |
+| Module | Tag | Source of truth | Bump with | Release artifact |
+|---|---|---|---|---|
+| `chrome-extension/` | `extension-v*` | `chrome-extension/version` | automatic, on push to `main` | zip of `src/` |
+| `desktop/` | `desktop-v*` | `desktop/version` | `go run ./_cmd/version.go` from `desktop/` | zip of `tempoc.exe` (Windows) |
 
 Tags of the form `v*` are pre-split extension releases (up to `v1.2.6`). They are left in place but trigger nothing; only `chrome-extension/scripts/versionup.py` still reads them, so that the next version computed after `v1.2.6` is `1.2.7`. Do not add new `v*` tags.
 
-The two pipelines differ in kind, so don't reach for one module's habits in the other. The extension bumps **itself**: any push to `main` touching `chrome-extension/**` runs `versionup.py`, which opens and merges a bump PR and pushes the tag. The desktop app bumps **on demand**: `go run ./_cmd/version.go` mirrors `desktop/version` into `build/config.yml` and `frontend/package.json`, and the exe metadata is baked from `config.yml` at build time — so a version change only reaches users after `wails3 task common:update:build-assets` and a rebuild. Details in each module's guide.
+The two pipelines differ in kind, so don't reach for one module's habits in the other. The extension bumps **itself**: any push to `main` touching `chrome-extension/**` runs `versionup.py`, which opens and merges a bump PR and pushes the tag, which in turn triggers its release. Nothing is typed by hand.
 
-The desktop app has no release workflow yet; `desktop-v*` is reserved for it.
+The desktop app bumps **on demand and releases on a hand-pushed tag**. `go run ./_cmd/version.go <x.y.z>` mirrors `desktop/version` into `build/config.yml` and `frontend/package.json`, but the exe's metadata is baked from `config.yml` at build time — so the bump only reaches the artifact after `wails3 task common:update:build-assets` and a rebuild, and those regenerated assets must be committed. Because that sequence is manual and easy to half-finish, `release-desktop.yml` refuses to build unless the tag, `desktop/version`, and the committed `build/windows/info.json` all agree. Details in each module's guide.

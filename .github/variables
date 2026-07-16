@@ -1,5 +1,20 @@
-# Pinned tool versions, loaded by workflows via `cat .github/variables >> "$GITHUB_ENV"`.
+# Pinned tool versions, loaded by workflows via
+#   grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"
+# (plain `cat` would choke on these comments).
+#
 # Keep WAILS_VERSION equal to the wails/v3 requirement in desktop/go.mod: the
 # CLI generates the bindings and the .syso that the module's code is built
 # against, and alpha releases break across versions. Do not use @latest.
 WAILS_VERSION=v3.0.0-alpha2.114
+
+# apt packages required to compile anything that imports wails/v3 on Linux --
+# including the wails3 CLI itself, whose internal/operatingsystem package
+# declares `#cgo linux pkg-config: gtk4 webkitgtk-6.0`. Without them even
+# `go install .../cmd/wails3` fails, with pkg-config "Package gtk4 was not
+# found".
+#
+# This list is tied to WAILS_VERSION and MUST be rechecked on every wails
+# upgrade: alpha.84 switched the default from GTK3/WebKit2 (libgtk-3-dev,
+# webkit2gtk-4.1-dev) to GTK4/WebKitGTK 6.0. See
+# .claude/skills/wails3/references/pitfalls.md #6.
+WAILS_LINUX_DEPS=libgtk-4-dev libwebkitgtk-6.0-dev

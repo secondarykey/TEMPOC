@@ -34,6 +34,15 @@ jobs:
           go-version-file: desktop/go.mod
           cache-dependency-path: desktop/go.sum
 
+      # `go install` of the CLI compiles wails/v3, whose internal/operatingsystem
+      # needs GTK4/WebKitGTK via cgo on Linux -- even though this job never
+      # builds the GUI. The package list lives next to WAILS_VERSION because the
+      # two must move together (see .github/variables).
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${WAILS_LINUX_DEPS}
+
       # Needed by `update build-assets` below. No Node here: this job never
       # builds the frontend, it only rewrites the version in the build assets.
       - name: Install wails3 CLI

@@ -51,16 +51,19 @@ probe "token  /repos"  -H "Authorization: token $GH_TOKEN"  "$API/repos/$REPO"
 probe "bearer /user"   -H "Authorization: Bearer $GH_TOKEN" "$API/user"
 echo
 
-# git-over-HTTPS to github.com is a different service from api.github.com, and
-# the tag could be pushed that way instead (which is what this workflow did
-# before it moved to the API). Worth knowing whether that door is open when the
-# API one is not. Output is suppressed so the URL-embedded token cannot leak.
-if git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" HEAD >/dev/null 2>&1; then
-  git_ok=yes
-else
-  git_ok=no
-fi
-printf '  %-22s %s\n' "git ls-remote" "$([ "$git_ok" = yes ] && echo 'OK -- git accepts the PAT' || echo 'FAILED')"
+# git-over-HTTPS to github.com is a different service from api.github.com, so
+# the tag could be pushed that way instead (as this workflow did before it moved
+# to the REST API). This asks git's *write* endpoint whether it would accept the
+# PAT, without pushing anything. It must be receive-pack: the read endpoint
+# answers 200 to anyone on a public repo -- the same trap as checkout appearing
+# to succeed with a bad token. Verified: anonymous and invalid tokens both 401
+# here, so a 200 really does mean push-capable.
+git_code=$(curl -sS -o /dev/null -w '%{http_code}' \
+  -u "x-access-token:${GH_TOKEN}" \
+  "https://github.com/${REPO}.git/info/refs?service=git-receive-pack" || echo "000")
+printf '  %-22s HTTP %s   %s\n' "git receive-pack" "$git_code" \
+  "$([ "$git_code" = 200 ] && echo '(push would be accepted)' || echo '(push would be rejected)')"
+[ "$git_code" = "200" ] && git_ok=yes || git_ok=no
 echo
 
 anon=${code["anon   /repos"]}

@@ -6,6 +6,11 @@ on:
     paths:
       - "chrome-extension/**"
 
+# Shared with versionup-desktop.yml — see the note there.
+concurrency:
+  group: versionup
+  cancel-in-progress: false
+
 jobs:
   versionup:
     if: "!contains(github.event.head_commit.message, '[skip versionup]')"

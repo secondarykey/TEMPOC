@@ -31,13 +31,18 @@ This repository holds **two independent modules**. They share no code and have s
 
 The two modules version independently, and **each release tag is namespaced by module** so that one module's tag can never trigger the other's release workflow:
 
-| Module | Tag | Source of truth | Bump with | Release artifact |
-|---|---|---|---|---|
-| `chrome-extension/` | `extension-v*` | `chrome-extension/version` | automatic, on push to `main` | zip of `src/` |
-| `desktop/` | `desktop-v*` | `desktop/version` | `go run ./_cmd/version.go` from `desktop/` | zip of `tempoc.exe` (Windows) |
+| Module | Tag | Source of truth | Release artifact |
+|---|---|---|---|
+| `chrome-extension/` | `extension-v*` | `chrome-extension/version` | zip of `src/` |
+| `desktop/` | `desktop-v*` | `desktop/version` | zip of `tempoc.exe` (Windows) |
 
 Tags of the form `v*` are pre-split extension releases (up to `v1.2.6`). They are left in place but trigger nothing; only `chrome-extension/scripts/versionup.py` still reads them, so that the next version computed after `v1.2.6` is `1.2.7`. Do not add new `v*` tags.
 
-The two pipelines differ in kind, so don't reach for one module's habits in the other. The extension bumps **itself**: any push to `main` touching `chrome-extension/**` runs `versionup.py`, which opens and merges a bump PR and pushes the tag, which in turn triggers its release. Nothing is typed by hand.
+**Both modules release automatically; no tag is ever pushed by hand.** Each module has the same pair of workflows, distinguished only by its `paths:` filter and tag prefix:
 
-The desktop app bumps **on demand and releases on a hand-pushed tag**. `go run ./_cmd/version.go <x.y.z>` mirrors `desktop/version` into `build/config.yml` and `frontend/package.json`, but the exe's metadata is baked from `config.yml` at build time — so the bump only reaches the artifact after `wails3 task common:update:build-assets` and a rebuild, and those regenerated assets must be committed. Because that sequence is manual and easy to half-finish, `release-desktop.yml` refuses to build unless the tag, `desktop/version`, and the committed `build/windows/info.json` all agree. Details in each module's guide.
+1. `versionup-<module>.yml` — on a push to `main` touching that module, computes the next version, commits the bump through a PR it merges itself, and pushes the module's tag.
+2. `release-<module>.yml` — on that tag, builds and attaches the artifact to a **draft** release.
+
+The version file holds the *next* version: if its value is already tagged, the bump is a patch; if not, the value is used as-is. **Editing `<module>/version` by hand is therefore how a minor or major release is started** — commit the new value and the pipeline releases exactly it.
+
+The two differ in what a bump has to touch. The extension's version lives in two files (`version`, `src/manifest.json`) and `versionup.py` writes both. The desktop's exe metadata is baked from `build/config.yml` into generated assets at build time, so its bump additionally runs `wails3 update build-assets`, and the regenerated assets get committed with the bump. `release-desktop.yml` re-checks that the tag, `desktop/version` and the committed `build/windows/info.json` all agree, and refuses to build otherwise — that guard exists because a hand-edited version bump that skips `update build-assets` would otherwise ship an exe whose version disagrees with its release.

@@ -272,21 +272,18 @@ wails3 task common:update:build-assets   # -name/-binaryname/-config/-dir を AP
 
 exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが毎回実行）→ `.syso` を go build がリンク、という順で起こる。したがって `config.yml` を直しただけでは何も変わらず、`update build-assets` → 再ビルドまでやって初めて反映される。
 
-### リリース（`desktop-v*` タグ）
+### リリース（自動。タグは手で打たない）
 
-`.github/workflows/release-desktop.yml` が `desktop-v*` タグで起動し、`windows-latest` 上で `wails3 task windows:build` → `bin/tempoc.exe` を zip 化 → **draft** リリースを作る（成果物は `tempoc-desktop-<version>-windows-amd64.zip`）。CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定してあり、**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、alpha 間のズレは壊れる）。
+2本のワークフローが直列に動く。**通常運用で必要なのは main に push することだけ**:
 
-手順（バージョン上げからリリースまで）:
+1. `versionup-desktop.yml` — `desktop/**` を触る push で起動。次バージョンを決めて `go run ./_cmd/version.go` + `wails3 task common:update:build-assets` を実行し、bump を PR 経由で main にマージして `desktop-v<version>` タグを打つ
+2. `release-desktop.yml` — そのタグで起動。`windows-latest` で `wails3 task windows:build` → `bin/tempoc.exe` を zip 化 → **draft** リリース（`tempoc-desktop-<version>-windows-amd64.zip`）
 
-```bash
-cd desktop
-go run ./_cmd/version.go 0.2.0          # version / config.yml / package.json を同期
-wails3 task common:update:build-assets  # config.yml → info.json 等へ反映（これを忘れると exe が旧版のまま）
-git add -A && git commit -m "chore(desktop): bump version to 0.2.0"
-git tag desktop-v0.2.0 && git push origin main --tags
-```
+次バージョンの決め方は拡張と同じ規則: **`desktop/version` の値が未タグならその値をそのまま使い、タグ済みなら patch を上げる**。したがって **minor/major を上げたいときは `go run ./_cmd/version.go 0.2.0` して commit するだけでよい**（CI はその値を尊重してリリースする）。CI が bump する場合、生成アセットも一緒にコミットされる。
 
-**`update build-assets` を忘れて `info.json` が古いままだと、タグと exe のバージョンが食い違ったまま配布されてしまう**。これを防ぐため、ワークフローの最初のステップで **タグ / `desktop/version` / `build/windows/info.json` の3者が一致するか検証し、ズレていれば直し方を示して落ちる**（ツールチェインのセットアップ前に fail fast する）。
+CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定。**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、alpha 間のズレは壊れる）。
+
+release 側の先頭には **タグ / `desktop/version` / `build/windows/info.json` の3者一致チェック**がある。exe のバージョンはタグではなく `info.json`（`config.yml` 由来）から焼かれるため、手で bump して `update build-assets` を忘れると中身が旧版のまま配布されうる。ズレていれば直し方を示してツールチェイン導入前に落ちる。
 
 ### ⚠️ exe のバージョン情報の確認方法
 

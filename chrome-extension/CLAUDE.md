@@ -30,7 +30,9 @@ Everything in this section is relative to `chrome-extension/`. The loadable exte
 | `scripts/versionup.py` | Run by `.github/workflows/versionup-extension.yml` on pushes to `main` that touch `chrome-extension/**`. Resolves its paths from its own location, so it works from any cwd |
 | `store-assets/` | Chrome Web Store listing images. Not part of the zip |
 
-Release tags for this module are `extension-v*` (e.g. `extension-v1.2.7`), and `.github/workflows/release-extension.yml` zips `src/` on those tags. Releases from before the repo split into modules were tagged `v*`; those tags stay as they are and no longer trigger anything, but `versionup.py` still recognises them so that the version after `v1.2.6` is `1.2.7` rather than a re-release of `1.2.6`.
+Release tags for this module are `extension-v*` (e.g. `extension-v1.3.0`), and `.github/workflows/release-extension.yml` zips `src/` on those tags. Releases from before the repo split into modules were tagged `v*` (up to `v1.2.6`); those tags stay as they are and no longer trigger anything, but `versionup.py` still recognises them (`is_released()`) so that an already-released version is never re-released.
+
+**`version` holds the version to release next, not the last one released.** `versionup.py` bumps the patch only if that value is already tagged; otherwise it keeps it. So a minor or major release is started by editing `version` (and `src/manifest.json`) by hand — CI then releases exactly that value and has nothing to commit. Note that this path produces **no file diff**, which is why `versionup-extension.yml`'s tag step must not be gated on the change check; gating it there would silently skip the release. `1.3.0` was cut this way, for the split into modules.
 
 | File | World | Role |
 |---|---|---|

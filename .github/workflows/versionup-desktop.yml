@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - "desktop/**"
+  # See versionup-extension.yml: re-running a failed run replays the old
+  # workflow file, so a manual trigger is the way to retry after a CI fix.
+  workflow_dispatch:
 
 # Shared with versionup-extension.yml: a push touching both modules starts both
 # workflows, and each one branches from main, merges a PR and moves main. They
@@ -21,6 +24,34 @@ jobs:
       contents: write
 
     steps:
+      # Preflight -- see the equivalent step in versionup-extension.yml for why
+      # this exists and why checkout succeeding proves nothing.
+      - name: Verify GH_PAT
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::secrets.GH_PAT is empty or unset. Add it under Settings > Secrets and variables > Actions. GITHUB_TOKEN cannot be used: tags it pushes do not trigger release-desktop.yml."
+            exit 1
+          fi
+          echo "GH_PAT length: ${#GH_TOKEN}"
+          gh --version
+          code=$(curl -sS -o /tmp/preflight -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}")
+          echo "GET /repos/${{ github.repository }} -> HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::PAT rejected (HTTP $code). 401 = wrong/stale value, 403 = valid but missing the 'repo' scope."
+            head -c 300 /tmp/preflight
+            exit 1
+          fi
+          if ! gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha'; then
+            echo "::error::gh could not read main's SHA even though the PAT is accepted. Raw response follows."
+            gh api "repos/${{ github.repository }}/git/ref/heads/main" --include || true
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # for the tag lookup below
@@ -33,6 +64,15 @@ jobs:
         with:
           go-version-file: desktop/go.mod
           cache-dependency-path: desktop/go.sum
+
+      # `go install` of the CLI compiles wails/v3, whose internal/operatingsystem
+      # needs GTK4/WebKitGTK via cgo on Linux -- even though this job never
+      # builds the GUI. The package list lives next to WAILS_VERSION because the
+      # two must move together (see .github/variables).
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${WAILS_LINUX_DEPS}
 
       # Needed by `update build-assets` below. No Node here: this job never
       # builds the frontend, it only rewrites the version in the build assets.
@@ -110,10 +150,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           TAG="desktop-v${{ steps.versionup.outputs.version }}"
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::secrets.GH_PAT is empty or unset. A PAT is required here, not GITHUB_TOKEN: tags pushed with GITHUB_TOKEN do not trigger release-desktop.yml."
+            exit 1
+          fi
           if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
           else
-            SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+            if ! SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha'); then
+              echo "::error::Could not read main's SHA, despite the GH_PAT preflight passing. Re-run with the raw response:"
+              gh api "repos/${{ github.repository }}/git/ref/heads/main" --include || true
+              exit 1
+            fi
             gh api "repos/${{ github.repository }}/git/refs" \
               -f ref="refs/tags/$TAG" \
               -f sha="$SHA"

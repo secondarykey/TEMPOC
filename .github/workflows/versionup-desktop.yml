@@ -24,33 +24,17 @@ jobs:
       contents: write
 
     steps:
-      # Preflight -- see the equivalent step in versionup-extension.yml for why
-      # this exists and why checkout succeeding proves nothing.
+      # Preflight -- see versionup-extension.yml for why this runs before the
+      # real checkout and why checkout succeeding proves nothing about the PAT.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
       - name: Verify GH_PAT
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::secrets.GH_PAT is empty or unset. Add it under Settings > Secrets and variables > Actions. GITHUB_TOKEN cannot be used: tags it pushes do not trigger release-desktop.yml."
-            exit 1
-          fi
-          echo "GH_PAT length: ${#GH_TOKEN}"
-          gh --version
-          code=$(curl -sS -o /tmp/preflight -w '%{http_code}' \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}")
-          echo "GET /repos/${{ github.repository }} -> HTTP $code"
-          if [ "$code" != "200" ]; then
-            echo "::error::PAT rejected (HTTP $code). 401 = wrong/stale value, 403 = valid but missing the 'repo' scope."
-            head -c 300 /tmp/preflight
-            exit 1
-          fi
-          if ! gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha'; then
-            echo "::error::gh could not read main's SHA even though the PAT is accepted. Raw response follows."
-            gh api "repos/${{ github.repository }}/git/ref/heads/main" --include || true
-            exit 1
-          fi
+        run: bash .github/scripts/verify-pat.sh "${{ github.repository }}" release-desktop.yml
 
       - uses: actions/checkout@v4
         with:

@@ -1,9 +1,9 @@
-name: Release
+name: Release (Chrome extension)
 
 on:
   push:
     tags:
-      - "v*"
+      - "extension-v*"
 
 jobs:
   release:
@@ -16,12 +16,12 @@ jobs:
 
       - name: Get version from tag
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: echo "version=${GITHUB_REF_NAME#extension-v}" >> "$GITHUB_OUTPUT"
 
-      - name: Create zip from src/
+      - name: Create zip from chrome-extension/src/
         run: |
-          cd src
-          zip -r "../tempoc-${{ steps.version.outputs.version }}.zip" .
+          cd chrome-extension/src
+          zip -r "$GITHUB_WORKSPACE/tempoc-${{ steps.version.outputs.version }}.zip" .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

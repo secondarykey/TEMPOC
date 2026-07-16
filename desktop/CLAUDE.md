@@ -1,6 +1,6 @@
 # desktop/CLAUDE.md
 
-TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（リポジトリルートの `src/`）と同じ「claude.ai の使用量 API を傍受して 5時間 / 7日ウィンドウの進捗を表示する」機能を、スタンドアロンのデスクトップアプリとして提供する。
+TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extension/src/`。[`../chrome-extension/CLAUDE.md`](../chrome-extension/CLAUDE.md)）と同じ「claude.ai の使用量 API を傍受して 5時間 / 7日ウィンドウの進捗を表示する」機能を、スタンドアロンのデスクトップアプリとして提供する。
 
 - Wails: `github.com/wailsapp/wails/v3` alpha2.114
 - Go module 名: `changeme`（テンプレート既定のまま。変更していない）

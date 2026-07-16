@@ -1,8 +1,10 @@
-name: Version Up
+name: Version Up (Chrome extension)
 
 on:
   push:
     branches: [main]
+    paths:
+      - "chrome-extension/**"
 
 jobs:
   versionup:
@@ -24,12 +26,12 @@ jobs:
 
       - name: Compute and apply version
         id: versionup
-        run: python scripts/versionup.py
+        run: python chrome-extension/scripts/versionup.py
 
       - name: Check for file changes
         id: changes
         run: |
-          if git diff --quiet version src/manifest.json; then
+          if git diff --quiet chrome-extension/version chrome-extension/src/manifest.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -40,10 +42,10 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          BRANCH="release/v${{ steps.versionup.outputs.version }}"
+          BRANCH="release/extension-v${{ steps.versionup.outputs.version }}"
           git checkout -b "$BRANCH"
-          git add version src/manifest.json
-          git commit -m "chore: bump version to ${{ steps.versionup.outputs.version }} [skip versionup]"
+          git add chrome-extension/version chrome-extension/src/manifest.json
+          git commit -m "chore(chrome-extension): bump version to ${{ steps.versionup.outputs.version }} [skip versionup]"
           git push origin "$BRANCH"
 
       - name: Create PR and merge to main
@@ -51,20 +53,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          BRANCH="release/v${{ steps.versionup.outputs.version }}"
+          BRANCH="release/extension-v${{ steps.versionup.outputs.version }}"
           VERSION="${{ steps.versionup.outputs.version }}"
           gh pr create --base main --head "$BRANCH" \
-            --title "chore: bump version to $VERSION" \
-            --body "Automated version bump to $VERSION"
+            --title "chore(chrome-extension): bump version to $VERSION" \
+            --body "Automated version bump of the Chrome extension to $VERSION"
           gh pr merge "$BRANCH" --merge --delete-branch \
-            --subject "chore: bump version to $VERSION [skip versionup]"
+            --subject "chore(chrome-extension): bump version to $VERSION [skip versionup]"
 
       - name: Push tag
         if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
-          TAG="v${{ steps.versionup.outputs.version }}"
+          TAG="extension-v${{ steps.versionup.outputs.version }}"
           if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
           else

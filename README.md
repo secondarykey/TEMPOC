@@ -8,7 +8,7 @@ Monitor your usage and plan ahead to get the most out of Claude.
 
 1. Open `chrome://extensions/` in Chrome
 2. Enable **Developer mode**
-3. Click **Load unpacked** and select the `src/` directory
+3. Click **Load unpacked** and select the `chrome-extension/src/` directory
 
 ## Elapsed time and amount used
 

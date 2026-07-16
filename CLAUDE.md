@@ -23,9 +23,8 @@ This repository holds **two independent modules**. They share no code and have s
 | `.github/variables` | Pinned tool versions shared by workflows (currently `WAILS_VERSION`). Loaded with `grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"` — plain `cat` would choke on the file's comments |
 | `.claude/skills/` | `wails3` (Wails v3 practices) and `tempoc-desktop-verify` (driving the built desktop exe over CDP) |
 | `README.md` | User-facing entry point: what TEMPOC is, the shared bar/color concept, and the privacy & disclaimer terms that cover both modules. Per-module install and settings docs live in each module's own `README.md`, which this one links to |
-| `FEATURES.md` | Working notes on planned features |
 
-`README.md`, `LICENSE`, and `FEATURES.md` stay at the root and cover both modules. Keep anything user-facing that is true of both — the concept, privacy, disclaimer, license — in the root `README.md` only, and anything install- or settings-specific in the module's `README.md` only, so the two never drift into contradicting each other.
+`README.md` and `LICENSE` stay at the root and cover both modules. Keep anything user-facing that is true of both — the concept, privacy, disclaimer, license — in the root `README.md` only, and anything install- or settings-specific in the module's `README.md` only, so the two never drift into contradicting each other.
 
 ## Versioning
 

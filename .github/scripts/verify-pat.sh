@@ -22,6 +22,11 @@ fi
 # Anything else -- notably 41 -- means whitespace or a newline came along when
 # the secret was pasted.
 echo "GH_PAT length: ${#GH_TOKEN}"
+# GITHUB_TOKEN is a GitHub App installation token. Since the April 2026 rollout
+# these are ~520 chars (ghs_APPID_JWT) rather than 40, so the two credentials
+# below also happen to differ in format -- worth noting if only the 40-char one
+# fails.
+[ -n "${ACTIONS_TOKEN:-}" ] && echo "GITHUB_TOKEN length: ${#ACTIONS_TOKEN}"
 gh --version | head -1
 echo
 
@@ -47,10 +52,20 @@ probe() {
 }
 
 echo "Probes against $API:"
-probe "anon   /repos"  "$API/repos/$REPO"
-probe "bearer /repos"  -H "Authorization: Bearer $GH_TOKEN" "$API/repos/$REPO"
-probe "token  /repos"  -H "Authorization: token $GH_TOKEN"  "$API/repos/$REPO"
-probe "bearer /user"   -H "Authorization: Bearer $GH_TOKEN" "$API/user"
+probe "anon    /repos" "$API/repos/$REPO"
+probe "bearer  /repos" -H "Authorization: Bearer $GH_TOKEN" "$API/repos/$REPO"
+probe "token   /repos" -H "Authorization: token $GH_TOKEN"  "$API/repos/$REPO"
+probe "bearer  /user"  -H "Authorization: Bearer $GH_TOKEN" "$API/user"
+
+# The decisive comparison: GITHUB_TOKEN is a second, unrelated credential that
+# every workflow gets for free, so it separates "authenticated requests from
+# this runner fail" from "this PAT fails". Anonymous vs PAT cannot separate
+# those two, because authenticated traffic may be served by different backends
+# than anonymous traffic -- and a partial failure there need not show up on
+# githubstatus.com.
+if [ -n "${ACTIONS_TOKEN:-}" ]; then
+  probe "actions /repos" -H "Authorization: Bearer $ACTIONS_TOKEN" "$API/repos/$REPO"
+fi
 echo
 
 # git-over-HTTPS to github.com is a different service from api.github.com, so
@@ -68,31 +83,39 @@ printf '  %-22s HTTP %s   %s\n' "git receive-pack" "$git_code" \
 [ "$git_code" = "200" ] && git_ok=yes || git_ok=no
 echo
 
-anon=${code["anon   /repos"]}
-bearer=${code["bearer /repos"]}
-tok=${code["token  /repos"]}
+anon=${code["anon    /repos"]}
+bearer=${code["bearer  /repos"]}
+tok=${code["token   /repos"]}
+actions=${code["actions /repos"]:-skipped}
 
 if [ "$bearer" = "200" ] || [ "$tok" = "200" ]; then
   echo "PAT accepted."
   exit 0
 fi
 
-echo "::error::GH_PAT cannot drive the API (bearer=$bearer token=$tok anon=$anon)."
-case "$anon:$bearer" in
-  200:5*)
-    echo "::error::The anonymous probe succeeded from this same runner, so the network and GitHub are fine and the 5xx is tied to this token. A 503 is not an auth rejection -- GitHub is erroring while handling this credential. Regenerate the PAT and update the secret; if it persists, quote the x-github-request-id above to GitHub Support."
-    if [ "$git_ok" = yes ]; then
-      echo "::notice::git accepts the same PAT, so only api.github.com is affected. If regenerating does not help, the tag can be pushed over git instead of the REST API."
-    fi
-    ;;
-  5*:5*)
-    echo "::error::Every probe 5xx'd, including the anonymous one, so this is GitHub or the runner's network rather than the token. Check githubstatus.com and retry."
-    ;;
-  *:401)
+echo "::error::GH_PAT cannot drive the API (anon=$anon bearer=$bearer token=$tok actions=$actions git=$git_code)."
+case "$bearer" in
+  401)
     echo "::error::401 means the secret's value is wrong or stale. Regenerating a PAT mints a new value; extending an expiry does not. The secret must hold the current value."
     ;;
-  *:403)
+  403)
     echo "::error::403 means the token is valid but lacks the scope. A classic PAT needs 'repo'."
+    ;;
+  5*)
+    # A 5xx is GitHub failing, not GitHub rejecting. Which credential still
+    # works tells us how far the failure reaches.
+    if [ "$anon" != "200" ]; then
+      echo "::error::Even the anonymous probe failed, so api.github.com is unreachable or down from this runner rather than this being about credentials. Retry later."
+    elif [ "$actions" = "200" ]; then
+      echo "::error::GITHUB_TOKEN works from this same runner while GH_PAT 5xx's, so the authenticated path is healthy and the failure follows this specific credential. Regenerate the PAT; if a fresh one behaves the same, it is a GitHub-side problem with this account's tokens -- report it with the x-github-request-id values above."
+    elif [ "${actions#5}" != "$actions" ]; then
+      echo "::error::Both GH_PAT and GITHUB_TOKEN 5xx while the anonymous probe returns 200. Two unrelated credentials failing rules out the token: authenticated requests from this runner are being served something broken. This is GitHub-side and worth reporting with the x-github-request-id values above, even if githubstatus.com is green -- a partial failure need not appear there."
+    else
+      echo "::error::GH_PAT 5xx'd while anonymous requests succeed. Re-run to compare against GITHUB_TOKEN, which separates a bad credential from a broken authenticated path."
+    fi
+    if [ "$git_ok" = yes ]; then
+      echo "::notice::The same PAT is accepted by git's write endpoint, so github.com is fine and only api.github.com is affected."
+    fi
     ;;
 esac
 exit 1

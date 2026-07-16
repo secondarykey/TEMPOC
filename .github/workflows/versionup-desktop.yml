@@ -34,6 +34,8 @@ jobs:
       - name: Verify GH_PAT
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          # The control in the probe -- see versionup-extension.yml.
+          ACTIONS_TOKEN: ${{ github.token }}
         run: bash .github/scripts/verify-pat.sh "${{ github.repository }}" release-desktop.yml
 
       - uses: actions/checkout@v4

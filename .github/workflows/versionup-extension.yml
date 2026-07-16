@@ -66,8 +66,12 @@ jobs:
           gh pr merge "$BRANCH" --merge --delete-branch \
             --subject "chore(chrome-extension): bump version to $VERSION [skip versionup]"
 
+      # Deliberately not gated on `changed`: when chrome-extension/version was
+      # bumped by hand (a minor/major release), versionup.py finds it untagged
+      # and keeps it, so there is nothing to commit — but the tag still has to
+      # be pushed, or the release never happens. The existence check below makes
+      # this safe to re-run.
       - name: Push tag
-        if: steps.changes.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
@@ -75,9 +79,9 @@ jobs:
           if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
           else
-            MERGE_SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+            SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
             gh api "repos/${{ github.repository }}/git/refs" \
               -f ref="refs/tags/$TAG" \
-              -f sha="$MERGE_SHA"
-            echo "Created tag $TAG at $MERGE_SHA"
+              -f sha="$SHA"
+            echo "Created tag $TAG at $SHA"
           fi

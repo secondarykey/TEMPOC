@@ -1,19 +1,26 @@
 """
-Compute the next release version, then update `version` and `src/manifest.json`.
+Compute the next Chrome extension release version, then update
+`chrome-extension/version` and `chrome-extension/src/manifest.json`.
 
 Logic:
   - Read the current version from the `version` file.
-  - If the git tag v<version> already exists, bump the patch component.
+  - If a release tag for that version already exists, bump the patch component.
   - Otherwise, use the version string as-is.
 
 Outputs `version=<new_version>` to GITHUB_OUTPUT (or stdout when run locally).
 """
 
-import json
 import os
 import re
 import subprocess
-import sys
+from pathlib import Path
+
+# chrome-extension/ — paths are resolved from this file, not the caller's cwd.
+ROOT = Path(__file__).resolve().parents[1]
+
+TAG_PREFIX = "extension-v"
+# Releases before the repo split into modules were tagged "v<version>".
+LEGACY_TAG_PREFIX = "v"
 
 
 def get_tags() -> set[str]:
@@ -28,31 +35,33 @@ def bump_patch(version: str) -> str:
     return ".".join(parts)
 
 
+def is_released(version: str, tags: set[str]) -> bool:
+    return (
+        f"{TAG_PREFIX}{version}" in tags
+        or f"{LEGACY_TAG_PREFIX}{version}" in tags
+        or version in tags
+    )
+
+
 def main() -> None:
-    with open("version") as f:
-        current = f.read().strip()
+    version_path = ROOT / "version"
+    current = version_path.read_text().strip()
 
     tags = get_tags()
-    if f"v{current}" in tags or current in tags:
-        new_version = bump_patch(current)
-    else:
-        new_version = current
+    new_version = bump_patch(current) if is_released(current, tags) else current
 
     # Update version file
-    with open("version", "w") as f:
-        f.write(new_version + "\n")
+    version_path.write_text(new_version + "\n")
 
     # Update src/manifest.json (preserve formatting via regex)
-    manifest_path = os.path.join("src", "manifest.json")
-    with open(manifest_path) as f:
-        content = f.read()
+    manifest_path = ROOT / "src" / "manifest.json"
+    content = manifest_path.read_text()
     content = re.sub(
         r'("version"\s*:\s*)"[^"]*"',
         rf'\g<1>"{new_version}"',
         content,
     )
-    with open(manifest_path, "w") as f:
-        f.write(content)
+    manifest_path.write_text(content)
 
     # Output for GitHub Actions or local use
     github_output = os.environ.get("GITHUB_OUTPUT")

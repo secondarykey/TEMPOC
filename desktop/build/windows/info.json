@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.1.0"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.1.0",
+			"CompanyName": "secondarykey",
+			"FileDescription": "TEMPOC - Claude usage window tracker",
+			"LegalCopyright": "(c) 2026, secondarykey",
+			"ProductName": "TEMPOC",
+			"Comments": "Shows elapsed time and reset timing for Claude's 5-hour and 7-day usage windows"
+		}
+	}
+}

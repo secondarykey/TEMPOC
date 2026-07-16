@@ -1,0 +1,86 @@
+name: Release (Desktop)
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+
+jobs:
+  release:
+    # The app is Windows-only (WebView2), and the .syso resource step plus the
+    # frontend build are driven by the wails3 CLI on the target OS.
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fails fast, before any toolchain setup. The exe's baked-in metadata
+      # comes from build/windows/info.json (generated from build/config.yml),
+      # not from the tag — so a mismatch would ship an exe whose version
+      # disagrees with the release it is attached to.
+      - name: Resolve and verify version
+        id: version
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#desktop-v}"
+          file_version="$(cat desktop/version)"
+          if [ "$tag_version" != "$file_version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME disagrees with desktop/version ($file_version). Bump with: cd desktop && go run ./_cmd/version.go $tag_version"
+            exit 1
+          fi
+          baked="$(grep -o '"file_version": "[^"]*"' desktop/build/windows/info.json | cut -d'"' -f4)"
+          if [ "$baked" != "$file_version" ]; then
+            echo "::error::desktop/build/windows/info.json ($baked) is stale against desktop/version ($file_version). Regenerate with: cd desktop && go run ./_cmd/version.go && wails3 task common:update:build-assets"
+            exit 1
+          fi
+          echo "version=$file_version" >> "$GITHUB_OUTPUT"
+
+      # Only the KEY=VALUE lines: $GITHUB_ENV rejects the file's comments.
+      - name: Load pinned tool versions
+        shell: bash
+        run: grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      # GOPATH/bin is added to PATH explicitly rather than assumed: `go install`
+      # drops wails3.exe there and the next step invokes it by name.
+      - name: Install wails3 CLI
+        shell: bash
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}
+          # $GITHUB_PATH only applies from the next step, so verify via full path.
+          "$(go env GOPATH)/bin/wails3" version
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # Pulls in the frontend deps, regenerates the bindings (gitignored) and
+      # the .syso, then builds bin/tempoc.exe. See desktop/CLAUDE.md.
+      - name: Build
+        shell: bash
+        working-directory: desktop
+        run: wails3 task windows:build
+
+      # Compress-Archive rather than `zip`: the Windows runners ship 7z and
+      # PowerShell, but Git Bash there has no zip binary.
+      - name: Create zip
+        shell: pwsh
+        working-directory: desktop
+        run: Compress-Archive -Path bin\tempoc.exe -DestinationPath "$env:GITHUB_WORKSPACE\tempoc-desktop-${{ steps.version.outputs.version }}-windows-amd64.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "TEMPOC Desktop v${{ steps.version.outputs.version }}"
+          files: "tempoc-desktop-${{ steps.version.outputs.version }}-windows-amd64.zip"
+          generate_release_notes: true
+          draft: true

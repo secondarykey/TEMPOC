@@ -1,0 +1,121 @@
+name: Version Up (Desktop)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "desktop/**"
+
+# Shared with versionup-extension.yml: a push touching both modules starts both
+# workflows, and each one branches from main, merges a PR and moves main. They
+# touch different files, but serialising them keeps the two merges from racing.
+concurrency:
+  group: versionup
+  cancel-in-progress: false
+
+jobs:
+  versionup:
+    if: "!contains(github.event.head_commit.message, '[skip versionup]')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # for the tag lookup below
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Load pinned tool versions
+        run: grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+
+      # Needed by `update build-assets` below. No Node here: this job never
+      # builds the frontend, it only rewrites the version in the build assets.
+      - name: Install wails3 CLI
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@${WAILS_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # Same rule as the extension's versionup.py: the version file holds the
+      # *next* version unless it has already been released, in which case bump
+      # the patch. Editing desktop/version by hand is therefore how a minor or
+      # major release is started.
+      - name: Compute next version
+        id: versionup
+        run: |
+          current="$(cat desktop/version)"
+          if git rev-parse -q --verify "refs/tags/desktop-v$current" >/dev/null; then
+            new="$(echo "$current" | awk -F. '{print $1"."$2"."$3+1}')"
+          else
+            new="$current"
+          fi
+          echo "Current: $current -> New: $new"
+          echo "version=$new" >> "$GITHUB_OUTPUT"
+
+      # version.go syncs version/config.yml/package.json; update build-assets
+      # then pushes config.yml's version into the generated platform assets
+      # (windows/info.json etc.), which is what the exe metadata is baked from.
+      # Skipping the second command would leave release-desktop.yml's version
+      # check failing on the tag this job is about to push.
+      - name: Apply version
+        working-directory: desktop
+        run: |
+          go run ./_cmd/version.go "${{ steps.versionup.outputs.version }}"
+          wails3 task common:update:build-assets
+
+      - name: Check for file changes
+        id: changes
+        run: |
+          if git diff --quiet desktop; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit on release branch
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="release/desktop-v${{ steps.versionup.outputs.version }}"
+          git checkout -b "$BRANCH"
+          git add desktop
+          git commit -m "chore(desktop): bump version to ${{ steps.versionup.outputs.version }} [skip versionup]"
+          git push origin "$BRANCH"
+
+      - name: Create PR and merge to main
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          BRANCH="release/desktop-v${{ steps.versionup.outputs.version }}"
+          VERSION="${{ steps.versionup.outputs.version }}"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(desktop): bump version to $VERSION" \
+            --body "Automated version bump of the desktop app to $VERSION"
+          gh pr merge "$BRANCH" --merge --delete-branch \
+            --subject "chore(desktop): bump version to $VERSION [skip versionup]"
+
+      # Deliberately not gated on `changed`: when desktop/version was bumped by
+      # hand (a minor/major release), the files are already in sync, so there is
+      # nothing to commit — but the tag still has to be pushed, or the release
+      # never happens. The existence check below makes this safe to re-run.
+      - name: Push tag
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          TAG="desktop-v${{ steps.versionup.outputs.version }}"
+          if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+          else
+            SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+            gh api "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/$TAG" \
+              -f sha="$SHA"
+            echo "Created tag $TAG at $SHA"
+          fi

@@ -1,0 +1,640 @@
+/* Theme variables. Dark is the default (no data-theme attribute yet — the
+   first paint before settings load); theme.ts applyTheme() stamps
+   data-theme="light" / "dark" on <html> per the theme setting, with "system"
+   resolved via prefers-color-scheme. */
+:root,
+[data-theme="dark"] {
+    --ink: #06070f;
+    --text: #f4f6fb;
+    --muted: #9aa6c0;
+    --text-dim: rgba(255, 255, 255, 0.45);
+    --glass: rgba(255, 255, 255, 0.05);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --hover-bg: rgba(255, 255, 255, 0.08);
+    --hover-bg-strong: rgba(255, 255, 255, 0.1);
+    --track-bg: rgba(255, 255, 255, 0.08);
+    --range-track-bg: rgba(255, 255, 255, 0.12);
+    --marker: #fff;
+    --marker-glow: rgba(255, 255, 255, 0.8);
+    --check-track: rgba(255, 255, 255, 0.14);
+    --check-thumb: #fff;
+    --input-bg: rgba(255, 255, 255, 0.06);
+    --btn-bg: rgba(255, 255, 255, 0.08);
+    --btn-bg-hover: rgba(255, 255, 255, 0.14);
+    --btn-border-hover: rgba(255, 255, 255, 0.3);
+    --thumb-bg: #27272a;
+    --thumb-border: rgba(255, 255, 255, 0.6);
+    --apply-text: #06070f;
+    --color-accent: #7dd3fc;
+    --color-warning: #fbbf24;
+    --color-danger: #ef4444;
+    color-scheme: dark;
+}
+
+/* Light theme. Accent/warning/danger use darker shades than the dark theme's
+   pastels — the same value doubles as bar fill and text, and the pastels
+   don't have enough contrast on a light background. */
+[data-theme="light"] {
+    --ink: #f3f5f9;
+    --text: #1a202c;
+    --muted: #5b6472;
+    --text-dim: rgba(0, 0, 0, 0.45);
+    --glass: rgba(0, 0, 0, 0.04);
+    --glass-border: rgba(0, 0, 0, 0.12);
+    --hover-bg: rgba(0, 0, 0, 0.06);
+    --hover-bg-strong: rgba(0, 0, 0, 0.09);
+    --track-bg: rgba(0, 0, 0, 0.08);
+    --range-track-bg: rgba(0, 0, 0, 0.12);
+    --marker: #1f2937;
+    --marker-glow: rgba(255, 255, 255, 0.8);
+    --check-track: rgba(0, 0, 0, 0.18);
+    --check-thumb: #fff;
+    --input-bg: rgba(0, 0, 0, 0.04);
+    --btn-bg: rgba(0, 0, 0, 0.06);
+    --btn-bg-hover: rgba(0, 0, 0, 0.1);
+    --btn-border-hover: rgba(0, 0, 0, 0.3);
+    --thumb-bg: #ffffff;
+    --thumb-border: rgba(0, 0, 0, 0.35);
+    --apply-text: #ffffff;
+    --color-accent: #0284c7;
+    --color-warning: #d97706;
+    --color-danger: #dc2626;
+    color-scheme: light;
+}
+
+:root {
+    --radius: 11px;
+
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+        sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    color: var(--text);
+    overflow: hidden;
+}
+
+/* Opaque by default; the native window is transparent-capable, so clearing this
+   background (via the transparency toggle) makes the window see-through. */
+html { background: var(--ink); }
+html.is-transparent { background: transparent; }
+body { background: transparent; }
+
+/* The 5px padding is the frameless window's resize-handle region (see
+   wails3 frameless.md). Content lives inside it. */
+#root {
+    height: 100vh;
+    padding: 5px;
+    display: flex;
+    flex-direction: column;
+}
+
+.root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* ── Custom title bar (frameless) ──────────────────────────────────── */
+.titlebar {
+    flex: 0 0 auto;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.titlebar-left { display: flex; align-items: center; height: 100%; }
+
+.titlebar-updated {
+    margin-left: 4px;
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.titlebar-gear,
+.titlebar-refresh {
+    height: 100%;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.15s ease;
+}
+.titlebar-gear:hover,
+.titlebar-refresh:hover { color: var(--text); }
+
+/* Settings window's title bar label (SettingsWindow.tsx), left-aligned next
+   to the drag region like the usage window's gear/refresh cluster. */
+.titlebar-title {
+    margin-left: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text);
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.titlebar-controls { display: flex; height: 100%; }
+
+.titlebar-controls button {
+    width: 44px;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.titlebar-controls button:hover { background: var(--hover-bg); color: var(--text); }
+.titlebar-controls button.close:hover { background: #e5484d; color: #fff; }
+.titlebar-controls button.pin.is-active { color: var(--color-accent); }
+.titlebar-controls button.pin.is-active:hover { color: var(--color-accent); }
+
+.app {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    width: 100%;
+    margin: 0 auto;
+    padding: 1.2rem 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+}
+
+.app-placeholder {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    text-align: center;
+    line-height: 1.7;
+}
+
+/* Explicit login entry point: shown in place of the waiting placeholder when
+   the interceptor reports Claude wants a login (auth-required). */
+.login-button {
+    margin-top: 0.9rem;
+    padding: 0.45rem 1.2rem;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--text);
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.login-button:hover {
+    background: var(--hover-bg-strong);
+    border-color: var(--color-accent);
+}
+
+/* Animated ellipsis so the startup wait doesn't look frozen: cycles
+   "" → "." → ".." → "..." once per ~1.2s. Width is reserved so the text
+   above it doesn't shift as the dots come and go. */
+.loading-dots::after {
+    content: '';
+    display: inline-block;
+    width: 1.2em;
+    text-align: left;
+    animation: loading-dots 1.2s steps(1, end) infinite;
+}
+
+@keyframes loading-dots {
+    0%   { content: ''; }
+    25%  { content: '.'; }
+    50%  { content: '..'; }
+    75%  { content: '...'; }
+    100% { content: ''; }
+}
+
+/* ── Usage bars ────────────────────────────────────────────────────── */
+.usage-bars { display: flex; flex-direction: column; gap: 1.6rem; }
+
+.usage-bar {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+}
+
+/* Title | Time | Usage — fixed column widths so the top and bottom bars line
+   up as columns. Tweak --reset-col / --util-col to taste. */
+.usage-bar-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--reset-col, 8.5rem) var(--util-col, 4rem);
+    align-items: baseline;
+    column-gap: 0.6rem;
+    margin-bottom: 0.6rem;
+}
+
+.usage-bar-label {
+    font-size: 0.92rem;
+    color: var(--text);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.usage-bar-reset {
+    text-align: right;
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+.usage-bar-util {
+    text-align: right;
+    font-size: 1.3rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Nested secondary window (e.g. weekly_scoped) inside the same card. */
+.usage-bar-head--sub {
+    margin-top: 0.8rem;
+    margin-bottom: 0.6rem;
+}
+.usage-bar-head--sub .usage-bar-util { font-size: 1.05rem; }
+
+/* Non-clipping wrapper so the marker + △ can overhang the clipped track. */
+.usage-bar-track-wrap {
+    position: relative;
+}
+
+.usage-bar-track {
+    position: relative;
+    height: 14px;
+    border-radius: 999px;
+    background: var(--track-bg);
+    overflow: hidden;
+}
+
+.usage-bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    height: 100%;
+    border-radius: 999px;
+    transition: width 0.4s ease-out, background 0.3s ease;
+}
+
+.usage-bar-marker {
+    position: absolute;
+    top: -2px;
+    height: 18px;
+    width: 2px;
+    background: var(--marker);
+    box-shadow: 0 0 4px var(--marker-glow);
+    transform: translateX(-1px);
+    transition: left 1s linear;
+}
+
+/* △ / ▽ pointing at the marker line from below and above. */
+.usage-bar-marker::after,
+.usage-bar-marker::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 3.5px solid transparent;
+    border-right: 3.5px solid transparent;
+    filter: drop-shadow(0 0 3px var(--marker-glow));
+}
+
+/* Upward-pointing △ just below the marker line. */
+.usage-bar-marker::after {
+    top: calc(100% - 4px);
+    border-bottom: 4px solid var(--marker);
+}
+
+/* Downward-pointing ▽ just above the marker line. */
+.usage-bar-marker::before {
+    bottom: calc(100% - 4px);
+    border-top: 4px solid var(--marker);
+}
+
+.usage-bar-foot {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ── Size mode: Small ──────────────────────────────────────────────
+   Provisional numbers — expect the user to retune padding/font-size. */
+.mode-small .app {
+    gap: 0.8rem;
+    padding: 0.8rem 1rem 1rem;
+}
+.mode-small .usage-bars { gap: 0.8rem; }
+.mode-small .usage-bar { padding: 0.6rem 0.75rem; }
+.mode-small .usage-bar-head { margin-bottom: 0.4rem; }
+.mode-small .usage-bar-label { font-size: 0.8rem; }
+.mode-small .usage-bar-util { font-size: 1rem; }
+.mode-small .usage-bar-reset { font-size: 0.72rem; }
+.mode-small .usage-bar-foot { font-size: 0.7rem; }
+.mode-small .usage-bar-track { height: 8px; }
+.mode-small .usage-bar-marker { top: -1px; height: 10px; width: 1.5px; }
+.mode-small .usage-bar-marker::after,
+.mode-small .usage-bar-marker::before {
+    border-left-width: 2.5px;
+    border-right-width: 2.5px;
+}
+.mode-small .usage-bar-marker::after { border-bottom-width: 3px; }
+.mode-small .usage-bar-marker::before { border-top-width: 3px; }
+
+/* ── Size mode: Compact ────────────────────────────────────────────
+   Hides the track/marker/foot entirely; each window collapses to one row
+   via .usage-bar-compact (label | reset date | utilization | remaining).
+   Provisional numbers — expect the user to retune padding/font-size. */
+.mode-compact .app {
+    gap: 0.6rem;
+    padding: 0.5rem 0.8rem 0.6rem;
+}
+.mode-compact .usage-bars { gap: 0.5rem; }
+.mode-compact .usage-bar { padding: 0.3rem 0.6rem; }
+
+.usage-bar-compact {
+    display: grid;
+    /* label | elapsed% | utilization% (utilization last, at the right edge).
+       The reset date and remaining time live only in the row's title tooltip.
+       Fixed value columns keep cells lined up across all rows and cards (each
+       card is its own grid); tweak the --compact-*-col vars. */
+    grid-template-columns:
+        minmax(0, 1fr)
+        var(--compact-elapsed-col, 4rem)
+        var(--compact-util-col, 3.2rem);
+    align-items: baseline;
+    column-gap: 0.6rem;
+    font-size: 0.8rem;
+}
+.usage-bar-compact--sub {
+    margin-top: 0.25rem;
+}
+.usage-bar-compact .usage-bar-label {
+    font-size: inherit;
+}
+.usage-bar-compact .usage-bar-util {
+    font-size: inherit;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+.usage-bar-compact-elapsed {
+    font-size: inherit;
+    font-weight: 400;
+    color: var(--muted);
+    white-space: nowrap;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.usage-bar-compact .usage-bar-util {
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* ── Settings view ─────────────────────────────────────────────────── */
+.settings { display: flex; flex-direction: column; gap: 1.2rem; }
+
+.settings-title {
+    margin: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.settings-row-label { font-size: 0.9rem; color: var(--text); }
+.settings-row-desc { font-size: 0.76rem; color: var(--muted); margin-top: 0.15rem; }
+
+.settings-btn {
+    flex: 0 0 auto;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.8rem;
+    color: var(--text);
+    background: var(--btn-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.settings-btn:hover { background: var(--btn-bg-hover); border-color: var(--btn-border-hover); }
+
+/* Settings window footer (SettingsWindow.tsx): pinned below the scrolling
+   .app content by .root's flex-column layout (same mechanism as .titlebar
+   at the top), so Apply/Close stay visible regardless of scroll position. */
+.settings-footer {
+    flex: 0 0 auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.8rem 1.5rem;
+    border-top: 1px solid var(--glass-border);
+}
+
+.settings-apply {
+    background: var(--color-accent);
+    border-color: transparent;
+    color: var(--apply-text);
+    font-weight: 600;
+}
+.settings-apply:hover { background: var(--color-accent); border-color: transparent; }
+.settings-apply:disabled { opacity: 0.35; cursor: default; }
+
+/* ── Settings form sections ───────────────────────────────────────── */
+.settings-section {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.settings-section-title {
+    margin: 0 0 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.settings-check-row,
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 30px;
+    padding: 8px 4px;
+    font-size: 0.85rem;
+    color: var(--text);
+    border-bottom: 1px solid var(--glass-border);
+    cursor: default;
+}
+
+.settings-check-row { cursor: pointer; }
+
+.settings-check-row:last-of-type,
+.settings-row:last-of-type { border-bottom: none; }
+
+/* Right-hand group of a settings-row when it holds several controls
+   (e.g. Auto-refresh: checkbox + number input + unit). */
+.settings-row-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.settings-help-text {
+    font-size: 0.72rem;
+    color: var(--muted);
+}
+
+.settings-debug-row {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 0.85rem 1rem;
+}
+
+.settings input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 30px;
+    height: 17px;
+    border-radius: 9px;
+    background: var(--check-track);
+    border: none;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+.settings input[type="checkbox"]::after {
+    content: '';
+    position: absolute;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--check-thumb);
+    top: 2px;
+    left: 2px;
+    transition: transform 0.15s;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.settings input[type="checkbox"]:checked { background: var(--color-accent); }
+.settings input[type="checkbox"]:checked::after { transform: translateX(13px); }
+
+.settings select,
+.settings-text-input,
+.settings-number-input {
+    font: inherit;
+    font-size: 0.82rem;
+    padding: 0.3rem 0.55rem;
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px;
+    outline: none;
+}
+/* The select's translucent background confuses Chromium's option popup
+   colors; give options an opaque themed background explicitly. */
+.settings select option {
+    background: var(--ink);
+    color: var(--text);
+}
+.settings select:focus,
+.settings-text-input:focus,
+.settings-number-input:focus { border-color: var(--muted); }
+
+.settings-number-input { width: 52px; text-align: center; }
+.settings-number-input:disabled { opacity: 0.35; }
+.settings-text-input { width: 92px; text-align: right; }
+.settings-unit { font-size: 0.72rem; color: var(--muted); }
+
+/* ── Dual-range slider ────────────────────────────────────────────── */
+.dual-range { padding: 0.5rem 0 0.2rem; margin-top: 0.2rem; }
+
+.dual-range-values {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    margin-bottom: 0.4rem;
+    color: var(--muted);
+}
+.dual-range-warning b { color: var(--color-warning); font-weight: 600; }
+.dual-range-danger b { color: var(--color-danger); font-weight: 600; }
+
+.dual-range-track {
+    position: relative;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--range-track-bg);
+    margin: 0.5rem 0 0.9rem;
+}
+
+.dual-range-fill {
+    position: absolute;
+    inset: 0;
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+.dual-range-input {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    pointer-events: none;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    outline: none;
+    border: none;
+    height: 5px;
+}
+.dual-range-input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    pointer-events: all;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--thumb-bg);
+    border: 1.5px solid var(--thumb-border);
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.dual-range-input::-webkit-slider-runnable-track {
+    background: transparent;
+    height: 5px;
+}

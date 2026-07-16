@@ -2,7 +2,13 @@
 
 A standalone desktop app (Wails v3, Windows / WebView2) that shows elapsed-time progress bars for Claude's 5-hour and 7-day usage windows — including exactly when each window resets, which claude.ai itself doesn't display.
 
-It works by loading claude.ai inside a hidden WebView, intercepting the usage API responses, and rendering the bars in its own compact, frameless window. All of the Chrome extension's settings are available, plus desktop-only options (locale, always-on-top, transparent window, size modes).
+It works by loading claude.ai inside a hidden WebView, intercepting the usage API responses, and rendering the bars in its own compact, frameless window. All of the [Chrome extension](../chrome-extension/README.md)'s settings are available, plus desktop-only options (locale, always-on-top, transparent window, size modes).
+
+For what the bars mean, and for privacy and disclaimer, see the [project README](../README.md).
+
+## Installing
+
+Download the zip from the [Releases page](https://github.com/secondarykey/TEMPOC/releases) (tagged `desktop-v*`) and run `tempoc.exe` — there is no installer. On first launch you will be asked to log in to claude.ai (see below).
 
 ## Logging in
 

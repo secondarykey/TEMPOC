@@ -35,6 +35,10 @@ jobs:
       - name: Verify GH_PAT
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          # Not used to do anything -- it is the control in the probe: a second,
+          # unrelated credential that tells a bad PAT apart from a broken
+          # authenticated path.
+          ACTIONS_TOKEN: ${{ github.token }}
         run: bash .github/scripts/verify-pat.sh "${{ github.repository }}" release-extension.yml
 
       - uses: actions/checkout@v4

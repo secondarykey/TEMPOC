@@ -51,6 +51,18 @@ probe "token  /repos"  -H "Authorization: token $GH_TOKEN"  "$API/repos/$REPO"
 probe "bearer /user"   -H "Authorization: Bearer $GH_TOKEN" "$API/user"
 echo
 
+# git-over-HTTPS to github.com is a different service from api.github.com, and
+# the tag could be pushed that way instead (which is what this workflow did
+# before it moved to the API). Worth knowing whether that door is open when the
+# API one is not. Output is suppressed so the URL-embedded token cannot leak.
+if git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" HEAD >/dev/null 2>&1; then
+  git_ok=yes
+else
+  git_ok=no
+fi
+printf '  %-22s %s\n' "git ls-remote" "$([ "$git_ok" = yes ] && echo 'OK -- git accepts the PAT' || echo 'FAILED')"
+echo
+
 anon=${code["anon   /repos"]}
 bearer=${code["bearer /repos"]}
 tok=${code["token  /repos"]}
@@ -64,6 +76,9 @@ echo "::error::GH_PAT cannot drive the API (bearer=$bearer token=$tok anon=$anon
 case "$anon:$bearer" in
   200:5*)
     echo "::error::The anonymous probe succeeded from this same runner, so the network and GitHub are fine and the 5xx is tied to this token. A 503 is not an auth rejection -- GitHub is erroring while handling this credential. Regenerate the PAT and update the secret; if it persists, quote the x-github-request-id above to GitHub Support."
+    if [ "$git_ok" = yes ]; then
+      echo "::notice::git accepts the same PAT, so only api.github.com is affected. If regenerating does not help, the tag can be pushed over git instead of the REST API."
+    fi
     ;;
   5*:5*)
     echo "::error::Every probe 5xx'd, including the anonymous one, so this is GitHub or the runner's network rather than the token. Check githubstatus.com and retry."

@@ -119,10 +119,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           TAG="desktop-v${{ steps.versionup.outputs.version }}"
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::secrets.GH_PAT is empty or unset. A PAT is required here, not GITHUB_TOKEN: tags pushed with GITHUB_TOKEN do not trigger release-desktop.yml."
+            exit 1
+          fi
           if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
             echo "Tag $TAG already exists, skipping."
           else
-            SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+            if ! SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha'); then
+              echo "::error::Could not read main's SHA. An 'invalid character <' error here means the API answered with HTML rather than JSON, which happens when the Authorization header is malformed -- i.e. GH_PAT is expired or invalid rather than merely absent."
+              exit 1
+            fi
             gh api "repos/${{ github.repository }}/git/refs" \
               -f ref="refs/tags/$TAG" \
               -f sha="$SHA"

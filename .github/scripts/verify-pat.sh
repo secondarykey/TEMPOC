@@ -40,7 +40,9 @@ probe() {
   code[$label]=$c
   printf '  %-22s HTTP %s   %s\n' "$label" "$c" "$rid"
   if [ "$c" != "200" ]; then
-    printf '      body: %s\n' "$(tr -d '\n' < "$body" | head -c 160)"
+    # head first, then strip newlines: piping tr into head makes head close the
+    # pipe early and tr report a broken pipe into the log.
+    printf '      body: %s\n' "$(head -c 160 "$body" | tr -d '\n')"
   fi
 }
 

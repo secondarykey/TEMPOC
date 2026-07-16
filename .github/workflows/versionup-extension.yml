@@ -23,49 +23,19 @@ jobs:
       contents: write
 
     steps:
-      # Preflight, because a bad GH_PAT does not surface until the very last
-      # step otherwise, and it surfaces as an unreadable JSON parse error. Note
-      # that checkout above proves nothing: this repo is public, so an empty or
-      # invalid token still clones anonymously.
+      # Preflight, because a bad GH_PAT otherwise surfaces only at the very last
+      # step, as an unreadable JSON parse error. Checkout is deliberately after
+      # it: this repo is public, so checkout proves nothing about the token --
+      # an empty or invalid one still clones anonymously.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+          sparse-checkout-cone-mode: false
+
       - name: Verify GH_PAT
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::secrets.GH_PAT is empty or unset. Add it under Settings > Secrets and variables > Actions. GITHUB_TOKEN cannot be used: tags it pushes do not trigger release-extension.yml."
-            exit 1
-          fi
-          # Length only -- never the value. A classic PAT is 40 chars, a
-          # fine-grained one ~93. A length of 41 typically means a newline was
-          # included when the secret was pasted.
-          echo "GH_PAT length: ${#GH_TOKEN}"
-          gh --version
-
-          # Verified against the live API: an absent, empty or expired token all
-          # yield 401 with a JSON body, and an anonymous request to this public
-          # repo yields 200. So a 401 here means the secret's value is stale --
-          # regenerating a PAT mints a new value, and the secret must be updated
-          # to match; extending an expiry in the UI does not change the value.
-          code=$(curl -sS -o /tmp/preflight -w '%{http_code}' \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/${{ github.repository }}")
-          echo "GET /repos/${{ github.repository }} -> HTTP $code"
-          if [ "$code" != "200" ]; then
-            echo "::error::PAT rejected (HTTP $code). 401 = wrong/stale value, 403 = valid but missing the 'repo' scope."
-            head -c 300 /tmp/preflight
-            exit 1
-          fi
-
-          # Reproduce the exact call that has been failing, here rather than at
-          # the end of the job. `invalid character '<'` means gh got HTML where
-          # JSON was due; the raw body below is what that HTML actually is,
-          # since none of the auth failure modes above can produce it.
-          if ! gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha'; then
-            echo "::error::gh could not read main's SHA even though the PAT is accepted. Raw response follows."
-            gh api "repos/${{ github.repository }}/git/ref/heads/main" --include || true
-            exit 1
-          fi
+        run: bash .github/scripts/verify-pat.sh "${{ github.repository }}" release-extension.yml
 
       - uses: actions/checkout@v4
         with:

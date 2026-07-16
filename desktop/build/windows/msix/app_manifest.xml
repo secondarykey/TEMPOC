@@ -9,14 +9,14 @@
   
   <Identity 
     Name="com.github.secondarykey.tempoc.desktop"
-    Publisher="CN=My Company"
+    Publisher="CN=secondarykey"
     Version="0.1.0.0" 
     ProcessorArchitecture="x64" />
   
   <Properties>
-    <DisplayName>My Product</DisplayName>
-    <PublisherDisplayName>My Company</PublisherDisplayName>
-    <Description>A desktop application</Description>
+    <DisplayName>TEMPOC</DisplayName>
+    <PublisherDisplayName>secondarykey</PublisherDisplayName>
+    <Description>TEMPOC - Claude usage window tracker</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   
@@ -29,10 +29,10 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.github.secondarykey.tempoc.desktop" Executable="desktop.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="com.github.secondarykey.tempoc.desktop" Executable="tempoc.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="My Product"
-        Description="A desktop application"
+        DisplayName="TEMPOC"
+        Description="TEMPOC - Claude usage window tracker"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
@@ -41,7 +41,7 @@
       </uap:VisualElements>
       
       <Extensions>
-        <desktop:Extension Category="windows.fullTrustProcess" Executable="desktop.exe" />
+        <desktop:Extension Category="windows.fullTrustProcess" Executable="tempoc.exe" />
         
         
       </Extensions>

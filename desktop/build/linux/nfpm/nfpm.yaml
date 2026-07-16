@@ -3,7 +3,7 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "desktop"
+name: "tempoc"
 arch: ${GOARCH}
 platform: "linux"
 version: "0.1.0"
@@ -17,12 +17,12 @@ license: "MIT"
 release: "1"
 
 contents:
-  - src: "./bin/desktop"
-    dst: "/usr/local/bin/desktop"
+  - src: "./bin/tempoc"
+    dst: "/usr/local/bin/tempoc"
   - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/desktop.png"
-  - src: "./build/linux/desktop.desktop"
-    dst: "/usr/share/applications/desktop.desktop"
+    dst: "/usr/share/icons/hicolor/128x128/apps/tempoc.png"
+  - src: "./build/linux/tempoc.desktop"
+    dst: "/usr/share/applications/tempoc.desktop"
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:

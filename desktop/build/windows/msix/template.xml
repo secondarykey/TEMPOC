@@ -8,17 +8,17 @@
         AllowPromptForPassword="false">
     </Settings>
     <Installer
-        Path="desktop.exe"
+        Path="tempoc.exe"
         Arguments=""
-        InstallLocation="C:\Program Files\My Company\My Product">
+        InstallLocation="C:\Program Files\secondarykey\TEMPOC">
     </Installer>
     <PackageInformation
-        PackageName="My Product"
-        PackageDisplayName="My Product"
-        PublisherName="CN=My Company"
-        PublisherDisplayName="My Company"
+        PackageName="TEMPOC"
+        PackageDisplayName="TEMPOC"
+        PublisherName="CN=secondarykey"
+        PublisherDisplayName="secondarykey"
         Version="0.1.0.0"
-        PackageDescription="A desktop application">
+        PackageDescription="TEMPOC - Claude usage window tracker">
         <Capabilities>
             <Capability Name="runFullTrust" />
             
@@ -26,9 +26,9 @@
         <Applications>
             <Application
                 Id="com.github.secondarykey.tempoc.desktop"
-                Description="A desktop application"
-                DisplayName="My Product"
-                ExecutableName="desktop.exe"
+                Description="TEMPOC - Claude usage window tracker"
+                DisplayName="TEMPOC"
+                ExecutableName="tempoc.exe"
                 EntryPoint="Windows.FullTrustApplication">
                 
             </Application>
@@ -41,13 +41,13 @@
         </Dependencies>
         <Properties>
             <Framework>false</Framework>
-            <DisplayName>My Product</DisplayName>
-            <PublisherDisplayName>My Company</PublisherDisplayName>
-            <Description>A desktop application</Description>
+            <DisplayName>TEMPOC</DisplayName>
+            <PublisherDisplayName>secondarykey</PublisherDisplayName>
+            <Description>TEMPOC - Claude usage window tracker</Description>
             <Logo>Assets\AppIcon.png</Logo>
         </Properties>
     </PackageInformation>
-    <SaveLocation PackagePath="desktop.msix" />
+    <SaveLocation PackagePath="tempoc.msix" />
     <PackageIntegrity>
         <CertificatePath></CertificatePath>
     </PackageIntegrity>

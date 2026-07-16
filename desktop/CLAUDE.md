@@ -250,6 +250,12 @@ go run ./_cmd/version.go -print  # 現在値を表示するだけ（CI 用）
 
 `_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`tempoc: starting v0.1.0`）に出る。
 
+### exe 名（`APP_NAME`）
+
+exe 名は `Taskfile.yml` の `APP_NAME`（= `tempoc`）が決める。`config.yml` の `info:` には**バイナリ名を指定するキーが無い**ため（`name:` / `binary:` は存在しない）、`update build-assets` へは `-name` / `-binaryname` として渡される。よって `APP_NAME` を変えたら `wails3 task common:update:build-assets` → 再ビルドまでやらないと、生成済みアセット（NSIS の `INFO_PROJECTNAME`、Linux の `Exec`/`Icon`/`StartupWMClass`、darwin の `CFBundleExecutable`）が古い名前のまま残る。
+
+⚠️ **`APP_NAME` の変更は WebView2 のユーザーデータフォルダ（`%APPDATA%\<exe名>\EBWebView`）を変える**。旧フォルダのセッションは引き継がれないため、改名後の初回起動では claude.ai が未ログイン状態になり、一度ログインし直すことになる（`desktop` → `tempoc` の改名時も同様）。この挙動は `.claude/skills/tempoc-desktop-verify` にも別名 exe のスモークテスト手段として記載がある。
+
 ### exe のメタデータ（`info:` → 各アセット）
 
 `build/config.yml` の `info:` が一元ソース。値の対応と「ユーザーに何として見えるか」は `.claude/skills/wails3/references/build-assets.md` を参照。**Windows のタスクバー／タスクマネージャの表示名は `description`（FileDescription）であって ProductName ではない**ため、`description` にはアプリの表示名を入れてある。
@@ -262,6 +268,8 @@ wails3 task common:update:build-assets   # -name/-binaryname/-config/-dir を AP
 
 **素の `wails3 update build-assets` を叩いてはいけない** — フラグが無いと全項目がテンプレート既定値で上書きされ、`windows/wails.exe.manifest` の `com.github.secondarykey.tempoc.desktop`（`productIdentifier` 由来）も失われる。
 
+**`build/windows/msix/` だけは例外で、`wails3 init` 時にしか生成されず update でも再生成されない**（＝手で直すと恒久的に残る一方、`config.yml` や `APP_NAME` を変えても自動追従しない）。`app_manifest.xml` / `template.xml` の表示名・exe 名・`Version="0.1.0.0"` は手で同期させてある。**バージョン番号は `_cmd/version.go` の同期対象外なので、MSIX で配布するなら bump のたびに手で直すこと**。現状の既定パッケージ形式は NSIS（`wails3 task windows:package`）で MSIX は使っていない。
+
 exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが毎回実行）→ `.syso` を go build がリンク、という順で起こる。したがって `config.yml` を直しただけでは何も変わらず、`update build-assets` → 再ビルドまでやって初めて反映される。
 
 ### ⚠️ exe のバージョン情報の確認方法
@@ -271,7 +279,7 @@ wails3 の syso はバージョンリソースを**言語ニュートラル（`0
 ```powershell
 $shell = New-Object -ComObject Shell.Application
 $folder = $shell.Namespace("<絶対パス>\desktop\bin")
-$item = $folder.ParseName("desktop.exe")
+$item = $folder.ParseName("tempoc.exe")
 $folder.GetDetailsOf($item, 34)   # File description
 $folder.GetDetailsOf($item, 306)  # Product version
 ```

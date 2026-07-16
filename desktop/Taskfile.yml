@@ -1,7 +1,11 @@
 version: '3'
 
 vars:
-  APP_NAME: "desktop"
+  # Drives the exe/binary name, and is passed to `wails3 update build-assets`
+  # as both -name and -binaryname (see build/Taskfile.yml). Renaming it changes
+  # the WebView2 user-data folder (%APPDATA%\<exe name>\EBWebView), which drops
+  # the claude.ai login.
+  APP_NAME: "tempoc"
   BIN_DIR: "bin"
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'

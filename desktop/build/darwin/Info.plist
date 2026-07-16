@@ -3,7 +3,7 @@
 <plist version="1.0">
 	<dict>
 		<key>CFBundleExecutable</key>
-		<string>desktop</string>
+		<string>tempoc</string>
 		<key>CFBundleGetInfoString</key>
 		<string>Shows elapsed time and reset timing for Claude&#39;s 5-hour and 7-day usage windows</string>
 		<key>CFBundleIconFile</key>

@@ -325,15 +325,27 @@ export default function SettingsWindow() {
 
   useEffect(() => {
     const reload = () => {
-      SettingsService.Get().then((s) => {
-        setDraft(s);
-        setDirty(false);
-        setLoaded(true);
-        // This window renders with the *saved* theme, not the draft's: like
-        // every other setting, a theme picked in the select only takes effect
-        // on Apply (see apply()), and reopening discards it with the draft.
-        applyTheme(s.theme);
-      });
+      SettingsService.Get()
+        .then((s) => {
+          setDraft(s);
+          setDirty(false);
+          setLoaded(true);
+          // This window renders with the *saved* theme, not the draft's: like
+          // every other setting, a theme picked in the select only takes effect
+          // on Apply (see apply()), and reopening discards it with the draft.
+          applyTheme(s.theme);
+        })
+        .catch((err) => {
+          // Backend Load() already falls back to defaults on a corrupt
+          // settings.json; this only guards I/O errors so `loaded` doesn't
+          // stay false forever and leave this window blank.
+          console.error('tempoc: failed to load settings, using defaults', err);
+          const s = new Settings();
+          setDraft(s);
+          setDirty(false);
+          setLoaded(true);
+          applyTheme(s.theme);
+        });
     };
     // Hidden -> Show (main.go's settingsWin) does not remount this
     // component, so the initial load alone wouldn't catch settings changed

@@ -17,7 +17,8 @@
   "weeklyLimit": "週間上限",
   "weeklyScopedFallback": "Weekly (scoped)",
   "elapsed": "経過 {pct}",
-  "resetsIn": "あと{remain}でリセット",
+  "resetsAt": "{date} にリセット",
+  "remaining": "あと{remain}",
   "resetsTooltip": "{date} にリセット（{remain}）",
   "notStarted": "未開始",
 

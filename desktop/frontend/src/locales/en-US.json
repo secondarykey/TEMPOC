@@ -17,7 +17,8 @@
   "weeklyLimit": "Weekly limit",
   "weeklyScopedFallback": "Weekly (scoped)",
   "elapsed": "Elapsed {pct}",
-  "resetsIn": "resets in {remain}",
+  "resetsAt": "Resets {date}",
+  "remaining": "{remain} left",
   "resetsTooltip": "Resets {date} ({remain})",
   "notStarted": "not started",
 

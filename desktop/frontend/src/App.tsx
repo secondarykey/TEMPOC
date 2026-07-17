@@ -314,17 +314,20 @@ function UsageBar({
         </>
       )}
 
-      {/* Foot is the "time" row: absolute reset date (left), elapsed% (centre),
-          remaining (right). The reset date moved here from the head so the head
-          reads cleanly as "label … usage%" without a date sitting next to the
-          percentage. */}
+      {/* Foot is the "time" row: "<date> resets" (left) and remaining (right).
+          Elapsed% has no cell of its own — it's the title (hover tooltip) on
+          both cells, plus the bar marker. */}
       <div className="usage-bar-foot">
-        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : ''}</span>
-        <span>{t.elapsed(started ? formatPercent(elapsed, settings) : '—')}</span>
-        <span>
+        <span
+          className="usage-bar-reset"
+          title={started ? t.elapsed(formatPercent(elapsed, settings)) : undefined}
+        >
+          {started && resets ? t.resetsAt(formatResetDate(resets, locale)) : ''}
+        </span>
+        <span title={started ? t.elapsed(formatPercent(elapsed, settings)) : undefined}>
           {started
             ? showRemain
-              ? t.resetsIn(formatRemaining(remainMs, settings.durationStyle, locale, t))
+              ? t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t))
               : ''
             : t.notStarted}
         </span>

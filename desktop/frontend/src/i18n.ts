@@ -36,8 +36,9 @@ export function resolveLocale(setting: string): LocaleCode {
 // Shape of a locale's JSON resource. Each JSON file is assigned to this type
 // below, so a missing or mistyped key fails the build rather than showing a
 // blank/undefined string at runtime. Plain values are finished strings;
-// `updated`/`elapsed`/`resetsIn`/`resetsTooltip` are {token} templates; and
-// `durationUnits`/`ago` are the data the two Intl fallbacks assemble from.
+// `updated`/`elapsed`/`resetsAt`/`remaining`/`resetsTooltip` are {token}
+// templates; and `durationUnits`/`ago` are the data the two Intl fallbacks
+// assemble from.
 type PluralForms = { one: string; other: string };
 type RawMessages = {
   settings: string;
@@ -58,7 +59,8 @@ type RawMessages = {
   weeklyLimit: string;
   weeklyScopedFallback: string;
   elapsed: string;
-  resetsIn: string;
+  resetsAt: string;
+  remaining: string;
   resetsTooltip: string;
   notStarted: string;
 
@@ -110,11 +112,12 @@ type RawMessages = {
 // parameterised entries are exposed as functions that fill in their template.
 export type Messages = Omit<
   RawMessages,
-  'updated' | 'elapsed' | 'resetsIn' | 'resetsTooltip' | 'durationUnits' | 'ago'
+  'updated' | 'elapsed' | 'resetsAt' | 'remaining' | 'resetsTooltip' | 'durationUnits' | 'ago'
 > & {
   updated: (when: string) => string;
   elapsed: (pct: string) => string;
-  resetsIn: (remain: string) => string;
+  resetsAt: (date: string) => string;
+  remaining: (remain: string) => string;
   resetsTooltip: (date: string, remain: string) => string;
   // Fallbacks for when Intl.DurationFormat / Intl.RelativeTimeFormat are
   // unavailable in the WebView; assembled from durationUnits / ago.
@@ -129,12 +132,13 @@ function interpolate(template: string, params: Record<string, string | number>):
 
 // Wrap a RawMessages (a locale's JSON) in the function-bearing Messages API.
 function build(raw: RawMessages): Messages {
-  const { updated, elapsed, resetsIn, resetsTooltip, durationUnits, ago, ...plain } = raw;
+  const { updated, elapsed, resetsAt, remaining, resetsTooltip, durationUnits, ago, ...plain } = raw;
   return {
     ...plain,
     updated: (when) => interpolate(updated, { when }),
     elapsed: (pct) => interpolate(elapsed, { pct }),
-    resetsIn: (remain) => interpolate(resetsIn, { remain }),
+    resetsAt: (date) => interpolate(resetsAt, { date }),
+    remaining: (remain) => interpolate(remaining, { remain }),
     resetsTooltip: (date, remain) => interpolate(resetsTooltip, { date, remain }),
     durationFallback: (days, hours, minutes) => {
       const parts: string[] = [];

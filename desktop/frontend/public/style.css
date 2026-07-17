@@ -335,24 +335,18 @@ body { background: transparent; }
     border-top: 4px solid var(--marker);
 }
 
-/* The "time" row: reset date (left) | elapsed% (centre) | remaining (right).
-   A fixed 3-track grid keeps the centre cell put instead of drifting with the
-   side cells' widths the way space-between would. */
+/* The "time" row: "<date> resets" (left) | remaining (right). Elapsed% is not
+   a cell here — it's the hover title on both. */
 .usage-bar-foot {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: baseline;
-    column-gap: 0.6rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
     margin-top: 0.5rem;
     font-size: 0.78rem;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
 }
-.usage-bar-foot > :nth-child(2) {
-    text-align: center;
-    white-space: nowrap;
-}
-.usage-bar-foot > :nth-child(3) {
+.usage-bar-foot > :last-child {
     text-align: right;
 }
 

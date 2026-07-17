@@ -4,8 +4,18 @@
 // a region subtag (en-US, ja-JP, ...). TEMPOC stores and resolves those same
 // codes internally so the supported list can later grow to the full official
 // set without touching the settings model. One resolved code drives both the
-// UI strings (dictionaries below) and every Intl date/duration formatter, so
-// the interface language and the date format can never disagree.
+// UI strings and every Intl date/duration formatter, so the interface language
+// and the date format can never disagree.
+//
+// The translations themselves live in per-locale JSON files under ./locales,
+// so a new language is added by dropping in a JSON file (and listing its code
+// in SUPPORTED_LOCALES) without touching this logic. Parameterised messages
+// are stored as templates with {token} placeholders; this module wraps them in
+// typed functions (the `Messages` type below) so callers keep a compile-time
+// checked API instead of poking raw strings.
+
+import enUS from './locales/en-US.json';
+import jaJP from './locales/ja-JP.json';
 
 export const SUPPORTED_LOCALES = ['en-US', 'ja-JP'] as const;
 export type LocaleCode = (typeof SUPPORTED_LOCALES)[number];
@@ -23,15 +33,17 @@ export function resolveLocale(setting: string): LocaleCode {
   return SUPPORTED_LOCALES.find((l) => l.split('-')[0] === lang) ?? DEFAULT_LOCALE;
 }
 
-// Every user-visible string, typed so a locale missing a key fails to
-// compile. Parameterised messages are functions, letting each language put
-// the value where its grammar needs it.
-export type Messages = {
-  // Title bar (main window)
+// Shape of a locale's JSON resource. Each JSON file is assigned to this type
+// below, so a missing or mistyped key fails the build rather than showing a
+// blank/undefined string at runtime. Plain values are finished strings;
+// `updated`/`elapsed`/`resetsIn`/`resetsTooltip` are {token} templates; and
+// `durationUnits`/`ago` are the data the two Intl fallbacks assemble from.
+type PluralForms = { one: string; other: string };
+type RawMessages = {
   settings: string;
   refreshUsage: string;
   refresh: string;
-  updated: (when: string) => string;
+  updated: string;
   updatedTooltip: string;
   alwaysOnTop: string;
   alwaysOnTopOn: string;
@@ -39,25 +51,21 @@ export type Messages = {
   minimise: string;
   close: string;
 
-  // Main window body
   loginRequired: string;
   loginToClaude: string;
   waitingForUsage: string;
   currentSession: string;
   weeklyLimit: string;
   weeklyScopedFallback: string;
-  elapsed: (pct: string) => string;
-  resetsIn: (remain: string) => string;
-  resetsTooltip: (date: string, remain: string) => string;
+  elapsed: string;
+  resetsIn: string;
+  resetsTooltip: string;
   notStarted: string;
 
-  // Fallbacks for when Intl.DurationFormat / Intl.RelativeTimeFormat are
-  // unavailable in the WebView.
-  durationFallback: (days: number, hours: number, minutes: number) => string;
+  durationUnits: { day: string; hour: string; minute: string };
   justNow: string;
-  agoFallback: (value: number, unit: 'second' | 'minute' | 'hour' | 'day') => string;
+  ago: { second: PluralForms; minute: PluralForms; hour: PluralForms; day: PluralForms };
 
-  // Settings window
   settingsTitle: string;
   sectionGeneral: string;
   theme: string;
@@ -98,158 +106,53 @@ export type Messages = {
   apply: string;
 };
 
-const EN_US: Messages = {
-  settings: 'Settings',
-  refreshUsage: 'Refresh usage',
-  refresh: 'Refresh',
-  updated: (when) => `Updated ${when}`,
-  updatedTooltip: 'When the displayed usage was last fetched',
-  alwaysOnTop: 'Always on top',
-  alwaysOnTopOn: 'Always on top: on',
-  alwaysOnTopOff: 'Always on top: off',
-  minimise: 'Minimise',
-  close: 'Close',
-
-  loginRequired: 'Login required',
-  loginToClaude: 'Log in to Claude',
-  waitingForUsage: 'Waiting for usage data',
-  currentSession: 'Current session',
-  weeklyLimit: 'Weekly limit',
-  weeklyScopedFallback: 'Weekly (scoped)',
-  elapsed: (pct) => `Elapsed ${pct}`,
-  resetsIn: (remain) => `resets in ${remain}`,
-  resetsTooltip: (date, remain) => `Resets ${date} (${remain})`,
-  notStarted: 'not started',
-
-  durationFallback: (days, hours, minutes) => {
-    const parts: string[] = [];
-    if (days) parts.push(`${days}d`);
-    if (days || hours) parts.push(`${hours}h`);
-    parts.push(`${minutes}m`);
-    return parts.join(' ');
-  },
-  justNow: 'just now',
-  agoFallback: (value, unit) => `${value} ${unit}${value === 1 ? '' : 's'} ago`,
-
-  settingsTitle: 'Settings',
-  sectionGeneral: 'General',
-  theme: 'Theme',
-  themeSystem: 'System',
-  themeLight: 'Light',
-  themeDark: 'Dark',
-  sizeMode: 'Size mode',
-  sizeNormal: 'Normal',
-  sizeSmall: 'Small',
-  sizeCompact: 'Compact',
-  transparentWindow: 'Transparent window',
-  autoRefresh: 'Auto-refresh',
-  minutesUnit: 'min',
-  nextLaunchNote: 'Takes effect on next app launch.',
-  sectionFormatting: 'Formatting',
-  language: 'Language',
-  languageAuto: 'Auto (system)',
-  durationStyle: 'Duration style',
-  durationNarrow: 'Narrow (3d 4h)',
-  durationShort: 'Short (3 days 4 hr.)',
-  durationLong: 'Long (3 days 4 hours)',
-  decimalPlaces: 'Decimal places',
-  percentFormat: 'Percent format',
-  sectionHour5: '5-Hour Window',
-  sectionDay7: '7-Day Window',
-  sectionWeeklyScoped: 'Weekly (scoped) Window',
-  show: 'Show',
-  showRemaining: 'Show remaining time',
-  colorThreshold: 'Color threshold',
-  labelField: 'Label',
-  sectionUtilization: 'Utilization Threshold',
-  utilizationHelp: 'Forces warning/danger colors when absolute usage reaches these values.',
-  warning: 'Warning',
-  danger: 'Danger',
-  interceptorTitle: 'Claude interceptor window',
-  interceptorDesc: 'Show the hidden Claude page for login or debugging.',
-  toggle: 'Toggle',
-  apply: 'Apply',
+// The API callers use. Same as the plain strings in RawMessages, except the
+// parameterised entries are exposed as functions that fill in their template.
+export type Messages = Omit<
+  RawMessages,
+  'updated' | 'elapsed' | 'resetsIn' | 'resetsTooltip' | 'durationUnits' | 'ago'
+> & {
+  updated: (when: string) => string;
+  elapsed: (pct: string) => string;
+  resetsIn: (remain: string) => string;
+  resetsTooltip: (date: string, remain: string) => string;
+  // Fallbacks for when Intl.DurationFormat / Intl.RelativeTimeFormat are
+  // unavailable in the WebView; assembled from durationUnits / ago.
+  durationFallback: (days: number, hours: number, minutes: number) => string;
+  agoFallback: (value: number, unit: keyof RawMessages['ago']) => string;
 };
 
-const JA_JP: Messages = {
-  settings: '設定',
-  refreshUsage: '使用量を更新',
-  refresh: '更新',
-  updated: (when) => `${when}に更新`,
-  updatedTooltip: '表示中の使用量を最後に取得した時刻',
-  alwaysOnTop: '最前面に表示',
-  alwaysOnTopOn: '最前面に表示: オン',
-  alwaysOnTopOff: '最前面に表示: オフ',
-  minimise: '最小化',
-  close: '閉じる',
+// Replace every {key} in `template` with params[key].
+function interpolate(template: string, params: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(params[key] ?? ''));
+}
 
-  loginRequired: 'ログインが必要です',
-  loginToClaude: 'Claude にログイン',
-  waitingForUsage: '使用量データを待機中',
-  currentSession: '現在のセッション',
-  weeklyLimit: '週間上限',
-  weeklyScopedFallback: 'Weekly (scoped)',
-  elapsed: (pct) => `経過 ${pct}`,
-  resetsIn: (remain) => `あと${remain}でリセット`,
-  resetsTooltip: (date, remain) => `${date} にリセット（${remain}）`,
-  notStarted: '未開始',
-
-  durationFallback: (days, hours, minutes) => {
-    const parts: string[] = [];
-    if (days) parts.push(`${days}日`);
-    if (days || hours) parts.push(`${hours}時間`);
-    parts.push(`${minutes}分`);
-    return parts.join(' ');
-  },
-  justNow: 'たった今',
-  agoFallback: (value, unit) => {
-    const units = { second: '秒', minute: '分', hour: '時間', day: '日' } as const;
-    return `${value}${units[unit]}前`;
-  },
-
-  settingsTitle: '設定',
-  sectionGeneral: '全般',
-  theme: 'テーマ',
-  themeSystem: 'システム',
-  themeLight: 'ライト',
-  themeDark: 'ダーク',
-  sizeMode: '表示サイズ',
-  sizeNormal: '標準',
-  sizeSmall: '小',
-  sizeCompact: 'コンパクト',
-  transparentWindow: 'ウィンドウを透明化',
-  autoRefresh: '自動更新',
-  minutesUnit: '分',
-  nextLaunchNote: '次回起動時に反映されます。',
-  sectionFormatting: '表示形式',
-  language: '言語',
-  languageAuto: '自動（システム）',
-  durationStyle: '期間の表記',
-  durationNarrow: '短縮（3d 4h）',
-  durationShort: '標準（3日 4時間）',
-  durationLong: '詳細（3日 4時間）',
-  decimalPlaces: '小数点以下の桁数',
-  percentFormat: 'パーセント表記',
-  sectionHour5: '5時間ウィンドウ',
-  sectionDay7: '7日ウィンドウ',
-  sectionWeeklyScoped: 'Weekly (scoped) ウィンドウ',
-  show: '表示',
-  showRemaining: '残り時間を表示',
-  colorThreshold: '色分けしきい値',
-  labelField: 'ラベル',
-  sectionUtilization: '使用率しきい値',
-  utilizationHelp: '使用率がこの値に達したとき、警告/危険色を強制します。',
-  warning: '警告',
-  danger: '危険',
-  interceptorTitle: 'Claude 傍受ウィンドウ',
-  interceptorDesc: '非表示の Claude ページをログインやデバッグ用に表示します。',
-  toggle: '切り替え',
-  apply: '適用',
-};
+// Wrap a RawMessages (a locale's JSON) in the function-bearing Messages API.
+function build(raw: RawMessages): Messages {
+  const { updated, elapsed, resetsIn, resetsTooltip, durationUnits, ago, ...plain } = raw;
+  return {
+    ...plain,
+    updated: (when) => interpolate(updated, { when }),
+    elapsed: (pct) => interpolate(elapsed, { pct }),
+    resetsIn: (remain) => interpolate(resetsIn, { remain }),
+    resetsTooltip: (date, remain) => interpolate(resetsTooltip, { date, remain }),
+    durationFallback: (days, hours, minutes) => {
+      const parts: string[] = [];
+      if (days) parts.push(`${days}${durationUnits.day}`);
+      if (days || hours) parts.push(`${hours}${durationUnits.hour}`);
+      parts.push(`${minutes}${durationUnits.minute}`);
+      return parts.join(' ');
+    },
+    agoFallback: (value, unit) => {
+      const forms = ago[unit];
+      return interpolate(value === 1 ? forms.one : forms.other, { value });
+    },
+  };
+}
 
 const MESSAGES: Record<LocaleCode, Messages> = {
-  'en-US': EN_US,
-  'ja-JP': JA_JP,
+  'en-US': build(enUS),
+  'ja-JP': build(jaJP),
 };
 
 export function getMessages(locale: LocaleCode): Messages {

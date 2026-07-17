@@ -49,7 +49,8 @@ Chrome 拡張は claude.ai のページ内に content script を注入して `wi
 | `frontend/src/App.tsx` | URL クエリルーター（`?window=settings` で分岐）+ メインウィンドウ UI（タイトルバー・使用量バー） |
 | `frontend/src/SettingsWindow.tsx` | 設定ウィンドウ UI（`SettingsView`・ドラフト管理・Apply/Close） |
 | `frontend/src/theme.ts` | 共有テーマ色（`COLORS`）。App.tsx と SettingsWindow.tsx の両方から import |
-| `frontend/src/i18n.ts` | i18n。サポートロケール一覧（`SUPPORTED_LOCALES`）、設定値/`navigator.language` をサポートコードへ解決する `resolveLocale()`、型付き文言辞書（`getMessages()`）。App.tsx と SettingsWindow.tsx の両方から import |
+| `frontend/src/i18n.ts` | i18n ロジック。サポートロケール一覧（`SUPPORTED_LOCALES`）、設定値/`navigator.language` をサポートコードへ解決する `resolveLocale()`、JSON を読み込んで型付き `Messages` を組み立てる `getMessages()`。App.tsx と SettingsWindow.tsx の両方から import |
+| `frontend/src/locales/*.json` | ロケール別の文言リソース（`en-US.json` / `ja-JP.json`）。翻訳文字列の実体。パラメータ付きは `{token}` プレースホルダ、`durationUnits`/`ago` は Intl フォールバック用のデータ。i18n.ts の `RawMessages` 型に代入して**キー欠落はビルドで検出**（型チェックが落ちる）。**言語追加は JSON を1枚足して `SUPPORTED_LOCALES` に列挙するだけ** |
 | `frontend/src/main.tsx` | React エントリ。`import '@wailsio/runtime'`（Frameless のドラッグに必須） |
 | `frontend/public/style.css` | スタイル |
 | `frontend/bindings/changeme/` | `wails3 generate bindings` の生成物（git 管理外。無ければ `desktop/` で `wails3 generate bindings` を実行して生成） |
@@ -220,6 +221,41 @@ diff = util - elapsed
 1. `settings/settings.go` の `Settings` にフィールド追加（+ 必要なら `Default()`）
 2. `desktop/` で `wails3 generate bindings -ts`（`frontend/bindings/changeme/settings/` が再生成される）
 3. `SettingsWindow.tsx` の `SettingsView` に UI を追加し、`App.tsx`（`UsageBar` などの描画側）へ反映
+
+## 国際化（i18n）
+
+UI 文言と日時・残り時間の表記をロケール対応にする仕組み。メイン・設定ウィンドウの両方が使う。
+
+### 構成
+
+| 要素 | 役割 |
+|---|---|
+| `frontend/src/locales/<code>.json` | **翻訳文字列の実体**。ロケールごとに1ファイル（`en-US.json` / `ja-JP.json`）。UI ロジックからは分離され、翻訳の追加・修正はこの JSON だけで完結する |
+| `frontend/src/i18n.ts` | ロジック。JSON を import し、`resolveLocale()`・`getMessages()`・型定義（`Messages` / `RawMessages`）を提供 |
+
+### ロケールコード
+
+内部で持つのは **Claude 公式のロケールコード（地域サブタグ付き: `en-US` / `ja-JP`）**。`SUPPORTED_LOCALES`（`i18n.ts`）が一覧で、将来は公式の全コードへ拡張する前提。設定 `locale` の空値（Auto）は `resolveLocale()` が `navigator.language` を最寄りのサポートコードへ解決する（完全一致 → 主言語一致 `ja`→`ja-JP` / `en-GB`→`en-US` → 既定 `en-US`）。**解決済みの1コードを UI 文言と Intl 日時整形の両方に渡す**ため、言語と日付書式がズレない。
+
+### JSON の中身と組み立て
+
+`getMessages(locale)` が JSON（`RawMessages`）を消費側 API（`Messages`）へ組み立てる。3 種類ある:
+
+- **プレーン文字列**（大多数）— そのまま `Messages` のフィールドになる（例: `"settings": "設定"`）
+- **パラメータ付き**（`updated` / `elapsed` / `resetsIn` / `resetsTooltip`）— JSON では `{token}` プレースホルダ入りテンプレート（例: `"updated": "{when}に更新"`）。`i18n.ts` の `interpolate()` が `{key}` を埋め、`Messages` では**関数**として公開される（`t.updated("2分前")` → `"2分前に更新"`）。言語ごとに token の位置を変えられるのが要点
+- **Intl フォールバック用データ**（`durationUnits` / `ago`）— `Intl.DurationFormat` / `Intl.RelativeTimeFormat` が使えない環境（WebView2 では基本的に発生しない保険）向け。組み立てロジック（どの単位を出すか、複数形の選択）は言語非依存なので `i18n.ts` に置き、**単位ラベルだけ** JSON に持つ。`ago` は CLDR 準拠で `one`/`other` の複数形を持ち、`value === 1` で選択
+
+### 型安全（キー欠落はビルドで落ちる）
+
+各 JSON を `RawMessages` 型へ代入しているため、**あるロケールでキーが欠けると `tsc`（＝ビルド）が失敗する**。ランタイムで undefined 文字列が出ることはない。消費側は `Messages` 型経由なので、文言の追加時に `App.tsx` / `SettingsWindow.tsx` のどこで使うかも型で導かれる。
+
+### 言語を追加する手順
+
+1. `frontend/src/locales/<code>.json` を新規作成（既存 JSON をコピーして全キーを翻訳。キーが揃っていないと `tsc` で落ちるのでコピーが安全）
+2. `i18n.ts` の `SUPPORTED_LOCALES` に `<code>` を追加し、`import` と `build(...)` を1行ずつ足す
+3. `SettingsWindow.tsx` の Language セレクタに `<option>` を追加（表示名は各言語の自称表記のまま。例: `English` / `日本語`）
+
+**文言キーの追加時**（新しい UI 文字列を足すとき）は、`RawMessages`（`i18n.ts`）にフィールドを足し、**全ロケールの JSON に同じキーを足す**（1つでも欠けると `tsc` が指摘する）。パラメータ付きなら `Messages` 側の関数シグネチャと `build()` の組み立ても足す。
 
 ## 開発・ビルド
 

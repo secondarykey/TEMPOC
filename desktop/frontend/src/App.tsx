@@ -288,7 +288,6 @@ function UsageBar({
     <div className="usage-bar">
       <div className="usage-bar-head">
         <span className="usage-bar-label">{label}</span>
-        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : ''}</span>
         <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
       </div>
       <div className="usage-bar-track-wrap">
@@ -304,7 +303,6 @@ function UsageBar({
         <>
           <div className="usage-bar-head usage-bar-head--sub">
             <span className="usage-bar-label">{secondary.label}</span>
-            <span className="usage-bar-reset" />
             <span className="usage-bar-util" style={{ color: secColor }}>{formatUtil(secUtil)}</span>
           </div>
           <div className="usage-bar-track-wrap">
@@ -316,7 +314,12 @@ function UsageBar({
         </>
       )}
 
+      {/* Foot is the "time" row: absolute reset date (left), elapsed% (centre),
+          remaining (right). The reset date moved here from the head so the head
+          reads cleanly as "label … usage%" without a date sitting next to the
+          percentage. */}
       <div className="usage-bar-foot">
+        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : ''}</span>
         <span>{t.elapsed(started ? formatPercent(elapsed, settings) : '—')}</span>
         <span>
           {started

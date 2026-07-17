@@ -23,15 +23,19 @@ jobs:
       contents: write
 
     steps:
-      # Preflight, because a bad GH_PAT otherwise surfaces only at the very last
-      # step, as an unreadable JSON parse error. Checkout is deliberately after
-      # it: this repo is public, so checkout proves nothing about the token --
-      # an empty or invalid one still clones anonymously.
+      # One checkout, not a sparse one for the preflight script followed by a
+      # full one: a second checkout into the same workspace reuses the existing
+      # clone, so `core.sparseCheckout` survives and the rest of the tree never
+      # appears.
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .github/scripts
-          sparse-checkout-cone-mode: false
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
 
+      # Preflight before any real work, because a bad GH_PAT otherwise surfaces
+      # only at the very last step, as an unreadable JSON parse error. Checkout
+      # passing above says nothing about the token: this repo is public, so an
+      # empty or invalid one still clones anonymously.
       - name: Verify GH_PAT
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
@@ -40,11 +44,6 @@ jobs:
           # authenticated path.
           ACTIONS_TOKEN: ${{ github.token }}
         run: bash .github/scripts/verify-pat.sh "${{ github.repository }}" release-extension.yml
-
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GH_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v5

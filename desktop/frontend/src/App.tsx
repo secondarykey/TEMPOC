@@ -345,10 +345,20 @@ function MainWindow() {
   const [authRequired, setAuthRequired] = useState(false);
 
   useEffect(() => {
-    SettingsService.Get().then((s) => {
-      setSettings(s);
-      setSettingsLoaded(true);
-    });
+    SettingsService.Get()
+      .then((s) => {
+        setSettings(s);
+        setSettingsLoaded(true);
+      })
+      .catch((err) => {
+        // Backend Load() already falls back to defaults on a corrupt
+        // settings.json, so this only guards against I/O errors (e.g. an
+        // unreadable file). Without it settingsLoaded stays false forever
+        // and the main window renders no usage bars at all.
+        console.error('tempoc: failed to load settings, using defaults', err);
+        setSettings(new Settings());
+        setSettingsLoaded(true);
+      });
   }, []);
 
   useEffect(() => {

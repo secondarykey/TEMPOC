@@ -253,42 +253,49 @@ function UsageBar({
   const secUtil = secondary ? clamp(secondary.data?.utilization ?? 0) : 0;
   const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
 
-  // One hover tooltip for the whole card, one line each: usage, reset date,
-  // elapsed% and remaining. Attached to the .usage-bar card (every size mode)
-  // so it shows anywhere on the 5h / 7d bar. The nested weekly_scoped sub-bar
-  // sits inside this same card and so shares this tooltip — which deliberately
-  // reports the primary (5h / 7d) window and never the scoped figures.
-  const tooltipLines = [t.usage(formatUtil(util))];
-  if (started && resets) {
-    tooltipLines.push(t.resetsAt(formatResetDate(resets, locale)));
-    tooltipLines.push(t.elapsed(formatPercent(elapsed, settings)));
-    tooltipLines.push(t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t)));
-  } else {
-    tooltipLines.push(t.notStarted);
-  }
-  const tooltip = tooltipLines.join('\n');
+  // Build a hover tooltip for a given utilisation: usage, reset date, elapsed
+  // and remaining, one line each. The reset date / elapsed / remaining are the
+  // window's shared timeline, so the only line that differs between the primary
+  // bar and the nested weekly_scoped bar is usage — hence the util parameter
+  // and the separate secTooltip. Each bar shows its own figures (scoped ⇒
+  // scoped usage), so the tooltip is attached per bar, not to the whole card.
+  const buildTip = (u: number): string => {
+    const lines = [t.usage(formatUtil(u))];
+    if (started && resets) {
+      lines.push(t.resetsAt(formatResetDate(resets, locale)));
+      lines.push(t.elapsed(formatPercent(elapsed, settings)));
+      lines.push(t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t)));
+    } else {
+      lines.push(t.notStarted);
+    }
+    return lines.join('\n');
+  };
+  const tooltip = buildTip(util);
+  const secTooltip = secondary ? buildTip(secUtil) : '';
 
   // Compact mode: a single line per window, "label | elapsed% | utilization%"
   // (utilization last, at the eye-catching right edge), instead of the
   // track/marker/foot layout. The reset date and remaining time aren't shown as
   // columns (so the row stays as small as possible) — they, and everything
-  // else, live in the card's hover tooltip (`tooltip` above). The fixed value
-  // columns (style.css --compact-*-col) keep cells lined up across every row —
-  // including across cards, since each card is its own grid. The secondary
-  // (weekly_scoped) row shares the primary's timeline, so its elapsed cell
-  // stays empty and it shares the card's (primary-window) tooltip.
+  // else, live in the row's hover tooltip. Each row carries its own window's
+  // tooltip (primary row `tooltip`, weekly_scoped row `secTooltip`), so the
+  // scoped row reports the scoped figures. The label has no title of its own,
+  // so hovering anywhere on the row — label included — shows that tooltip. The
+  // fixed value columns (style.css --compact-*-col) keep cells lined up across
+  // every row (and across cards, each its own grid); the secondary row shares
+  // the primary's timeline, so its elapsed cell stays empty.
   if (sizeMode === 'compact') {
-    const row = (lbl: string, u: number, c: string, sub?: boolean) => (
-      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`}>
-        <span className="usage-bar-label" title={lbl}>{lbl}</span>
+    const row = (lbl: string, u: number, c: string, tip: string, sub?: boolean) => (
+      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={tip}>
+        <span className="usage-bar-label">{lbl}</span>
         <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatPercent(elapsed, settings) : '—'}</span>
         <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
       </div>
     );
     return (
-      <div className="usage-bar" title={tooltip}>
-        {row(label, util, color)}
-        {secondary && row(secondary.label, secUtil, secColor, true)}
+      <div className="usage-bar">
+        {row(label, util, color, tooltip)}
+        {secondary && row(secondary.label, secUtil, secColor, secTooltip, true)}
       </div>
     );
   }
@@ -308,13 +315,15 @@ function UsageBar({
         )}
       </div>
 
+      {/* The scoped sub-bar's own parts carry secTooltip, overriding the card's
+          primary tooltip on hover so the scoped bar reports scoped figures. */}
       {secondary && (
         <>
-          <div className="usage-bar-head usage-bar-head--sub">
+          <div className="usage-bar-head usage-bar-head--sub" title={secTooltip}>
             <span className="usage-bar-label">{secondary.label}</span>
             <span className="usage-bar-util" style={{ color: secColor }}>{formatUtil(secUtil)}</span>
           </div>
-          <div className="usage-bar-track-wrap">
+          <div className="usage-bar-track-wrap" title={secTooltip}>
             <div className="usage-bar-track">
               <div className="usage-bar-fill" style={{ width: `${secUtil}%`, background: secColor }} />
             </div>

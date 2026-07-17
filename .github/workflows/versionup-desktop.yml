@@ -24,7 +24,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # for the tag lookup below
           token: ${{ secrets.GH_PAT }}
@@ -41,7 +41,7 @@ jobs:
       - name: Load pinned tool versions
         run: grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: desktop/go.mod
           cache-dependency-path: desktop/go.sum

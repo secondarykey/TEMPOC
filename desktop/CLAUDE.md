@@ -49,6 +49,7 @@ Chrome 拡張は claude.ai のページ内に content script を注入して `wi
 | `frontend/src/App.tsx` | URL クエリルーター（`?window=settings` で分岐）+ メインウィンドウ UI（タイトルバー・使用量バー） |
 | `frontend/src/SettingsWindow.tsx` | 設定ウィンドウ UI（`SettingsView`・ドラフト管理・Apply/Close） |
 | `frontend/src/theme.ts` | 共有テーマ色（`COLORS`）。App.tsx と SettingsWindow.tsx の両方から import |
+| `frontend/src/i18n.ts` | i18n。サポートロケール一覧（`SUPPORTED_LOCALES`）、設定値/`navigator.language` をサポートコードへ解決する `resolveLocale()`、型付き文言辞書（`getMessages()`）。App.tsx と SettingsWindow.tsx の両方から import |
 | `frontend/src/main.tsx` | React エントリ。`import '@wailsio/runtime'`（Frameless のドラッグに必須） |
 | `frontend/public/style.css` | スタイル |
 | `frontend/bindings/changeme/` | `wails3 generate bindings` の生成物（git 管理外。無ければ `desktop/` で `wails3 generate bindings` を実行して生成） |
@@ -202,7 +203,7 @@ diff = util - elapsed
 
 | キー | 既定 | 説明 |
 |---|---|---|
-| `locale` | `""`(Auto) | 日時・残り時間の表記ロケール。空は `navigator.language` に従う。設定ウィンドウの Language セレクタ（Auto / English / 日本語） |
+| `locale` | `""`(Auto) | **UI 言語**と日時・残り時間の表記ロケール。値は Claude 公式のロケールコード（地域サブタグ付き: `en-US` / `ja-JP`。一覧は `frontend/src/i18n.ts` の `SUPPORTED_LOCALES`、将来は公式の全コードへ拡張予定）。空は `navigator.language` を最寄りのサポートコードへ解決（`ja` → `ja-JP`、非対応言語 → `en-US`）。**UI 文言と Intl 日時整形の両方に同じ解決済みコードを使う**ため言語と日付書式がズレない。設定ウィンドウの Language セレクタは選択した瞬間に設定ウィンドウ自身へプレビューされ、メインへの反映は Apply 時 |
 | `theme` | `"system"` | UI テーマ: `system` / `light` / `dark`。`system` は `prefers-color-scheme` で OS 設定に追従（OS 側の切り替えもライブ反映）。`theme.ts` の `applyTheme()` が `<html>` に `data-theme="light\|dark"` を付与し、`style.css` の CSS 変数（`:root` = ダーク既定、`[data-theme="light"]` で上書き）が切り替わる。バー色（`COLORS`）も `var(--color-*)` 参照でテーマ追従。メイン・設定ウィンドウは別 JS コンテキストのため各自 `applyTheme()` を呼ぶ（設定ウィンドウは保存値で描画し、Apply 時に反映） |
 | `transparent` | `false` | ウィンドウ透明の On/Off（設定ウィンドウ General のチェックボックス） |
 | `alwaysOnTop` | `false` | 最前面表示の On/Off（タイトルバーのピン。永続化・起動時復元） |
@@ -210,7 +211,7 @@ diff = util - elapsed
 | `weeklyScopedWarning` / `weeklyScopedDanger` | `0` / `10` | weekly_scoped の色閾値 |
 | `weeklyScopedColorEnabled` | `true` | weekly_scoped の色分け有効 |
 | `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
-| `weeklyScopedLabel` | `"Weekly (scoped)"` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可） |
+| `weeklyScopedLabel` | `""` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可）。空は UI 言語の既定ラベル（`i18n.ts` の `weeklyScopedFallback`）に従う |
 
 設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / Formatting / 5-Hour / 7-Day / (weekly_scoped 存在時のみ) Weekly (scoped) / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped セクションは **データが存在するときだけ表示**され、5h/7d と同じ設定に加え Label（名称）入力を持つ（`hasWeeklyScoped` prop で制御。設定ウィンドウ自身も `tempoc:usage` を購読して導出）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
 

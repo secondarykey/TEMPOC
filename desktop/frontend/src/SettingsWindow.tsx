@@ -3,6 +3,7 @@ import { Events, Window } from '@wailsio/runtime'
 import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
 import { COLORS, applyTheme } from './theme'
+import { resolveLocale, getMessages, type Messages } from './i18n'
 
 // A dual-thumb range slider: warning is clamped to stay <= danger and vice
 // versa, with a gradient fill mirroring the extension's options.js
@@ -13,12 +14,14 @@ function DualRange({
   warning,
   danger,
   onChange,
+  t,
 }: {
   min: number;
   max: number;
   warning: number;
   danger: number;
   onChange: (warning: number, danger: number) => void;
+  t: Messages;
 }) {
   const range = max - min;
   const wPct = ((warning - min) / range) * 100;
@@ -36,8 +39,8 @@ function DualRange({
   return (
     <div className="dual-range">
       <div className="dual-range-values">
-        <span className="dual-range-warning">Warning: <b>{warning}</b></span>
-        <span className="dual-range-danger">Danger: <b>{danger}</b></span>
+        <span className="dual-range-warning">{t.warning}: <b>{warning}</b></span>
+        <span className="dual-range-danger">{t.danger}: <b>{danger}</b></span>
       </div>
       <div className="dual-range-track">
         <div
@@ -84,28 +87,33 @@ export function SettingsView({
     Events.Emit('tempoc:toggle-claude');
   };
 
+  // The settings window renders in the draft's language, so picking a
+  // language previews immediately here; the main window only follows on
+  // Apply, like every other setting.
+  const t = getMessages(resolveLocale(settings.locale));
+
   return (
     <div className="settings">
       <section className="settings-section">
-        <h3 className="settings-section-title">General</h3>
+        <h3 className="settings-section-title">{t.sectionGeneral}</h3>
         <label className="settings-row">
-          <span>Theme</span>
+          <span>{t.theme}</span>
           <select value={settings.theme || 'system'} onChange={(e) => onUpdate({ theme: e.target.value })}>
-            <option value="system">System</option>
-            <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="system">{t.themeSystem}</option>
+            <option value="light">{t.themeLight}</option>
+            <option value="dark">{t.themeDark}</option>
           </select>
         </label>
         <label className="settings-row">
-          <span>Size mode</span>
+          <span>{t.sizeMode}</span>
           <select value={settings.sizeMode || 'normal'} onChange={(e) => onUpdate({ sizeMode: e.target.value })}>
-            <option value="normal">Normal</option>
-            <option value="small">Small</option>
-            <option value="compact">Compact</option>
+            <option value="normal">{t.sizeNormal}</option>
+            <option value="small">{t.sizeSmall}</option>
+            <option value="compact">{t.sizeCompact}</option>
           </select>
         </label>
         <label className="settings-row">
-          <span>Transparent window</span>
+          <span>{t.transparentWindow}</span>
           <input
             type="checkbox"
             checked={settings.transparent}
@@ -113,7 +121,7 @@ export function SettingsView({
           />
         </label>
         <label className="settings-row">
-          <span>Auto-refresh</span>
+          <span>{t.autoRefresh}</span>
           <span className="settings-row-controls">
             <input
               type="checkbox"
@@ -129,32 +137,34 @@ export function SettingsView({
               disabled={settings.refreshInterval <= 0}
               onChange={(e) => onUpdate({ refreshInterval: Number(e.target.value) })}
             />
-            <span className="settings-unit">min</span>
+            <span className="settings-unit">{t.minutesUnit}</span>
           </span>
         </label>
-        <div className="settings-help-text">Takes effect on next app launch.</div>
+        <div className="settings-help-text">{t.nextLaunchNote}</div>
       </section>
 
       <section className="settings-section">
-        <h3 className="settings-section-title">Formatting</h3>
+        <h3 className="settings-section-title">{t.sectionFormatting}</h3>
         <label className="settings-row">
-          <span>Language</span>
+          <span>{t.language}</span>
+          {/* Language names stay in their own language (English / 日本語) —
+              standard practice so users can always find their own. */}
           <select value={settings.locale} onChange={(e) => onUpdate({ locale: e.target.value })}>
-            <option value="">Auto (system)</option>
+            <option value="">{t.languageAuto}</option>
             <option value="en-US">English</option>
             <option value="ja-JP">日本語</option>
           </select>
         </label>
         <label className="settings-row">
-          <span>Duration style</span>
+          <span>{t.durationStyle}</span>
           <select value={settings.durationStyle} onChange={(e) => onUpdate({ durationStyle: e.target.value })}>
-            <option value="narrow">Narrow (3d 4h)</option>
-            <option value="short">Short (3 days 4 hr.)</option>
-            <option value="long">Long (3 days 4 hours)</option>
+            <option value="narrow">{t.durationNarrow}</option>
+            <option value="short">{t.durationShort}</option>
+            <option value="long">{t.durationLong}</option>
           </select>
         </label>
         <label className="settings-row">
-          <span>Decimal places</span>
+          <span>{t.decimalPlaces}</span>
           <select value={settings.decimalPlaces} onChange={(e) => onUpdate({ decimalPlaces: Number(e.target.value) })}>
             <option value={0}>0</option>
             <option value={1}>1</option>
@@ -163,7 +173,7 @@ export function SettingsView({
           </select>
         </label>
         <label className="settings-row">
-          <span>Percent format</span>
+          <span>{t.percentFormat}</span>
           <input
             type="text"
             className="settings-text-input"
@@ -174,17 +184,17 @@ export function SettingsView({
       </section>
 
       <section className="settings-section">
-        <h3 className="settings-section-title">5-Hour Window</h3>
+        <h3 className="settings-section-title">{t.sectionHour5}</h3>
         <label className="settings-check-row">
-          <span>Show</span>
+          <span>{t.show}</span>
           <input type="checkbox" checked={settings.showHour5} onChange={(e) => onUpdate({ showHour5: e.target.checked })} />
         </label>
         <label className="settings-check-row">
-          <span>Show remaining time</span>
+          <span>{t.showRemaining}</span>
           <input type="checkbox" checked={settings.showRemainHour5} onChange={(e) => onUpdate({ showRemainHour5: e.target.checked })} />
         </label>
         <label className="settings-check-row">
-          <span>Color threshold</span>
+          <span>{t.colorThreshold}</span>
           <input type="checkbox" checked={settings.hour5ColorEnabled} onChange={(e) => onUpdate({ hour5ColorEnabled: e.target.checked })} />
         </label>
         <DualRange
@@ -193,21 +203,22 @@ export function SettingsView({
           warning={settings.hour5Warning}
           danger={settings.hour5Danger}
           onChange={(w, d) => onUpdate({ hour5Warning: w, hour5Danger: d })}
+          t={t}
         />
       </section>
 
       <section className="settings-section">
-        <h3 className="settings-section-title">7-Day Window</h3>
+        <h3 className="settings-section-title">{t.sectionDay7}</h3>
         <label className="settings-check-row">
-          <span>Show</span>
+          <span>{t.show}</span>
           <input type="checkbox" checked={settings.showDay7} onChange={(e) => onUpdate({ showDay7: e.target.checked })} />
         </label>
         <label className="settings-check-row">
-          <span>Show remaining time</span>
+          <span>{t.showRemaining}</span>
           <input type="checkbox" checked={settings.showRemainDay7} onChange={(e) => onUpdate({ showRemainDay7: e.target.checked })} />
         </label>
         <label className="settings-check-row">
-          <span>Color threshold</span>
+          <span>{t.colorThreshold}</span>
           <input type="checkbox" checked={settings.day7ColorEnabled} onChange={(e) => onUpdate({ day7ColorEnabled: e.target.checked })} />
         </label>
         <DualRange
@@ -216,32 +227,33 @@ export function SettingsView({
           warning={settings.day7Warning}
           danger={settings.day7Danger}
           onChange={(w, d) => onUpdate({ day7Warning: w, day7Danger: d })}
+          t={t}
         />
       </section>
 
       {hasWeeklyScoped && (
         <section className="settings-section">
-          <h3 className="settings-section-title">Weekly (scoped) Window</h3>
+          <h3 className="settings-section-title">{t.sectionWeeklyScoped}</h3>
           <label className="settings-check-row">
-            <span>Show</span>
+            <span>{t.show}</span>
             <input type="checkbox" checked={settings.showWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
           </label>
           <label className="settings-row">
-            <span>Label</span>
+            <span>{t.labelField}</span>
             <input
               type="text"
               className="settings-text-input"
               value={settings.weeklyScopedLabel}
-              placeholder="Weekly (scoped)"
+              placeholder={t.weeklyScopedFallback}
               onChange={(e) => onUpdate({ weeklyScopedLabel: e.target.value })}
             />
           </label>
           <label className="settings-check-row">
-            <span>Show remaining time</span>
+            <span>{t.showRemaining}</span>
             <input type="checkbox" checked={settings.showRemainWeeklyScoped} onChange={(e) => onUpdate({ showRemainWeeklyScoped: e.target.checked })} />
           </label>
           <label className="settings-check-row">
-            <span>Color threshold</span>
+            <span>{t.colorThreshold}</span>
             <input type="checkbox" checked={settings.weeklyScopedColorEnabled} onChange={(e) => onUpdate({ weeklyScopedColorEnabled: e.target.checked })} />
           </label>
           <DualRange
@@ -250,28 +262,30 @@ export function SettingsView({
             warning={settings.weeklyScopedWarning}
             danger={settings.weeklyScopedDanger}
             onChange={(w, d) => onUpdate({ weeklyScopedWarning: w, weeklyScopedDanger: d })}
+            t={t}
           />
         </section>
       )}
 
       <section className="settings-section">
-        <h3 className="settings-section-title">Utilization Threshold</h3>
-        <div className="settings-help-text">Forces warning/danger colors when absolute usage reaches these values.</div>
+        <h3 className="settings-section-title">{t.sectionUtilization}</h3>
+        <div className="settings-help-text">{t.utilizationHelp}</div>
         <DualRange
           min={0}
           max={100}
           warning={settings.utilizationWarning}
           danger={settings.utilizationDanger}
           onChange={(w, d) => onUpdate({ utilizationWarning: w, utilizationDanger: d })}
+          t={t}
         />
       </section>
 
       <div className="settings-row settings-debug-row">
         <div>
-          <div className="settings-row-label">Claude interceptor window</div>
-          <div className="settings-row-desc">Show the hidden Claude page for login or debugging.</div>
+          <div className="settings-row-label">{t.interceptorTitle}</div>
+          <div className="settings-row-desc">{t.interceptorDesc}</div>
         </div>
-        <button className="settings-btn" onClick={toggleClaude}>Toggle</button>
+        <button className="settings-btn" onClick={toggleClaude}>{t.toggle}</button>
       </div>
     </div>
   );
@@ -281,14 +295,14 @@ export function SettingsView({
 // (same .titlebar / .titlebar-controls classes and drag-region pattern) but
 // with a plain text label instead of the usage window's icon buttons, and a
 // single close control — there's nothing to pin or refresh here.
-function SettingsTitleBar() {
+function SettingsTitleBar({ t }: { t: Messages }) {
   return (
     <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
       <div className="titlebar-left" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
-        <span className="titlebar-title">Settings</span>
+        <span className="titlebar-title">{t.settingsTitle}</span>
       </div>
       <div className="titlebar-controls" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
-        <button aria-label="Close" className="close" onClick={() => Window.Close()}>&#x2715;</button>
+        <button aria-label={t.close} className="close" onClick={() => Window.Close()}>&#x2715;</button>
       </div>
     </header>
   );
@@ -370,15 +384,19 @@ export default function SettingsWindow() {
     }
   };
 
+  // Same draft-locale rendering as SettingsView: the title bar and footer
+  // follow the language selected in the (unsaved) draft.
+  const t = getMessages(resolveLocale(draft.locale));
+
   return (
     <div className="root">
-      <SettingsTitleBar />
+      <SettingsTitleBar t={t} />
       <main className="app">
         {loaded && <SettingsView settings={draft} onUpdate={updateDraft} hasWeeklyScoped={hasWeeklyScoped} />}
       </main>
       <footer className="settings-footer">
-        <button className="settings-btn" onClick={() => Window.Close()}>Close</button>
-        <button className="settings-btn settings-apply" disabled={!dirty || !loaded} onClick={apply}>Apply</button>
+        <button className="settings-btn" onClick={() => Window.Close()}>{t.close}</button>
+        <button className="settings-btn settings-apply" disabled={!dirty || !loaded} onClick={apply}>{t.apply}</button>
       </footer>
     </div>
   );

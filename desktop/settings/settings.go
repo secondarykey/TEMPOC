@@ -23,16 +23,23 @@ type Settings struct {
 	WeeklyScopedDanger       int    `json:"weeklyScopedDanger"`
 	WeeklyScopedWarning      int    `json:"weeklyScopedWarning"`
 	WeeklyScopedColorEnabled bool   `json:"weeklyScopedColorEnabled"`
-	ShowRemainWeeklyScoped   bool   `json:"showRemainWeeklyScoped"`
-	WeeklyScopedLabel        string `json:"weeklyScopedLabel"`
+	ShowRemainWeeklyScoped bool `json:"showRemainWeeklyScoped"`
+	// WeeklyScopedLabel overrides the sub-bar's label. Empty means "use the
+	// UI language's default label" (i18n.ts's weeklyScopedFallback), so the
+	// label follows the selected language unless the user typed their own.
+	WeeklyScopedLabel string `json:"weeklyScopedLabel"`
 	DecimalPlaces            int    `json:"decimalPlaces"`
 	DurationStyle            string `json:"durationStyle"`
 	PercentFormat            string `json:"percentFormat"`
 	RefreshInterval          int    `json:"refreshInterval"`
 	UtilizationWarning       int    `json:"utilizationWarning"`
 	UtilizationDanger        int    `json:"utilizationDanger"`
-	// Locale overrides the BCP-47 locale used to format the reset date/time and
-	// remaining duration. Empty means "auto" (follow navigator.language).
+	// Locale selects the UI language and the locale for date/time and duration
+	// formatting. Values are Claude's official locale codes, which always carry
+	// a region subtag ("en-US", "ja-JP"; the supported list lives in
+	// frontend/src/i18n.ts and may later grow to the full official set). Empty
+	// means "auto": the frontend resolves navigator.language to the nearest
+	// supported code.
 	Locale string `json:"locale"`
 	// Transparent makes the window background fully see-through (default off).
 	Transparent bool `json:"transparent"`
@@ -72,7 +79,7 @@ func Default() Settings {
 		WeeklyScopedWarning:      0,
 		WeeklyScopedColorEnabled: true,
 		ShowRemainWeeklyScoped:   true,
-		WeeklyScopedLabel:        "Weekly (scoped)",
+		WeeklyScopedLabel:        "",
 		DecimalPlaces:            2,
 		DurationStyle:            "short",
 		PercentFormat:            "{}%",

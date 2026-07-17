@@ -4,6 +4,7 @@ import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
 import SettingsWindow from './SettingsWindow'
 import { COLORS, applyTheme } from './theme'
+import { resolveLocale, getMessages, type LocaleCode, type Messages } from './i18n'
 
 function PinIcon() {
   return (
@@ -38,46 +39,46 @@ function GearIcon() {
 // region; the gear button and window controls opt out with
 // --wails-draggable: no-drag. The gear opens the (now separate) settings
 // window rather than toggling an in-window view.
-function TitleBar({ onOpenSettings, onRefresh, onTop, onToggleOnTop, lastUpdatedLabel }: { onOpenSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void; lastUpdatedLabel: string | null }) {
+function TitleBar({ onOpenSettings, onRefresh, onTop, onToggleOnTop, lastUpdatedLabel, t }: { onOpenSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void; lastUpdatedLabel: string | null; t: Messages }) {
   return (
     <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
       <div className="titlebar-left" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
           className="titlebar-gear"
-          aria-label="Settings"
-          title="Settings"
+          aria-label={t.settings}
+          title={t.settings}
           onClick={onOpenSettings}
         >
           <GearIcon />
         </button>
         <button
           className="titlebar-refresh"
-          aria-label="Refresh"
-          title="Refresh usage"
+          aria-label={t.refresh}
+          title={t.refreshUsage}
           onClick={onRefresh}
         >
           <RefreshIcon />
         </button>
         {lastUpdatedLabel && (
-          <span className="titlebar-updated" style={{ '--wails-draggable': 'drag' } as React.CSSProperties} title="When the displayed usage was last fetched">
-            Updated {lastUpdatedLabel}
+          <span className="titlebar-updated" style={{ '--wails-draggable': 'drag' } as React.CSSProperties} title={t.updatedTooltip}>
+            {t.updated(lastUpdatedLabel)}
           </span>
         )}
       </div>
       <div className="titlebar-controls" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
           className={`pin${onTop ? ' is-active' : ''}`}
-          aria-label="Always on top"
+          aria-label={t.alwaysOnTop}
           aria-pressed={onTop}
-          title={onTop ? 'Always on top: on' : 'Always on top: off'}
+          title={onTop ? t.alwaysOnTopOn : t.alwaysOnTopOff}
           onClick={onToggleOnTop}
         >
           <PinIcon />
         </button>
-        <button aria-label="Minimise" onClick={() => Window.Minimise()}>&#x2015;</button>
+        <button aria-label={t.minimise} onClick={() => Window.Minimise()}>&#x2015;</button>
         {/* tempoc:quit (not Window.Close()) so Go can save the window position
             while the frameless window still reports reliable coordinates. */}
-        <button aria-label="Close" className="close" onClick={() => Events.Emit('tempoc:quit')}>&#x2715;</button>
+        <button aria-label={t.close} className="close" onClick={() => Events.Emit('tempoc:quit')}>&#x2715;</button>
       </div>
     </header>
   );
@@ -105,10 +106,6 @@ const WINDOW_MS: Record<WindowKind, number> = {
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
-// Effective locale for date/duration formatting: the explicit setting, or the
-// OS/browser locale when set to "auto" (empty).
-const resolveLocale = (settings: Settings): string => settings.locale || navigator.language;
-
 function formatPercent(n: number, settings: Settings): string {
   const fmt = settings.percentFormat || '{}%';
   return fmt.replace('{}', n.toFixed(settings.decimalPlaces));
@@ -124,8 +121,9 @@ function formatUtil(n: number): string {
 // Format a remaining duration using Intl.DurationFormat (ported from
 // content.js's createDuration + redraw). Intl.DurationFormat isn't in the
 // TS lib yet, so it's accessed dynamically and wrapped in try/catch, falling
-// back to a simple "1d 3h 20m" string when unsupported or given bad input.
-function formatRemaining(ms: number, durationStyle: string, locale: string): string {
+// back to a localized "1d 3h 20m"-style string when unsupported or given
+// bad input.
+function formatRemaining(ms: number, durationStyle: string, locale: LocaleCode, t: Messages): string {
   if (ms < 0) ms = 0;
   const duration = {
     days: Math.floor(ms / (1000 * 60 * 60 * 24)),
@@ -138,21 +136,17 @@ function formatRemaining(ms: number, durationStyle: string, locale: string): str
     const df = new DurationFormat(locale, { style: durationStyle });
     return df.format(duration);
   } catch {
-    const parts: string[] = [];
-    if (duration.days) parts.push(`${duration.days}d`);
-    if (duration.days || duration.hours) parts.push(`${duration.hours}h`);
-    parts.push(`${duration.minutes}m`);
-    return parts.join(' ');
+    return t.durationFallback(duration.days, duration.hours, duration.minutes);
   }
 }
 
 // Format how long ago the usage data was last received, as a localized
 // relative string (e.g. "5 sec. ago", "2 min. ago"). Uses the same `now` tick
 // that drives the Elapsed bars, so it stays fresh without re-fetching. Falls
-// back to a plain English string when Intl.RelativeTimeFormat is unavailable.
-function formatLastUpdated(sinceMs: number, locale: string): string {
+// back to a localized plain string when Intl.RelativeTimeFormat is unavailable.
+function formatLastUpdated(sinceMs: number, locale: LocaleCode, t: Messages): string {
   const sec = Math.max(0, Math.floor(sinceMs / 1000));
-  const pick = (): [number, Intl.RelativeTimeFormatUnit] => {
+  const pick = (): [number, 'second' | 'minute' | 'hour' | 'day'] => {
     if (sec < 60) return [sec, 'second'];
     const min = Math.floor(sec / 60);
     if (min < 60) return [min, 'minute'];
@@ -165,7 +159,7 @@ function formatLastUpdated(sinceMs: number, locale: string): string {
     const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' });
     return rtf.format(-value, unit);
   } catch {
-    return value === 0 ? 'just now' : `${value} ${unit}${value === 1 ? '' : 's'} ago`;
+    return value === 0 ? t.justNow : t.agoFallback(value, unit);
   }
 }
 
@@ -173,7 +167,7 @@ function formatLastUpdated(sinceMs: number, locale: string): string {
 // content.js: month/day/weekday + hour/minute). This is the value that isn't
 // shown on Claude's own usage page — knowing exactly which day and hour the
 // window resets is the point of this app.
-function formatResetDate(d: Date, locale: string): string {
+function formatResetDate(d: Date, locale: LocaleCode): string {
   try {
     return d.toLocaleString(locale, {
       month: 'numeric',
@@ -225,6 +219,8 @@ function UsageBar({
   settings,
   secondary,
   sizeMode,
+  locale,
+  t,
 }: {
   label: string;
   kind: WindowKind;
@@ -233,6 +229,8 @@ function UsageBar({
   settings: Settings;
   secondary?: { label: string; kind: WindowKind; data: UsageWindow | undefined };
   sizeMode: SizeMode;
+  locale: LocaleCode;
+  t: Messages;
 }) {
   const util = clamp(data?.utilization ?? 0);
   const resets = data?.resets_at ? new Date(data.resets_at) : null;
@@ -265,11 +263,10 @@ function UsageBar({
   // shares the primary's timeline: its tooltip repeats the primary's and its
   // elapsed cell stays empty.
   if (sizeMode === 'compact') {
-    const locale = resolveLocale(settings);
     const resetInfo =
       started && resets
-        ? `Resets ${formatResetDate(resets, locale)} (${formatRemaining(remainMs, settings.durationStyle, locale)})`
-        : 'not started';
+        ? t.resetsTooltip(formatResetDate(resets, locale), formatRemaining(remainMs, settings.durationStyle, locale, t))
+        : t.notStarted;
     const row = (lbl: string, u: number, c: string, sub?: boolean) => (
       <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={resetInfo}>
         <span className="usage-bar-label" title={lbl}>{lbl}</span>
@@ -291,7 +288,7 @@ function UsageBar({
     <div className="usage-bar">
       <div className="usage-bar-head">
         <span className="usage-bar-label">{label}</span>
-        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, resolveLocale(settings)) : ''}</span>
+        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, locale) : ''}</span>
         <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
       </div>
       <div className="usage-bar-track-wrap">
@@ -299,7 +296,7 @@ function UsageBar({
           <div className="usage-bar-fill" style={{ width: `${util}%`, background: color }} />
         </div>
         {started && (
-          <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} title={`Elapsed ${formatPercent(elapsed, settings)}`} />
+          <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} title={t.elapsed(formatPercent(elapsed, settings))} />
         )}
       </div>
 
@@ -320,13 +317,13 @@ function UsageBar({
       )}
 
       <div className="usage-bar-foot">
-        <span>Elapsed {started ? formatPercent(elapsed, settings) : '—'}</span>
+        <span>{t.elapsed(started ? formatPercent(elapsed, settings) : '—')}</span>
         <span>
           {started
             ? showRemain
-              ? `resets in ${formatRemaining(remainMs, settings.durationStyle, resolveLocale(settings))}`
+              ? t.resetsIn(formatRemaining(remainMs, settings.durationStyle, locale, t))
               : ''
-            : 'not started'}
+            : t.notStarted}
         </span>
       </div>
     </div>
@@ -552,8 +549,11 @@ function MainWindow() {
     });
   }, []);
 
+  const locale = resolveLocale(settings.locale);
+  const t = getMessages(locale);
+
   const lastUpdatedLabel =
-    lastUpdated != null ? formatLastUpdated(now - lastUpdated, resolveLocale(settings)) : null;
+    lastUpdated != null ? formatLastUpdated(now - lastUpdated, locale, t) : null;
 
   const rootModeClass = sizeMode === 'small' ? ' mode-small' : sizeMode === 'compact' ? ' mode-compact' : '';
 
@@ -565,6 +565,7 @@ function MainWindow() {
         onTop={settings.alwaysOnTop}
         onToggleOnTop={() => updateSettings({ alwaysOnTop: !settings.alwaysOnTop })}
         lastUpdatedLabel={lastUpdatedLabel}
+        t={t}
       />
       <main className="app">
         {authRequired ? (
@@ -572,32 +573,34 @@ function MainWindow() {
           // reports the session is gone (401 or a /login redirect), the bars
           // would only show outdated numbers, so fall back to the login prompt.
           <div className="app-placeholder">
-            Login required
+            {t.loginRequired}
             <br />
             <button className="login-button" onClick={() => Events.Emit('tempoc:login')}>
-              Log in to Claude
+              {t.loginToClaude}
             </button>
           </div>
         ) : !usage ? (
           <p className="app-placeholder">
-            Waiting for usage data<span className="loading-dots" aria-hidden="true" />
+            {t.waitingForUsage}<span className="loading-dots" aria-hidden="true" />
           </p>
         ) : (
           <div className="usage-bars" ref={measureRef}>
             {settings.showHour5 && (
-              <UsageBar label="Current session" kind="five_hour" data={usage.five_hour} now={now} settings={settings} sizeMode={sizeMode} />
+              <UsageBar label={t.currentSession} kind="five_hour" data={usage.five_hour} now={now} settings={settings} sizeMode={sizeMode} locale={locale} t={t} />
             )}
             {settings.showDay7 ? (
               <UsageBar
-                label="Weekly limit"
+                label={t.weeklyLimit}
                 kind="seven_day"
                 data={usage.seven_day}
                 now={now}
                 settings={settings}
                 sizeMode={sizeMode}
+                locale={locale}
+                t={t}
                 secondary={
                   settings.showWeeklyScoped && weeklyScopedHasData
-                    ? { label: settings.weeklyScopedLabel || 'Weekly (scoped)', kind: 'weekly_scoped', data: usage.weekly_scoped }
+                    ? { label: settings.weeklyScopedLabel || t.weeklyScopedFallback, kind: 'weekly_scoped', data: usage.weekly_scoped }
                     : undefined
                 }
               />
@@ -605,12 +608,14 @@ function MainWindow() {
               settings.showWeeklyScoped &&
               weeklyScopedHasData && (
                 <UsageBar
-                  label={settings.weeklyScopedLabel || 'Weekly (scoped)'}
+                  label={settings.weeklyScopedLabel || t.weeklyScopedFallback}
                   kind="weekly_scoped"
                   data={usage.weekly_scoped}
                   now={now}
                   settings={settings}
                   sizeMode={sizeMode}
+                  locale={locale}
+                  t={t}
                 />
               )
             )}

@@ -253,31 +253,40 @@ function UsageBar({
   const secUtil = secondary ? clamp(secondary.data?.utilization ?? 0) : 0;
   const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
 
+  // One hover tooltip for the whole card, one line each: usage, reset date,
+  // elapsed% and remaining. Attached to the .usage-bar card (every size mode)
+  // so it shows anywhere on the 5h / 7d bar. The nested weekly_scoped sub-bar
+  // sits inside this same card and so shares this tooltip — which deliberately
+  // reports the primary (5h / 7d) window and never the scoped figures.
+  const tooltipLines = [t.usage(formatUtil(util))];
+  if (started && resets) {
+    tooltipLines.push(t.resetsAt(formatResetDate(resets, locale)));
+    tooltipLines.push(t.elapsed(formatPercent(elapsed, settings)));
+    tooltipLines.push(t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t)));
+  } else {
+    tooltipLines.push(t.notStarted);
+  }
+  const tooltip = tooltipLines.join('\n');
+
   // Compact mode: a single line per window, "label | elapsed% | utilization%"
   // (utilization last, at the eye-catching right edge), instead of the
-  // track/marker/foot layout. The reset date and remaining time
-  // are tucked into the row's title tooltip rather than shown as columns, so
-  // the row stays as small as possible. The fixed value columns (style.css
-  // --compact-*-col) keep cells lined up across every row — including across
-  // cards, since each card is its own grid. The secondary (weekly_scoped) row
-  // shares the primary's timeline: its tooltip repeats the primary's and its
-  // elapsed cell stays empty.
+  // track/marker/foot layout. The reset date and remaining time aren't shown as
+  // columns (so the row stays as small as possible) — they, and everything
+  // else, live in the card's hover tooltip (`tooltip` above). The fixed value
+  // columns (style.css --compact-*-col) keep cells lined up across every row —
+  // including across cards, since each card is its own grid. The secondary
+  // (weekly_scoped) row shares the primary's timeline, so its elapsed cell
+  // stays empty and it shares the card's (primary-window) tooltip.
   if (sizeMode === 'compact') {
-    const resetInfo =
-      started && resets
-        ? t.resetsTooltip(formatResetDate(resets, locale), formatRemaining(remainMs, settings.durationStyle, locale, t))
-        : t.notStarted;
     const row = (lbl: string, u: number, c: string, sub?: boolean) => (
-      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={resetInfo}>
+      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`}>
         <span className="usage-bar-label" title={lbl}>{lbl}</span>
-        {/* The sub row (weekly_scoped) shares the primary's timeline, so
-            repeating its elapsed% is just noise — leave the cell empty. */}
         <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatPercent(elapsed, settings) : '—'}</span>
         <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
       </div>
     );
     return (
-      <div className="usage-bar">
+      <div className="usage-bar" title={tooltip}>
         {row(label, util, color)}
         {secondary && row(secondary.label, secUtil, secColor, true)}
       </div>
@@ -285,7 +294,7 @@ function UsageBar({
   }
 
   return (
-    <div className="usage-bar">
+    <div className="usage-bar" title={tooltip}>
       <div className="usage-bar-head">
         <span className="usage-bar-label">{label}</span>
         <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
@@ -295,7 +304,7 @@ function UsageBar({
           <div className="usage-bar-fill" style={{ width: `${util}%`, background: color }} />
         </div>
         {started && (
-          <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} title={t.elapsed(formatPercent(elapsed, settings))} />
+          <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} />
         )}
       </div>
 
@@ -315,16 +324,13 @@ function UsageBar({
       )}
 
       {/* Foot is the "time" row: "<date> resets" (left) and remaining (right).
-          Elapsed% has no cell of its own — it's the title (hover tooltip) on
-          both cells, plus the bar marker. */}
+          Elapsed% isn't shown here — it's in the card's hover tooltip
+          (`tooltip` above) along with usage and the reset date. */}
       <div className="usage-bar-foot">
-        <span
-          className="usage-bar-reset"
-          title={started ? t.elapsed(formatPercent(elapsed, settings)) : undefined}
-        >
+        <span className="usage-bar-reset">
           {started && resets ? t.resetsAt(formatResetDate(resets, locale)) : ''}
         </span>
-        <span title={started ? t.elapsed(formatPercent(elapsed, settings)) : undefined}>
+        <span>
           {started
             ? showRemain
               ? t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t))

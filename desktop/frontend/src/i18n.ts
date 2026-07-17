@@ -36,9 +36,8 @@ export function resolveLocale(setting: string): LocaleCode {
 // Shape of a locale's JSON resource. Each JSON file is assigned to this type
 // below, so a missing or mistyped key fails the build rather than showing a
 // blank/undefined string at runtime. Plain values are finished strings;
-// `updated`/`elapsed`/`resetsAt`/`remaining`/`resetsTooltip` are {token}
-// templates; and `durationUnits`/`ago` are the data the two Intl fallbacks
-// assemble from.
+// `updated`/`usage`/`elapsed`/`resetsAt`/`remaining` are {token} templates;
+// and `durationUnits`/`ago` are the data the two Intl fallbacks assemble from.
 type PluralForms = { one: string; other: string };
 type RawMessages = {
   settings: string;
@@ -58,10 +57,10 @@ type RawMessages = {
   currentSession: string;
   weeklyLimit: string;
   weeklyScopedFallback: string;
+  usage: string;
   elapsed: string;
   resetsAt: string;
   remaining: string;
-  resetsTooltip: string;
   notStarted: string;
 
   durationUnits: { day: string; hour: string; minute: string };
@@ -112,13 +111,13 @@ type RawMessages = {
 // parameterised entries are exposed as functions that fill in their template.
 export type Messages = Omit<
   RawMessages,
-  'updated' | 'elapsed' | 'resetsAt' | 'remaining' | 'resetsTooltip' | 'durationUnits' | 'ago'
+  'updated' | 'usage' | 'elapsed' | 'resetsAt' | 'remaining' | 'durationUnits' | 'ago'
 > & {
   updated: (when: string) => string;
+  usage: (pct: string) => string;
   elapsed: (pct: string) => string;
   resetsAt: (date: string) => string;
   remaining: (remain: string) => string;
-  resetsTooltip: (date: string, remain: string) => string;
   // Fallbacks for when Intl.DurationFormat / Intl.RelativeTimeFormat are
   // unavailable in the WebView; assembled from durationUnits / ago.
   durationFallback: (days: number, hours: number, minutes: number) => string;
@@ -132,14 +131,14 @@ function interpolate(template: string, params: Record<string, string | number>):
 
 // Wrap a RawMessages (a locale's JSON) in the function-bearing Messages API.
 function build(raw: RawMessages): Messages {
-  const { updated, elapsed, resetsAt, remaining, resetsTooltip, durationUnits, ago, ...plain } = raw;
+  const { updated, usage, elapsed, resetsAt, remaining, durationUnits, ago, ...plain } = raw;
   return {
     ...plain,
     updated: (when) => interpolate(updated, { when }),
+    usage: (pct) => interpolate(usage, { pct }),
     elapsed: (pct) => interpolate(elapsed, { pct }),
     resetsAt: (date) => interpolate(resetsAt, { date }),
     remaining: (remain) => interpolate(remaining, { remain }),
-    resetsTooltip: (date, remain) => interpolate(resetsTooltip, { date, remain }),
     durationFallback: (days, hours, minutes) => {
       const parts: string[] = [];
       if (days) parts.push(`${days}${durationUnits.day}`);

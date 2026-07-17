@@ -16,10 +16,10 @@
   "currentSession": "現在のセッション",
   "weeklyLimit": "週間上限",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "usage": "使用量 {pct}",
   "elapsed": "経過 {pct}",
   "resetsAt": "{date} にリセット",
   "remaining": "あと{remain}",
-  "resetsTooltip": "{date} にリセット（{remain}）",
   "notStarted": "未開始",
 
   "durationUnits": { "day": "日", "hour": "時間", "minute": "分" },

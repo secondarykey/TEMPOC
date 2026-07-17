@@ -16,10 +16,10 @@
   "currentSession": "Current session",
   "weeklyLimit": "Weekly limit",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "usage": "Usage {pct}",
   "elapsed": "Elapsed {pct}",
   "resetsAt": "Resets {date}",
   "remaining": "{remain} left",
-  "resetsTooltip": "Resets {date} ({remain})",
   "notStarted": "not started",
 
   "durationUnits": { "day": "d", "hour": "h", "minute": "m" },

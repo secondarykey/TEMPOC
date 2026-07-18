@@ -149,17 +149,20 @@ export function SettingsView({
           <span>{t.language}</span>
           {/* Language names are the site's own region-qualified endonyms
               (e.g. "English (United States)", "日本語 (日本)") — copied verbatim
-              from claude.ai, including its casing/spacing, so users find the
-              exact label they see on the site. */}
+              from claude.ai, including its casing/spacing and list order, so
+              users find the exact label they see on the site. Auto stays first
+              as the default (empty locale -> resolveLocale(navigator.language)).
+              This is display order only; Auto resolution uses i18n.ts's
+              SUPPORTED_LOCALES, which is unaffected. */}
           <select value={settings.locale} onChange={(e) => onUpdate({ locale: e.target.value })}>
             <option value="">{t.languageAuto}</option>
             <option value="en-US">English (United States)</option>
-            <option value="ja-JP">日本語 (日本)</option>
             <option value="fr-FR">français (France)</option>
             <option value="de-DE">Deutsch (Deutschland)</option>
             <option value="hi-IN">हिन्दी (भारत)</option>
             <option value="id-ID">Indonesia (Indonesia)</option>
             <option value="it-IT">italiano (Italia)</option>
+            <option value="ja-JP">日本語 (日本)</option>
             <option value="ko-KR">한국어(대한민국)</option>
             <option value="pt-BR">português (Brasil)</option>
             <option value="es-419">español (Latinoamérica)</option>

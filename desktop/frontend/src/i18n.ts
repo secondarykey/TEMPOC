@@ -16,8 +16,29 @@
 
 import enUS from './locales/en-US.json';
 import jaJP from './locales/ja-JP.json';
+import frFR from './locales/fr-FR.json';
+import deDE from './locales/de-DE.json';
+import hiIN from './locales/hi-IN.json';
+import idID from './locales/id-ID.json';
+import itIT from './locales/it-IT.json';
+import koKR from './locales/ko-KR.json';
+import ptBR from './locales/pt-BR.json';
+import es419 from './locales/es-419.json';
+import esES from './locales/es-ES.json';
 
-export const SUPPORTED_LOCALES = ['en-US', 'ja-JP'] as const;
+export const SUPPORTED_LOCALES = [
+  'en-US',
+  'ja-JP',
+  'fr-FR',
+  'de-DE',
+  'hi-IN',
+  'id-ID',
+  'it-IT',
+  'ko-KR',
+  'pt-BR',
+  'es-419',
+  'es-ES',
+] as const;
 export type LocaleCode = (typeof SUPPORTED_LOCALES)[number];
 
 export const DEFAULT_LOCALE: LocaleCode = 'en-US';
@@ -156,6 +177,15 @@ function build(raw: RawMessages): Messages {
 const MESSAGES: Record<LocaleCode, Messages> = {
   'en-US': build(enUS),
   'ja-JP': build(jaJP),
+  'fr-FR': build(frFR),
+  'de-DE': build(deDE),
+  'hi-IN': build(hiIN),
+  'id-ID': build(idID),
+  'it-IT': build(itIT),
+  'ko-KR': build(koKR),
+  'pt-BR': build(ptBR),
+  'es-419': build(es419),
+  'es-ES': build(esES),
 };
 
 export function getMessages(locale: LocaleCode): Messages {

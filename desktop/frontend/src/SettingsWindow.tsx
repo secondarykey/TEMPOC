@@ -153,6 +153,15 @@ export function SettingsView({
             <option value="">{t.languageAuto}</option>
             <option value="en-US">English</option>
             <option value="ja-JP">日本語</option>
+            <option value="fr-FR">Français</option>
+            <option value="de-DE">Deutsch</option>
+            <option value="hi-IN">हिन्दी</option>
+            <option value="id-ID">Bahasa Indonesia</option>
+            <option value="it-IT">Italiano</option>
+            <option value="ko-KR">한국어</option>
+            <option value="pt-BR">Português (Brasil)</option>
+            <option value="es-419">Español (Latinoamérica)</option>
+            <option value="es-ES">Español (España)</option>
           </select>
         </label>
         <label className="settings-row">

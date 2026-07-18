@@ -3,7 +3,7 @@ package settings
 import (
 	"bytes"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -47,7 +47,7 @@ func (r *Repository) Load() (Settings, error) {
 	// encoding/json rejects; strip it so such a file still parses.
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	if err := json.Unmarshal(data, &s); err != nil {
-		log.Printf("tempoc: settings.json is invalid, using defaults: %v", err)
+		slog.Warn("settings.json is invalid, using defaults", "err", err)
 		return Default(), nil
 	}
 	return s, nil

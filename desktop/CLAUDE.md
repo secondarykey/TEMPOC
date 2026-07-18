@@ -295,7 +295,7 @@ go run ./_cmd/version.go -print  # 現在値を表示するだけ（CI 用）
 
 `frontend/package-lock.json` の `version` は**同期対象に含めていない**。ロック内の依存パッケージのバージョン行と同じインデント（6スペースの `"version": "..."`）で並んでおり、行パターンで置換すると全依存のバージョンを書き潰すため。ビルド時の `npm install`（`npm ci` ではない）が package.json に合わせて自動で書き直すので実害はなく、アプリの中身にも影響しない。
 
-`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`tempoc: starting v0.1.0`）に出る。
+`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`level=INFO msg=starting version=0.1.0`）に出る。
 
 ### exe 名（`APP_NAME`）
 

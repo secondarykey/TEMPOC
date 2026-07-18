@@ -3,12 +3,16 @@ package main
 import (
 	"embed"
 	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"changeme/settings"
 
@@ -166,12 +170,42 @@ func main() {
 	// All Go-side logging goes through this one slog logger, shared between
 	// the app (slog.SetDefault) and Wails (Options.Logger below — left unset,
 	// Wails logs where WE don't control: its own dev logger, or nowhere at
-	// all in production builds). logLevel comes from the `production` build
-	// tag (dev.go / production.go): Info in dev, Warn in release. slog.Debug
-	// calls (the inject.js relay, Wails per-request internals) never show by
-	// default; lower the level when debugging.
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: logLevel,
+	// all in production builds). Without -log, output goes to stderr at
+	// logLevel, which comes from the `production` build tag (dev.go /
+	// production.go): Info in dev, Warn in release. `-log debug|info|warn`
+	// redirects output to <YYYY-MM-DD>.log in the working directory at that
+	// level instead — the only way to see logs from a release exe (windowsgui,
+	// no console) and to see slog.Debug (the inject.js relay, Wails
+	// per-request internals) without editing code.
+	logFlag := flag.String("log", "", "write logs to <date>.log in the working directory at this level: debug, info or warn")
+	flag.Parse()
+
+	level := slog.Leveler(logLevel)
+	out := io.Writer(os.Stderr)
+	if *logFlag != "" {
+		switch strings.ToLower(*logFlag) {
+		case "debug":
+			level = slog.LevelDebug
+		case "info":
+			level = slog.LevelInfo
+		case "warn":
+			level = slog.LevelWarn
+		default:
+			fmt.Fprintf(os.Stderr, "tempoc: invalid -log level %q (want debug, info or warn)\n", *logFlag)
+			os.Exit(2)
+		}
+		// Append so several runs on the same day share one file. Held open
+		// for the process lifetime; the OS closes it on exit.
+		name := time.Now().Format("2006-01-02") + ".log"
+		if f, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err != nil {
+			// Logging must not take the app down — fall back to stderr.
+			fmt.Fprintf(os.Stderr, "tempoc: cannot open log file %s: %v\n", name, err)
+		} else {
+			out = f
+		}
+	}
+	logger := slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{
+		Level: level,
 	}))
 	slog.SetDefault(logger)
 

@@ -239,11 +239,12 @@ body { background: transparent; }
     padding: 1rem 1.1rem;
 }
 
-/* Title | Time | Usage — fixed column widths so the top and bottom bars line
-   up as columns. Tweak --reset-col / --util-col to taste. */
+/* Label | Usage — the head shows just what this window is and how much is
+   used, so the percentage isn't visually tied to anything else. The reset
+   date/time lives in the foot (the "time" row). Tweak --util-col to taste. */
 .usage-bar-head {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--reset-col, 8.5rem) var(--util-col, 4rem);
+    grid-template-columns: minmax(0, 1fr) var(--util-col, 4rem);
     align-items: baseline;
     column-gap: 0.6rem;
     margin-bottom: 0.6rem;
@@ -257,11 +258,10 @@ body { background: transparent; }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+/* The reset date/time, shown in the foot's left cell. */
 .usage-bar-reset {
-    text-align: right;
     color: var(--muted);
     font-weight: 400;
-    font-size: 0.82rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
@@ -335,13 +335,19 @@ body { background: transparent; }
     border-top: 4px solid var(--marker);
 }
 
+/* The "time" row: "<date> resets" (left) | remaining (right). Elapsed% is not
+   a cell here — it's the hover title on both. */
 .usage-bar-foot {
     display: flex;
     justify-content: space-between;
+    gap: 0.6rem;
     margin-top: 0.5rem;
     font-size: 0.78rem;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
+}
+.usage-bar-foot > :last-child {
+    text-align: right;
 }
 
 /* ── Size mode: Small ──────────────────────────────────────────────
@@ -355,7 +361,7 @@ body { background: transparent; }
 .mode-small .usage-bar-head { margin-bottom: 0.4rem; }
 .mode-small .usage-bar-label { font-size: 0.8rem; }
 .mode-small .usage-bar-util { font-size: 1rem; }
-.mode-small .usage-bar-reset { font-size: 0.72rem; }
+/* .usage-bar-reset now lives in the foot, so it inherits the foot's size. */
 .mode-small .usage-bar-foot { font-size: 0.7rem; }
 .mode-small .usage-bar-track { height: 8px; }
 .mode-small .usage-bar-marker { top: -1px; height: 10px; width: 1.5px; }

@@ -49,6 +49,8 @@ Chrome 拡張は claude.ai のページ内に content script を注入して `wi
 | `frontend/src/App.tsx` | URL クエリルーター（`?window=settings` で分岐）+ メインウィンドウ UI（タイトルバー・使用量バー） |
 | `frontend/src/SettingsWindow.tsx` | 設定ウィンドウ UI（`SettingsView`・ドラフト管理・Apply/Close） |
 | `frontend/src/theme.ts` | 共有テーマ色（`COLORS`）。App.tsx と SettingsWindow.tsx の両方から import |
+| `frontend/src/i18n.ts` | i18n ロジック。サポートロケール一覧（`SUPPORTED_LOCALES`）、設定値/`navigator.language` をサポートコードへ解決する `resolveLocale()`、JSON を読み込んで型付き `Messages` を組み立てる `getMessages()`。App.tsx と SettingsWindow.tsx の両方から import |
+| `frontend/src/locales/*.json` | ロケール別の文言リソース（`en-US.json` / `ja-JP.json`）。翻訳文字列の実体。パラメータ付きは `{token}` プレースホルダ、`durationUnits`/`ago` は Intl フォールバック用のデータ。i18n.ts の `RawMessages` 型に代入して**キー欠落はビルドで検出**（型チェックが落ちる）。**ルート `locales/` の同期コピーで直接編集不可**（`python3 scripts/sync_locales.py` で同期） |
 | `frontend/src/main.tsx` | React エントリ。`import '@wailsio/runtime'`（Frameless のドラッグに必須） |
 | `frontend/public/style.css` | スタイル |
 | `frontend/bindings/changeme/` | `wails3 generate bindings` の生成物（git 管理外。無ければ `desktop/` で `wails3 generate bindings` を実行して生成） |
@@ -167,7 +169,13 @@ postMessage の `type` で分岐:
 
 ### 使用量バー（`UsageBar`）
 
-上段を **タイトル｜リセット日時｜使用率** の 3 カラムグリッド（列幅固定で上下バーが揃う）。バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）:
+上段（`usage-bar-head`）は **ラベル｜使用率** の 2 カラム。使用率のすぐ左に日時が並ぶと「日付 xx%」に見えて何の％か紛らわしいため、**リセット日時は下段（`usage-bar-foot`）へ移動**した。下段は「時間の行」で **`{日付}にリセット`（左）｜`あと{残り時間}`（右）** の 2 セル（flex space-between。`resetsAt` / `remaining` は i18n テンプレート。左右で「リセット」の語を分担するため right は `でリセット` を含まない）。バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。
+
+**バーごとのツールチップ（`title`）**: `使用量｜リセット日付｜経過%｜残り` を改行区切りでまとめた `title` を各バーに付ける（`buildTip(util)` で生成、全サイズモード共通）。経過%は独立表示を持たずこのツールチップに集約。**リセット日付/経過/残りはタイムライン共有なので主バーと副バーで違うのは使用量の行だけ**。主バーは `tooltip`（=`buildTip(util)`）、**weekly_scoped 副バーは `secTooltip`（=`buildTip(secUtil)`）で自分の使用量を表示**する。
+- ノーマル/スモール: `.usage-bar` カードに主 `tooltip`、副バーの `usage-bar-head--sub` と `usage-bar-track-wrap` に `secTooltip` を付けて内側で上書き（ホバーで副バーは Scoped 値、それ以外は主バー値）。マーカー・フッターセルに個別 `title` は付けない。
+- コンパクト: 各行（`usage-bar-compact`）に自分のツールチップ（主行=`tooltip`、副行=`secTooltip`）。**ラベルの省略時 `title` は付けない**ため、行のどこ（ラベル含む）をホバーしてもこの値が出る。
+
+色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）:
 
 ```
 colorEnabled=false                                   → accent
@@ -202,7 +210,7 @@ diff = util - elapsed
 
 | キー | 既定 | 説明 |
 |---|---|---|
-| `locale` | `""`(Auto) | 日時・残り時間の表記ロケール。空は `navigator.language` に従う。設定ウィンドウの Language セレクタ（Auto / English / 日本語） |
+| `locale` | `""`(Auto) | **UI 言語**と日時・残り時間の表記ロケール。値は Claude 公式のロケールコード（地域サブタグ付き: `en-US` / `ja-JP`。一覧は `frontend/src/i18n.ts` の `SUPPORTED_LOCALES`、将来は公式の全コードへ拡張予定）。空は `navigator.language` を最寄りのサポートコードへ解決（`ja` → `ja-JP`、非対応言語 → `en-US`）。**UI 文言と Intl 日時整形の両方に同じ解決済みコードを使う**ため言語と日付書式がズレない。設定ウィンドウの Language セレクタは選択した瞬間に設定ウィンドウ自身へプレビューされ、メインへの反映は Apply 時 |
 | `theme` | `"system"` | UI テーマ: `system` / `light` / `dark`。`system` は `prefers-color-scheme` で OS 設定に追従（OS 側の切り替えもライブ反映）。`theme.ts` の `applyTheme()` が `<html>` に `data-theme="light\|dark"` を付与し、`style.css` の CSS 変数（`:root` = ダーク既定、`[data-theme="light"]` で上書き）が切り替わる。バー色（`COLORS`）も `var(--color-*)` 参照でテーマ追従。メイン・設定ウィンドウは別 JS コンテキストのため各自 `applyTheme()` を呼ぶ（設定ウィンドウは保存値で描画し、Apply 時に反映） |
 | `transparent` | `false` | ウィンドウ透明の On/Off（設定ウィンドウ General のチェックボックス） |
 | `alwaysOnTop` | `false` | 最前面表示の On/Off（タイトルバーのピン。永続化・起動時復元） |
@@ -210,7 +218,7 @@ diff = util - elapsed
 | `weeklyScopedWarning` / `weeklyScopedDanger` | `0` / `10` | weekly_scoped の色閾値 |
 | `weeklyScopedColorEnabled` | `true` | weekly_scoped の色分け有効 |
 | `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
-| `weeklyScopedLabel` | `"Weekly (scoped)"` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可） |
+| `weeklyScopedLabel` | `""` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可）。空は UI 言語の既定ラベル（`i18n.ts` の `weeklyScopedFallback`）に従う |
 
 設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / Formatting / 5-Hour / 7-Day / (weekly_scoped 存在時のみ) Weekly (scoped) / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped セクションは **データが存在するときだけ表示**され、5h/7d と同じ設定に加え Label（名称）入力を持つ（`hasWeeklyScoped` prop で制御。設定ウィンドウ自身も `tempoc:usage` を購読して導出）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
 
@@ -219,6 +227,45 @@ diff = util - elapsed
 1. `settings/settings.go` の `Settings` にフィールド追加（+ 必要なら `Default()`）
 2. `desktop/` で `wails3 generate bindings -ts`（`frontend/bindings/changeme/settings/` が再生成される）
 3. `SettingsWindow.tsx` の `SettingsView` に UI を追加し、`App.tsx`（`UsageBar` などの描画側）へ反映
+
+## 国際化（i18n）
+
+UI 文言と日時・残り時間の表記をロケール対応にする仕組み。メイン・設定ウィンドウの両方が使う。
+
+### 構成
+
+| 要素 | 役割 |
+|---|---|
+| `frontend/src/locales/<code>.json` | **翻訳文字列の実体**。ロケールごとに1ファイル（`en-US.json` / `ja-JP.json`）。UI ロジックからは分離されている。**ルート `locales/`（マスター）の同期コピーなので直接編集しない** — ルートを編集して `python3 scripts/sync_locales.py` を実行する（[`../CLAUDE.md`](../CLAUDE.md) の Shared locale resources 参照） |
+| `frontend/src/i18n.ts` | ロジック。JSON を import し、`resolveLocale()`・`getMessages()`・型定義（`Messages` / `RawMessages`）を提供 |
+
+### ロケールコード
+
+内部で持つのは **Claude 公式のロケールコード（地域サブタグ付き: `en-US` / `ja-JP`）**。`SUPPORTED_LOCALES`（`i18n.ts`）が一覧で、将来は公式の全コードへ拡張する前提。設定 `locale` の空値（Auto）は `resolveLocale()` が `navigator.language` を最寄りのサポートコードへ解決する（完全一致 → 主言語一致 `ja`→`ja-JP` / `en-GB`→`en-US` → 既定 `en-US`）。**解決済みの1コードを UI 文言と Intl 日時整形の両方に渡す**ため、言語と日付書式がズレない。
+
+### JSON の中身と組み立て
+
+`getMessages(locale)` が JSON（`RawMessages`）を消費側 API（`Messages`）へ組み立てる。3 種類ある:
+
+- **プレーン文字列**（大多数）— そのまま `Messages` のフィールドになる（例: `"settings": "設定"`）
+- **パラメータ付き**（`updated` / `elapsed` / `resetsIn` / `resetsTooltip`）— JSON では `{token}` プレースホルダ入りテンプレート（例: `"updated": "{when}に更新"`）。`i18n.ts` の `interpolate()` が `{key}` を埋め、`Messages` では**関数**として公開される（`t.updated("2分前")` → `"2分前に更新"`）。言語ごとに token の位置を変えられるのが要点
+- **Intl フォールバック用データ**（`durationUnits` / `ago`）— `Intl.DurationFormat` / `Intl.RelativeTimeFormat` が使えない環境（WebView2 では基本的に発生しない保険）向け。組み立てロジック（どの単位を出すか、複数形の選択）は言語非依存なので `i18n.ts` に置き、**単位ラベルだけ** JSON に持つ。`ago` は CLDR 準拠で `one`/`other` の複数形を持ち、`value === 1` で選択
+
+### 型安全（キー欠落はビルドで落ちる）
+
+各 JSON を `RawMessages` 型へ代入しているため、**あるロケールでキーが欠けると `tsc`（＝ビルド）が失敗する**。ランタイムで undefined 文字列が出ることはない。消費側は `Messages` 型経由なので、文言の追加時に `App.tsx` / `SettingsWindow.tsx` のどこで使うかも型で導かれる。
+
+### ネイティブウィンドウタイトル（タスクバー / Alt-Tab）
+
+Frameless のタイトルバーは React 描画だが、**タスクバー・Alt-Tab に出るネイティブタイトルは Wails が持つ**。これを **Go にロケール解決を持たせず**ローカライズするため、設定ウィンドウ自身の JS コンテキストが `Window.SetTitle(\`TEMPOC ${t.settingsTitle}\`)` を `useEffect` で呼び、**ドラフト言語（プレビュー中の UI 言語）に追従**させる。`main.go` 側の `Title: "TEMPOC Settings"` は **React マウント前のフォールバックだけ**（マウント後に上書きされる）。`Locale` が空（Auto）でもフロントは `navigator.language` を解決済みなので、Go 側の言語判定は不要。メインウィンドウのタイトルは `TEMPOC`（ブランド名）でローカライズ対象外。**傍受ウィンドウのタイトル（`… — TEMPOC interceptor`）は Go が動的に組み立てる**（claude.ai を読むため React 不在で `SetTitle` できない）ので現状は英語のまま — 必要ならローカライズ語をフロントから Go へ渡す方式にする。
+
+### 言語を追加する手順
+
+1. ルート `locales/<code>.json` を新規作成（既存 JSON をコピーして全キーを翻訳。キーが揃っていないと `sync_locales.py` と `tsc` の両方で落ちるのでコピーが安全）し、`python3 scripts/sync_locales.py` で両モジュールへ同期
+2. `i18n.ts` の `SUPPORTED_LOCALES` に `<code>` を追加し、`import` と `build(...)` を1行ずつ足す（拡張側は `chrome-extension/src/i18n.js` の `TEMPOC_LOCALES` — [`../chrome-extension/CLAUDE.md`](../chrome-extension/CLAUDE.md) 参照）
+3. `SettingsWindow.tsx` の Language セレクタに `<option>` を追加（表示名は各言語の自称表記のまま。例: `English` / `日本語`）
+
+**文言キーの追加時**（新しい UI 文字列を足すとき）は、`RawMessages`（`i18n.ts`）にフィールドを足し、**ルート `locales/` の全 JSON に同じキーを足して同期**する（欠けると `sync_locales.py` と `tsc` の両方が指摘する）。パラメータ付きなら `Messages` 側の関数シグネチャと `build()` の組み立ても足す。拡張のオプションページだけが使うキー（`previewLabel` / `refreshHelp` / `savedToast`）も `RawMessages` に列挙してあり、デスクトップの型チェックが全キーの充足を保証する。
 
 ## 開発・ビルド
 
@@ -233,6 +280,8 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
 - **`wails3 dev` は bindings を内部で自動再生成する**（`build/Taskfile.yml` の `generate:bindings`、`-clean=true -ts`）。dev の前に手動で generate する必要はない
 - 手動で generate する場合（`npx tsc --noEmit` の前など）は **`-ts` を付ける**（dev と同一フォーマット＝TypeScript クラス）。**`-i` は付けない** — interface 生成になり、`new Settings()`（App.tsx）が `TS2693: 'Settings' only refers to a type` で壊れる。引数なし（JS 生成）でもコンパイルは通るが、dev と生成物が入れ替わり続けるので避ける
 - Go の Service やバインド対象の型を変えたら bindings の再生成を忘れない。忘れると無言で壊れる
+- **ログは slog 1本**（`slog.SetDefault` と `application.Options.Logger` に同一ロガー。渡さないと Wails は制御外の出力先に流す）。レベルは `production` ビルドタグで切り替え（`dev.go` / `production.go`）: 開発 = Info、正規ビルド（`wails3 task windows:build`）= Warn
+- **`-log debug|info|warn` でファイル出力**: 指定時のみ、標準エラーの代わりに**実行位置（カレントディレクトリ）の `YYYY-MM-DD.log`** へ指定レベルで出力（同日は追記）。正規 exe（windowsgui でコンソール無し）からログを取る手段であり、`slog.Debug`（inject.js の debug 中継等）を見る手段でもある。フラグ無しの既定では Debug はどこにも出ない
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
 
 ## バージョン管理・アプリ情報
@@ -248,7 +297,7 @@ go run ./_cmd/version.go -print  # 現在値を表示するだけ（CI 用）
 
 `frontend/package-lock.json` の `version` は**同期対象に含めていない**。ロック内の依存パッケージのバージョン行と同じインデント（6スペースの `"version": "..."`）で並んでおり、行パターンで置換すると全依存のバージョンを書き潰すため。ビルド時の `npm install`（`npm ci` ではない）が package.json に合わせて自動で書き直すので実害はなく、アプリの中身にも影響しない。
 
-`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`tempoc: starting v0.1.0`）に出る。
+`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`level=INFO msg=starting version=0.1.0`。開発ビルドのみ — 下記ログ方針参照）に出る。
 
 ### exe 名（`APP_NAME`）
 

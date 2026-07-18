@@ -357,23 +357,23 @@
 <body>
   <div class="layout">
     <section id="sec-hour5">
-      <h2>5-Hour Window</h2>
+      <h2 data-i18n="sectionHour5">5-Hour Window</h2>
       <div class="row">
-        <label for="showHour5">Show</label>
+        <label for="showHour5" data-i18n="show">Show</label>
         <input type="checkbox" id="showHour5">
       </div>
       <div class="row">
-        <label for="showRemainHour5">Show remaining time</label>
+        <label for="showRemainHour5" data-i18n="showRemaining">Show remaining time</label>
         <input type="checkbox" id="showRemainHour5">
       </div>
       <div class="row">
-        <label for="hour5ColorEnabled">Color threshold</label>
+        <label for="hour5ColorEnabled" data-i18n="colorThreshold">Color threshold</label>
         <input type="checkbox" id="hour5ColorEnabled" checked>
       </div>
       <div class="dual-range" id="hour5Range">
         <div class="dual-range__values">
-          <span class="warning-label">Warning: <b>0</b>% over</span>
-          <span class="danger-label">Danger: <b>10</b>% over</span>
+          <span class="warning-label"><span data-i18n="warning">Warning</span>: <b>0</b></span>
+          <span class="danger-label"><span data-i18n="danger">Danger</span>: <b>10</b></span>
         </div>
         <div class="dual-range__track">
           <div class="dual-range__fill"></div>
@@ -385,18 +385,18 @@
     </section>
 
     <section id="sec-general">
-      <h2>General</h2>
+      <h2 data-i18n="sectionGeneral">General</h2>
       <div class="rows">
         <div class="row">
-          <label for="durationStyle">Duration style</label>
+          <label for="durationStyle" data-i18n="durationStyle">Duration style</label>
           <select id="durationStyle">
-            <option value="narrow">Narrow (3d 4h)</option>
-            <option value="short" selected>Short (3 days 4 hr.)</option>
-            <option value="long">Long (3 days 4 hours)</option>
+            <option value="narrow" data-i18n="durationNarrow">Narrow (3d 4h)</option>
+            <option value="short" selected data-i18n="durationShort">Short (3 days 4 hr.)</option>
+            <option value="long" data-i18n="durationLong">Long (3 days 4 hours)</option>
           </select>
         </div>
         <div class="row">
-          <label for="decimalPlaces">Decimal places</label>
+          <label for="decimalPlaces" data-i18n="decimalPlaces">Decimal places</label>
           <select id="decimalPlaces">
             <option value="0">0</option>
             <option value="1">1</option>
@@ -405,29 +405,29 @@
           </select>
         </div>
         <div class="row">
-          <label for="percentFormat">Percent format</label>
+          <label for="percentFormat" data-i18n="percentFormat">Percent format</label>
           <input type="text" id="percentFormat" value="{}%" style="text-align: right;">
         </div>
         <div class="row row--preview">
-          <div class="preview-label">Preview</div>
+          <div class="preview-label" data-i18n="previewLabel">Preview</div>
           <div id="formatPreview" class="preview-value"></div>
         </div>
         <div class="row row--refresh">
           <div class="row-refresh__top">
-            <label for="enableRefresh">Auto-refresh</label>
+            <label for="enableRefresh" data-i18n="autoRefresh">Auto-refresh</label>
             <input type="checkbox" id="enableRefresh">
             <input type="number" id="refreshMinutes" min="1" max="60" value="2" disabled>
-            <span class="unit">min</span>
+            <span class="unit" data-i18n="minutesUnit">min</span>
           </div>
-          <div class="help-text">Refreshes display independently of API calls</div>
+          <div class="help-text" data-i18n="refreshHelp">Refreshes display independently of API calls</div>
         </div>
         <div class="row">
-          <label>Utilization floor</label>
+          <label data-i18n="sectionUtilization">Utilization Threshold</label>
         </div>
         <div class="dual-range dual-range--util" id="utilizationRange">
           <div class="dual-range__values">
-            <span class="warning-label">Warning: <b>98</b>%</span>
-            <span class="danger-label">Danger: <b>100</b>%</span>
+            <span class="warning-label"><span data-i18n="warning">Warning</span>: <b>98</b></span>
+            <span class="danger-label"><span data-i18n="danger">Danger</span>: <b>100</b></span>
           </div>
           <div class="dual-range__track">
             <div class="dual-range__fill"></div>
@@ -439,23 +439,23 @@
     </section>
 
     <section id="sec-day7">
-      <h2>7-Day Window</h2>
+      <h2 data-i18n="sectionDay7">7-Day Window</h2>
       <div class="row">
-        <label for="showDay7">Show</label>
+        <label for="showDay7" data-i18n="show">Show</label>
         <input type="checkbox" id="showDay7">
       </div>
       <div class="row">
-        <label for="showRemainDay7">Show remaining time</label>
+        <label for="showRemainDay7" data-i18n="showRemaining">Show remaining time</label>
         <input type="checkbox" id="showRemainDay7">
       </div>
       <div class="row">
-        <label for="day7ColorEnabled">Color threshold</label>
+        <label for="day7ColorEnabled" data-i18n="colorThreshold">Color threshold</label>
         <input type="checkbox" id="day7ColorEnabled" checked>
       </div>
       <div class="dual-range" id="day7Range">
         <div class="dual-range__values">
-          <span class="warning-label">Warning: <b>0</b>% over</span>
-          <span class="danger-label">Danger: <b>10</b>% over</span>
+          <span class="warning-label"><span data-i18n="warning">Warning</span>: <b>0</b></span>
+          <span class="danger-label"><span data-i18n="danger">Danger</span>: <b>10</b></span>
         </div>
         <div class="dual-range__track">
           <div class="dual-range__fill"></div>
@@ -468,6 +468,7 @@
   </div>
 
   <div id="status"></div>
+  <script src="i18n.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

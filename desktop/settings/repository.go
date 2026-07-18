@@ -1,7 +1,9 @@
 package settings
 
 import (
+	"bytes"
 	"encoding/json"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -24,9 +26,13 @@ func NewRepository() (*Repository, error) {
 	return &Repository{path: filepath.Join(configDir, "settings.json")}, nil
 }
 
-// Load reads settings.json, returning Default() if the file does not exist.
-// It starts from Default() and unmarshals the file over it so that any
-// fields missing from an older settings.json keep sensible defaults.
+// Load reads settings.json, returning Default() if the file does not exist
+// or does not parse. It starts from Default() and unmarshals the file over it
+// so that any fields missing from an older settings.json keep sensible
+// defaults. Only I/O errors (an existing file that cannot be read) are
+// returned; a corrupt file is not an error, because callers up to the
+// frontend treat Load errors as fatal and a hand-edited settings.json must
+// never leave the app blank.
 func (r *Repository) Load() (Settings, error) {
 	s := Default()
 
@@ -37,8 +43,12 @@ func (r *Repository) Load() (Settings, error) {
 	if err != nil {
 		return s, err
 	}
+	// Editors like Notepad may save the file with a UTF-8 BOM, which
+	// encoding/json rejects; strip it so such a file still parses.
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	if err := json.Unmarshal(data, &s); err != nil {
-		return Default(), err
+		slog.Warn("settings.json is invalid, using defaults", "err", err)
+		return Default(), nil
 	}
 	return s, nil
 }

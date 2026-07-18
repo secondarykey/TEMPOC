@@ -4,6 +4,7 @@ import { SettingsService } from '../bindings/changeme'
 import { Settings } from '../bindings/changeme/settings'
 import SettingsWindow from './SettingsWindow'
 import { COLORS, applyTheme } from './theme'
+import { resolveLocale, getMessages, type LocaleCode, type Messages } from './i18n'
 
 function PinIcon() {
   return (
@@ -38,46 +39,46 @@ function GearIcon() {
 // region; the gear button and window controls opt out with
 // --wails-draggable: no-drag. The gear opens the (now separate) settings
 // window rather than toggling an in-window view.
-function TitleBar({ onOpenSettings, onRefresh, onTop, onToggleOnTop, lastUpdatedLabel }: { onOpenSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void; lastUpdatedLabel: string | null }) {
+function TitleBar({ onOpenSettings, onRefresh, onTop, onToggleOnTop, lastUpdatedLabel, t }: { onOpenSettings: () => void; onRefresh: () => void; onTop: boolean; onToggleOnTop: () => void; lastUpdatedLabel: string | null; t: Messages }) {
   return (
     <header className="titlebar" style={{ '--wails-draggable': 'drag' } as React.CSSProperties}>
       <div className="titlebar-left" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
           className="titlebar-gear"
-          aria-label="Settings"
-          title="Settings"
+          aria-label={t.settings}
+          title={t.settings}
           onClick={onOpenSettings}
         >
           <GearIcon />
         </button>
         <button
           className="titlebar-refresh"
-          aria-label="Refresh"
-          title="Refresh usage"
+          aria-label={t.refresh}
+          title={t.refreshUsage}
           onClick={onRefresh}
         >
           <RefreshIcon />
         </button>
         {lastUpdatedLabel && (
-          <span className="titlebar-updated" style={{ '--wails-draggable': 'drag' } as React.CSSProperties} title="When the displayed usage was last fetched">
-            Updated {lastUpdatedLabel}
+          <span className="titlebar-updated" style={{ '--wails-draggable': 'drag' } as React.CSSProperties} title={t.updatedTooltip}>
+            {t.updated(lastUpdatedLabel)}
           </span>
         )}
       </div>
       <div className="titlebar-controls" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
           className={`pin${onTop ? ' is-active' : ''}`}
-          aria-label="Always on top"
+          aria-label={t.alwaysOnTop}
           aria-pressed={onTop}
-          title={onTop ? 'Always on top: on' : 'Always on top: off'}
+          title={onTop ? t.alwaysOnTopOn : t.alwaysOnTopOff}
           onClick={onToggleOnTop}
         >
           <PinIcon />
         </button>
-        <button aria-label="Minimise" onClick={() => Window.Minimise()}>&#x2015;</button>
+        <button aria-label={t.minimise} onClick={() => Window.Minimise()}>&#x2015;</button>
         {/* tempoc:quit (not Window.Close()) so Go can save the window position
             while the frameless window still reports reliable coordinates. */}
-        <button aria-label="Close" className="close" onClick={() => Events.Emit('tempoc:quit')}>&#x2715;</button>
+        <button aria-label={t.close} className="close" onClick={() => Events.Emit('tempoc:quit')}>&#x2715;</button>
       </div>
     </header>
   );
@@ -105,10 +106,6 @@ const WINDOW_MS: Record<WindowKind, number> = {
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
-// Effective locale for date/duration formatting: the explicit setting, or the
-// OS/browser locale when set to "auto" (empty).
-const resolveLocale = (settings: Settings): string => settings.locale || navigator.language;
-
 function formatPercent(n: number, settings: Settings): string {
   const fmt = settings.percentFormat || '{}%';
   return fmt.replace('{}', n.toFixed(settings.decimalPlaces));
@@ -124,8 +121,9 @@ function formatUtil(n: number): string {
 // Format a remaining duration using Intl.DurationFormat (ported from
 // content.js's createDuration + redraw). Intl.DurationFormat isn't in the
 // TS lib yet, so it's accessed dynamically and wrapped in try/catch, falling
-// back to a simple "1d 3h 20m" string when unsupported or given bad input.
-function formatRemaining(ms: number, durationStyle: string, locale: string): string {
+// back to a localized "1d 3h 20m"-style string when unsupported or given
+// bad input.
+function formatRemaining(ms: number, durationStyle: string, locale: LocaleCode, t: Messages): string {
   if (ms < 0) ms = 0;
   const duration = {
     days: Math.floor(ms / (1000 * 60 * 60 * 24)),
@@ -138,21 +136,17 @@ function formatRemaining(ms: number, durationStyle: string, locale: string): str
     const df = new DurationFormat(locale, { style: durationStyle });
     return df.format(duration);
   } catch {
-    const parts: string[] = [];
-    if (duration.days) parts.push(`${duration.days}d`);
-    if (duration.days || duration.hours) parts.push(`${duration.hours}h`);
-    parts.push(`${duration.minutes}m`);
-    return parts.join(' ');
+    return t.durationFallback(duration.days, duration.hours, duration.minutes);
   }
 }
 
 // Format how long ago the usage data was last received, as a localized
 // relative string (e.g. "5 sec. ago", "2 min. ago"). Uses the same `now` tick
 // that drives the Elapsed bars, so it stays fresh without re-fetching. Falls
-// back to a plain English string when Intl.RelativeTimeFormat is unavailable.
-function formatLastUpdated(sinceMs: number, locale: string): string {
+// back to a localized plain string when Intl.RelativeTimeFormat is unavailable.
+function formatLastUpdated(sinceMs: number, locale: LocaleCode, t: Messages): string {
   const sec = Math.max(0, Math.floor(sinceMs / 1000));
-  const pick = (): [number, Intl.RelativeTimeFormatUnit] => {
+  const pick = (): [number, 'second' | 'minute' | 'hour' | 'day'] => {
     if (sec < 60) return [sec, 'second'];
     const min = Math.floor(sec / 60);
     if (min < 60) return [min, 'minute'];
@@ -165,7 +159,7 @@ function formatLastUpdated(sinceMs: number, locale: string): string {
     const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' });
     return rtf.format(-value, unit);
   } catch {
-    return value === 0 ? 'just now' : `${value} ${unit}${value === 1 ? '' : 's'} ago`;
+    return value === 0 ? t.justNow : t.agoFallback(value, unit);
   }
 }
 
@@ -173,7 +167,7 @@ function formatLastUpdated(sinceMs: number, locale: string): string {
 // content.js: month/day/weekday + hour/minute). This is the value that isn't
 // shown on Claude's own usage page — knowing exactly which day and hour the
 // window resets is the point of this app.
-function formatResetDate(d: Date, locale: string): string {
+function formatResetDate(d: Date, locale: LocaleCode): string {
   try {
     return d.toLocaleString(locale, {
       month: 'numeric',
@@ -225,6 +219,8 @@ function UsageBar({
   settings,
   secondary,
   sizeMode,
+  locale,
+  t,
 }: {
   label: string;
   kind: WindowKind;
@@ -233,6 +229,8 @@ function UsageBar({
   settings: Settings;
   secondary?: { label: string; kind: WindowKind; data: UsageWindow | undefined };
   sizeMode: SizeMode;
+  locale: LocaleCode;
+  t: Messages;
 }) {
   const util = clamp(data?.utilization ?? 0);
   const resets = data?.resets_at ? new Date(data.resets_at) : null;
@@ -255,43 +253,57 @@ function UsageBar({
   const secUtil = secondary ? clamp(secondary.data?.utilization ?? 0) : 0;
   const secColor = secondary ? computeColor(secUtil, elapsed, secondary.kind, settings) : '';
 
+  // Build a hover tooltip for a given utilisation: usage, reset date, elapsed
+  // and remaining, one line each. The reset date / elapsed / remaining are the
+  // window's shared timeline, so the only line that differs between the primary
+  // bar and the nested weekly_scoped bar is usage — hence the util parameter
+  // and the separate secTooltip. Each bar shows its own figures (scoped ⇒
+  // scoped usage), so the tooltip is attached per bar, not to the whole card.
+  const buildTip = (u: number): string => {
+    const lines = [t.usage(formatUtil(u))];
+    if (started && resets) {
+      lines.push(t.resetsAt(formatResetDate(resets, locale)));
+      lines.push(t.elapsed(formatPercent(elapsed, settings)));
+      lines.push(t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t)));
+    } else {
+      lines.push(t.notStarted);
+    }
+    return lines.join('\n');
+  };
+  const tooltip = buildTip(util);
+  const secTooltip = secondary ? buildTip(secUtil) : '';
+
   // Compact mode: a single line per window, "label | elapsed% | utilization%"
   // (utilization last, at the eye-catching right edge), instead of the
-  // track/marker/foot layout. The reset date and remaining time
-  // are tucked into the row's title tooltip rather than shown as columns, so
-  // the row stays as small as possible. The fixed value columns (style.css
-  // --compact-*-col) keep cells lined up across every row — including across
-  // cards, since each card is its own grid. The secondary (weekly_scoped) row
-  // shares the primary's timeline: its tooltip repeats the primary's and its
-  // elapsed cell stays empty.
+  // track/marker/foot layout. The reset date and remaining time aren't shown as
+  // columns (so the row stays as small as possible) — they, and everything
+  // else, live in the row's hover tooltip. Each row carries its own window's
+  // tooltip (primary row `tooltip`, weekly_scoped row `secTooltip`), so the
+  // scoped row reports the scoped figures. The label has no title of its own,
+  // so hovering anywhere on the row — label included — shows that tooltip. The
+  // fixed value columns (style.css --compact-*-col) keep cells lined up across
+  // every row (and across cards, each its own grid); the secondary row shares
+  // the primary's timeline, so its elapsed cell stays empty.
   if (sizeMode === 'compact') {
-    const locale = resolveLocale(settings);
-    const resetInfo =
-      started && resets
-        ? `Resets ${formatResetDate(resets, locale)} (${formatRemaining(remainMs, settings.durationStyle, locale)})`
-        : 'not started';
-    const row = (lbl: string, u: number, c: string, sub?: boolean) => (
-      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={resetInfo}>
-        <span className="usage-bar-label" title={lbl}>{lbl}</span>
-        {/* The sub row (weekly_scoped) shares the primary's timeline, so
-            repeating its elapsed% is just noise — leave the cell empty. */}
+    const row = (lbl: string, u: number, c: string, tip: string, sub?: boolean) => (
+      <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={tip}>
+        <span className="usage-bar-label">{lbl}</span>
         <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatPercent(elapsed, settings) : '—'}</span>
         <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
       </div>
     );
     return (
       <div className="usage-bar">
-        {row(label, util, color)}
-        {secondary && row(secondary.label, secUtil, secColor, true)}
+        {row(label, util, color, tooltip)}
+        {secondary && row(secondary.label, secUtil, secColor, secTooltip, true)}
       </div>
     );
   }
 
   return (
-    <div className="usage-bar">
+    <div className="usage-bar" title={tooltip}>
       <div className="usage-bar-head">
         <span className="usage-bar-label">{label}</span>
-        <span className="usage-bar-reset">{started && resets ? formatResetDate(resets, resolveLocale(settings)) : ''}</span>
         <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
       </div>
       <div className="usage-bar-track-wrap">
@@ -299,18 +311,19 @@ function UsageBar({
           <div className="usage-bar-fill" style={{ width: `${util}%`, background: color }} />
         </div>
         {started && (
-          <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} title={`Elapsed ${formatPercent(elapsed, settings)}`} />
+          <div className="usage-bar-marker" style={{ left: `${elapsed}%` }} />
         )}
       </div>
 
+      {/* The scoped sub-bar's own parts carry secTooltip, overriding the card's
+          primary tooltip on hover so the scoped bar reports scoped figures. */}
       {secondary && (
         <>
-          <div className="usage-bar-head usage-bar-head--sub">
+          <div className="usage-bar-head usage-bar-head--sub" title={secTooltip}>
             <span className="usage-bar-label">{secondary.label}</span>
-            <span className="usage-bar-reset" />
             <span className="usage-bar-util" style={{ color: secColor }}>{formatUtil(secUtil)}</span>
           </div>
-          <div className="usage-bar-track-wrap">
+          <div className="usage-bar-track-wrap" title={secTooltip}>
             <div className="usage-bar-track">
               <div className="usage-bar-fill" style={{ width: `${secUtil}%`, background: secColor }} />
             </div>
@@ -319,14 +332,19 @@ function UsageBar({
         </>
       )}
 
+      {/* Foot is the "time" row: "<date> resets" (left) and remaining (right).
+          Elapsed% isn't shown here — it's in the card's hover tooltip
+          (`tooltip` above) along with usage and the reset date. */}
       <div className="usage-bar-foot">
-        <span>Elapsed {started ? formatPercent(elapsed, settings) : '—'}</span>
+        <span className="usage-bar-reset">
+          {started && resets ? t.resetsAt(formatResetDate(resets, locale)) : ''}
+        </span>
         <span>
           {started
             ? showRemain
-              ? `resets in ${formatRemaining(remainMs, settings.durationStyle, resolveLocale(settings))}`
+              ? t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t))
               : ''
-            : 'not started'}
+            : t.notStarted}
         </span>
       </div>
     </div>
@@ -345,10 +363,20 @@ function MainWindow() {
   const [authRequired, setAuthRequired] = useState(false);
 
   useEffect(() => {
-    SettingsService.Get().then((s) => {
-      setSettings(s);
-      setSettingsLoaded(true);
-    });
+    SettingsService.Get()
+      .then((s) => {
+        setSettings(s);
+        setSettingsLoaded(true);
+      })
+      .catch((err) => {
+        // Backend Load() already falls back to defaults on a corrupt
+        // settings.json, so this only guards against I/O errors (e.g. an
+        // unreadable file). Without it settingsLoaded stays false forever
+        // and the main window renders no usage bars at all.
+        console.error('tempoc: failed to load settings, using defaults', err);
+        setSettings(new Settings());
+        setSettingsLoaded(true);
+      });
   }, []);
 
   useEffect(() => {
@@ -552,8 +580,11 @@ function MainWindow() {
     });
   }, []);
 
+  const locale = resolveLocale(settings.locale);
+  const t = getMessages(locale);
+
   const lastUpdatedLabel =
-    lastUpdated != null ? formatLastUpdated(now - lastUpdated, resolveLocale(settings)) : null;
+    lastUpdated != null ? formatLastUpdated(now - lastUpdated, locale, t) : null;
 
   const rootModeClass = sizeMode === 'small' ? ' mode-small' : sizeMode === 'compact' ? ' mode-compact' : '';
 
@@ -565,6 +596,7 @@ function MainWindow() {
         onTop={settings.alwaysOnTop}
         onToggleOnTop={() => updateSettings({ alwaysOnTop: !settings.alwaysOnTop })}
         lastUpdatedLabel={lastUpdatedLabel}
+        t={t}
       />
       <main className="app">
         {authRequired ? (
@@ -572,32 +604,34 @@ function MainWindow() {
           // reports the session is gone (401 or a /login redirect), the bars
           // would only show outdated numbers, so fall back to the login prompt.
           <div className="app-placeholder">
-            Login required
+            {t.loginRequired}
             <br />
             <button className="login-button" onClick={() => Events.Emit('tempoc:login')}>
-              Log in to Claude
+              {t.loginToClaude}
             </button>
           </div>
         ) : !usage ? (
           <p className="app-placeholder">
-            Waiting for usage data<span className="loading-dots" aria-hidden="true" />
+            {t.waitingForUsage}<span className="loading-dots" aria-hidden="true" />
           </p>
         ) : (
           <div className="usage-bars" ref={measureRef}>
             {settings.showHour5 && (
-              <UsageBar label="Current session" kind="five_hour" data={usage.five_hour} now={now} settings={settings} sizeMode={sizeMode} />
+              <UsageBar label={t.currentSession} kind="five_hour" data={usage.five_hour} now={now} settings={settings} sizeMode={sizeMode} locale={locale} t={t} />
             )}
             {settings.showDay7 ? (
               <UsageBar
-                label="Weekly limit"
+                label={t.weeklyLimit}
                 kind="seven_day"
                 data={usage.seven_day}
                 now={now}
                 settings={settings}
                 sizeMode={sizeMode}
+                locale={locale}
+                t={t}
                 secondary={
                   settings.showWeeklyScoped && weeklyScopedHasData
-                    ? { label: settings.weeklyScopedLabel || 'Weekly (scoped)', kind: 'weekly_scoped', data: usage.weekly_scoped }
+                    ? { label: settings.weeklyScopedLabel || t.weeklyScopedFallback, kind: 'weekly_scoped', data: usage.weekly_scoped }
                     : undefined
                 }
               />
@@ -605,12 +639,14 @@ function MainWindow() {
               settings.showWeeklyScoped &&
               weeklyScopedHasData && (
                 <UsageBar
-                  label={settings.weeklyScopedLabel || 'Weekly (scoped)'}
+                  label={settings.weeklyScopedLabel || t.weeklyScopedFallback}
                   kind="weekly_scoped"
                   data={usage.weekly_scoped}
                   now={now}
                   settings={settings}
                   sizeMode={sizeMode}
+                  locale={locale}
+                  t={t}
                 />
               )
             )}

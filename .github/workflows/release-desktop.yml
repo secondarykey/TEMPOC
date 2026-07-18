@@ -14,7 +14,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Fails fast, before any toolchain setup. The exe's baked-in metadata
       # comes from build/windows/info.json (generated from build/config.yml),
@@ -42,12 +42,12 @@ jobs:
         shell: bash
         run: grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: desktop/go.mod
           cache-dependency-path: desktop/go.sum
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: "22"
           cache: npm
@@ -78,7 +78,7 @@ jobs:
         run: Compress-Archive -Path bin\tempoc.exe -DestinationPath "$env:GITHUB_WORKSPACE\tempoc-desktop-${{ steps.version.outputs.version }}-windows-amd64.zip"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "TEMPOC Desktop v${{ steps.version.outputs.version }}"
           files: "tempoc-desktop-${{ steps.version.outputs.version }}-windows-amd64.zip"

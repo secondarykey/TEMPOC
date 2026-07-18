@@ -3,11 +3,16 @@ package main
 import (
 	"embed"
 	"encoding/json"
-	"log"
+	"flag"
+	"fmt"
+	"io"
+	"log/slog"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"changeme/settings"
 
@@ -162,16 +167,59 @@ func init() {
 }
 
 func main() {
+	// All Go-side logging goes through this one slog logger, shared between
+	// the app (slog.SetDefault) and Wails (Options.Logger below — left unset,
+	// Wails logs where WE don't control: its own dev logger, or nowhere at
+	// all in production builds). Without -log, output goes to stderr at
+	// logLevel, which comes from the `production` build tag (dev.go /
+	// production.go): Info in dev, Warn in release. `-log debug|info|warn`
+	// redirects output to <YYYY-MM-DD>.log in the working directory at that
+	// level instead — the only way to see logs from a release exe (windowsgui,
+	// no console) and to see slog.Debug (the inject.js relay, Wails
+	// per-request internals) without editing code.
+	logFlag := flag.String("log", "", "write logs to <date>.log in the working directory at this level: debug, info or warn")
+	flag.Parse()
+
+	level := slog.Leveler(logLevel)
+	out := io.Writer(os.Stderr)
+	if *logFlag != "" {
+		switch strings.ToLower(*logFlag) {
+		case "debug":
+			level = slog.LevelDebug
+		case "info":
+			level = slog.LevelInfo
+		case "warn":
+			level = slog.LevelWarn
+		default:
+			fmt.Fprintf(os.Stderr, "tempoc: invalid -log level %q (want debug, info or warn)\n", *logFlag)
+			os.Exit(2)
+		}
+		// Append so several runs on the same day share one file. Held open
+		// for the process lifetime; the OS closes it on exit.
+		name := time.Now().Format("2006-01-02") + ".log"
+		if f, err := os.OpenFile(name, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644); err != nil {
+			// Logging must not take the app down — fall back to stderr.
+			fmt.Fprintf(os.Stderr, "tempoc: cannot open log file %s: %v\n", name, err)
+		} else {
+			out = f
+		}
+	}
+	logger := slog.New(slog.NewTextHandler(out, &slog.HandlerOptions{
+		Level: level,
+	}))
+	slog.SetDefault(logger)
+
 	// The embedded file keeps its trailing newline.
 	version = strings.TrimSpace(version)
-	log.Printf("tempoc: starting v%s", version)
+	slog.Info("starting", "version", version)
 
 	// claude holds the interception window; wired up after the window exists.
 	claude := &claudeCtl{}
 
 	settingsRepo, err := settings.NewRepository()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to init settings repository", "err", err)
+		os.Exit(1)
 	}
 	settingsSvc := NewSettingsService(settingsRepo)
 
@@ -182,7 +230,7 @@ func main() {
 	// re-injected live (see the ExecJS caveat in the claude.win comment).
 	cfg, err := settingsRepo.Load()
 	if err != nil {
-		log.Printf("tempoc: failed to load settings, using defaults: %v", err)
+		slog.Warn("failed to load settings, using defaults", "err", err)
 		cfg = settings.Default()
 	}
 	// Saved native window geometry (separate file from user settings — see
@@ -202,6 +250,7 @@ func main() {
 	app = application.New(application.Options{
 		Name:        "TEMPOC",
 		Description: "Claude usage monitor",
+		Logger:      logger,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
@@ -221,7 +270,7 @@ func main() {
 
 			var msg usageMessage
 			if err := json.Unmarshal([]byte(message), &msg); err != nil {
-				log.Printf("tempoc: failed to parse raw message: %v", err)
+				slog.Warn("failed to parse raw message", "err", err)
 				return
 			}
 
@@ -243,16 +292,16 @@ func main() {
 			}
 			switch msg.Type {
 			case "debug":
-				log.Printf("tempoc[debug]: %s", msg.Msg)
+				slog.Debug(msg.Msg, "source", "inject.js")
 			case "auth-required":
 				// Claude redirected to its login page. Don't pop the window up
 				// on our own — tell the frontend, which shows a "Log in to
 				// Claude" button; clicking it emits tempoc:login (handled
 				// below) to reveal the window.
-				log.Printf("tempoc: login required, notifying frontend")
+				slog.Info("login required, notifying frontend")
 				app.Event.Emit("tempoc:auth-required", nil)
 			case "usage":
-				log.Printf("tempoc: received usage payload from %s", originInfo.Origin)
+				slog.Info("received usage payload", "origin", originInfo.Origin)
 				app.Event.Emit("tempoc:usage", UsagePayload{
 					SevenDay:     msg.SevenDay,
 					FiveHour:     msg.FiveHour,
@@ -353,6 +402,10 @@ func main() {
 	// clicked) and unpinned from any specific usage-data state, unlike
 	// claude.win's auto-show-on-auth-required behaviour.
 	settingsWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		// Pre-mount fallback only: SettingsWindow.tsx sets the native title
+		// itself via Window.SetTitle() from the localized messages, so the
+		// taskbar/Alt-Tab title follows the UI language without Go resolving a
+		// locale. This English value shows only until React mounts.
 		Title:     "TEMPOC Settings",
 		Frameless: true,
 		Width:     520,
@@ -406,7 +459,7 @@ func main() {
 		}
 		w, _ := mainWin.Size()
 		if err := settings.SaveWindowState(settings.WindowState{MainX: x, MainY: y, MainW: w}); err != nil {
-			log.Printf("tempoc: failed to save window state: %v", err)
+			slog.Error("failed to save window state", "err", err)
 		}
 	}
 
@@ -509,6 +562,7 @@ func main() {
 
 	// Run the application. This blocks until the application has been exited.
 	if err := app.Run(); err != nil {
-		log.Fatal(err)
+		slog.Error("application exited with error", "err", err)
+		os.Exit(1)
 	}
 }

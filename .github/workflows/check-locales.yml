@@ -1,0 +1,37 @@
+name: Check locales
+
+# Guard for the shared locale resources: locales/ at the repo root is the
+# master, and both modules hold committed copies written by
+# scripts/sync_locales.py. This fails when a copy was edited directly or a
+# master edit was committed without running the sync script.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "locales/**"
+      - "desktop/frontend/src/locales/**"
+      - "chrome-extension/src/locales/**"
+      - "scripts/sync_locales.py"
+      - ".github/workflows/check-locales.yml"
+  pull_request:
+    paths:
+      - "locales/**"
+      - "desktop/frontend/src/locales/**"
+      - "chrome-extension/src/locales/**"
+      - "scripts/sync_locales.py"
+      - ".github/workflows/check-locales.yml"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Verify locale copies match the master
+        run: python scripts/sync_locales.py --check

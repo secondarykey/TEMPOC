@@ -27,7 +27,7 @@ jobs:
       # full one: a second checkout into the same workspace reuses the existing
       # clone, so `core.sparseCheckout` survives and the rest of the tree never
       # appears.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ secrets.GH_PAT }}
@@ -46,7 +46,7 @@ jobs:
         run: bash .github/scripts/verify-pat.sh "${{ github.repository }}" release-extension.yml
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.x"
 

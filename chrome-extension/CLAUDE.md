@@ -96,11 +96,12 @@ These CSS path selectors target Claude's existing progress bar sections within t
 
 ```js
 const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child > div:last-child';
-const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div";
-const Day7ElementPATH  = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
+const UsageRowFilter = ":has(> div:nth-child(2) > div > div > div)";
+const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div" + UsageRowFilter;
+const Day7ElementPATH  = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div" + UsageRowFilter;
 ```
 
-The usage page is now rendered as a modal dialog at `https://claude.ai/new#settings/usage` (previously a full page at `/settings/usage`). Section 1 = "Current session" (5-hour window), Section 2 = "Weekly limits" (7-day window).
+The usage page is now rendered as a modal dialog at `https://claude.ai/new#settings/usage` (previously a full page at `/settings/usage`). Section 1 = "Plan usage limits" (5-hour "Current session" window), Section 2 = "Weekly limits" (7-day window). Within a section, a row is located by structure (`:has()` matching the meter markup), not by `nth-child` position, because claude.ai sometimes prepends banners to a section (e.g. the July 2026 "Your limits are temporarily boosted." notice plus a "Learn more" link, which shifted every row down by two and broke the 7-day selector). `querySelector` takes the first structural match, so the extra weekly rows per model family ("Fable" etc.) below the leading "All models" row are skipped naturally.
 
 ### Options page i18n
 

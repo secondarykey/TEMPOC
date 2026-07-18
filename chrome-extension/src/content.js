@@ -2,9 +2,12 @@ const Day7ProgressElementId = "day7Progress";
 const Hour5ProgressElementId = "hour5Progress";
 
 const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child > div:last-child';
-const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div";
+// 使用量行 = 2番目の子にメーター(div>div>div)を持つ行。告知バナー等が
+// セクション先頭に挿入されても位置がずれないよう nth-child ではなく :has で特定する
+const UsageRowFilter = ":has(> div:nth-child(2) > div > div > div)";
+const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div" + UsageRowFilter;
 const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div > div";
-const Day7ElementPATH = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div:nth-child(2)";
+const Day7ElementPATH = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div" + UsageRowFilter;
 const Day7ElementBarPATH = Day7ElementPATH + " > div:nth-child(2) > div > div > div";
 
 var day7Elm = undefined;

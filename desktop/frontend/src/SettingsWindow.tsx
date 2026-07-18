@@ -409,6 +409,15 @@ export default function SettingsWindow() {
   // follow the language selected in the (unsaved) draft.
   const t = getMessages(resolveLocale(draft.locale));
 
+  // The frameless titlebar above is React, but the *native* window title
+  // (taskbar / Alt-Tab) is owned by Wails. This window's own JS context can
+  // set it directly, so it stays localized without Go needing to resolve a
+  // locale. Follows the draft language, matching the previewed UI. Format
+  // mirrors the previous hard-coded "TEMPOC Settings".
+  useEffect(() => {
+    Window.SetTitle(`TEMPOC ${t.settingsTitle}`);
+  }, [t.settingsTitle]);
+
   return (
     <div className="root">
       <SettingsTitleBar t={t} />

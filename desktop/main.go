@@ -353,6 +353,10 @@ func main() {
 	// clicked) and unpinned from any specific usage-data state, unlike
 	// claude.win's auto-show-on-auth-required behaviour.
 	settingsWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
+		// Pre-mount fallback only: SettingsWindow.tsx sets the native title
+		// itself via Window.SetTitle() from the localized messages, so the
+		// taskbar/Alt-Tab title follows the UI language without Go resolving a
+		// locale. This English value shows only until React mounts.
 		Title:     "TEMPOC Settings",
 		Frameless: true,
 		Width:     520,

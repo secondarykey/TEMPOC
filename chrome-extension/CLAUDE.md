@@ -40,6 +40,8 @@ Release tags for this module are `extension-v*` (e.g. `extension-v1.3.0`), and `
 | `src/bridge.js` | ISOLATED | Reads `chrome.storage` and forwards settings to MAIN world via custom events |
 | `src/content.js` | MAIN | Injects UI and intercepts `window.fetch` |
 | `src/options.html` / `src/options.js` | Options page | Settings UI |
+| `src/i18n.js` | Options page | Locale resolution and message loading/applying for the options page |
+| `src/locales/*.json` | Options page | UI strings, one file per locale. **Synced copies of the repo-root `locales/` master — never edit here** (see the root `CLAUDE.md`, "Shared locale resources") |
 | `src/tempoc.png` | — | Extension icon |
 
 `content.js` must run in `world: "MAIN"` to monkey-patch `window.fetch`. Since MAIN world cannot access `chrome.storage` or `chrome.runtime`, `bridge.js` runs in ISOLATED world as a relay.
@@ -99,6 +101,15 @@ const Day7ElementPATH  = DialogSectionsPATH + " > section:nth-child(2) > div:nth
 ```
 
 The usage page is now rendered as a modal dialog at `https://claude.ai/new#settings/usage` (previously a full page at `/settings/usage`). Section 1 = "Current session" (5-hour window), Section 2 = "Weekly limits" (7-day window).
+
+### Options page i18n
+
+Only the options page has translatable strings — the injected bars render dates and durations via `Intl` and carry no fixed text. `chrome.i18n` / `_locales` is deliberately **not** used: its language is pinned to the browser UI language, while TEMPOC follows the user's claude.ai display language.
+
+- **Locale selection**: `content.js` intercepts `/api/account_profile` and dispatches the account `locale`; `bridge.js` stores it as `chrome.storage.local.detectedLocale` (this relay predates i18n — the options page already used it for `Intl` preview formatting). `options.js` resolves it with `tempocResolveLocale()` (exact match → primary-language match → `en-US`) and falls back to `navigator.language` when claude.ai has not been visited yet.
+- **Applying**: elements carry `data-i18n="key"` attributes; `tempocApplyI18n()` replaces their text once the locale JSON is fetched. The English text baked into `options.html` is the pre-load fallback and must be kept in sync with `locales/en-US.json`.
+- **Loading**: `i18n.js` fetches `locales/<code>.json` relative to the options page (extension pages may fetch their own packaged resources; no `web_accessible_resources` needed). Supported codes are listed in `TEMPOC_LOCALES`, which must match the desktop's `SUPPORTED_LOCALES`.
+- **Adding a language or key**: edit the repo-root `locales/` master and run `python3 scripts/sync_locales.py`; for a new language also add its code to `TEMPOC_LOCALES` (and the desktop's `SUPPORTED_LOCALES`). Key parity across locales is enforced by the sync script (there is no build step here to catch it).
 
 ### Colors
 

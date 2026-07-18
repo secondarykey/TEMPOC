@@ -34,15 +34,29 @@ const PREVIEW_DURATION  = { days: 2, hours: 3, minutes: 45 };
 
 let detectedLocale = navigator.language;
 
+// Messages of the resolved UI locale (i18n.js). Null until loaded; the
+// English text baked into options.html is the fallback in the meantime.
+let t = null;
+
+async function applyLocale() {
+  const locale = tempocResolveLocale(detectedLocale);
+  t = await tempocLoadMessages(locale);
+  document.documentElement.lang = locale;
+  document.title = "TEMPOC " + t.settingsTitle;
+  tempocApplyI18n(t);
+}
+
 chrome.storage.local.get({ detectedLocale: navigator.language }, (s) => {
   detectedLocale = s.detectedLocale;
   updatePreview();
+  applyLocale();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.detectedLocale) {
     detectedLocale = changes.detectedLocale.newValue;
     updatePreview();
+    applyLocale();
   }
 });
 
@@ -98,7 +112,7 @@ function broadcast() {
 
 function save() {
   chrome.storage.sync.set(getCurrentSettings(), () => {
-    status.textContent = "✓  Saved";
+    status.textContent = "✓  " + (t ? t.savedToast : "Saved");
     status.classList.remove("hide");
     status.classList.add("show");
     clearTimeout(status._timer);

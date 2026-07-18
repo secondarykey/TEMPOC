@@ -22,9 +22,21 @@ This repository holds **two independent modules**. They share no code and have s
 | `.github/workflows/` | CI for both modules. Each file is named `<job>-<module>.yml` and its tag pattern / `paths:` filter keeps it from firing for the other module |
 | `.github/variables` | Pinned tool versions shared by workflows (currently `WAILS_VERSION`). Loaded with `grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"` — plain `cat` would choke on the file's comments |
 | `.claude/skills/` | `wails3` (Wails v3 practices) and `tempoc-desktop-verify` (driving the built desktop exe over CDP) |
+| `locales/` | **Master** of the locale JSON files shared by both modules (one file per locale, flat keys with `{token}` templates). Edit translations here only |
+| `scripts/` | Repo-wide tooling. `sync_locales.py` validates `locales/` (key/placeholder parity across all files) and rewrites both modules' committed copies |
 | `README.md` | User-facing entry point: what TEMPOC is, the shared bar/color concept, and the privacy & disclaimer terms that cover both modules. Per-module install and settings docs live in each module's own `README.md`, which this one links to |
 
 `README.md` and `LICENSE` stay at the root and cover both modules. Keep anything user-facing that is true of both — the concept, privacy, disclaimer, license — in the root `README.md` only, and anything install- or settings-specific in the module's `README.md` only, so the two never drift into contradicting each other.
+
+## Shared locale resources
+
+The i18n message JSON is the one asset both modules consume. The master is `locales/` at the root; `desktop/frontend/src/locales/` and `chrome-extension/src/locales/` are **committed copies** written by `python3 scripts/sync_locales.py` — committed because neither module can reach outside its own directory when packaged (the extension zip is just `src/`, with no build step). Never edit the copies directly; `.github/workflows/check-locales.yml` fails the build if a copy drifts from the master.
+
+Consequences to keep in mind:
+
+- A translation change is one commit that touches both modules, so it triggers **both** versionup workflows and releases both modules. That is usually what you want for wording fixes; there is no way to ship a shared-string change to only one module.
+- Key completeness is enforced twice: `sync_locales.py` compares every locale against `en-US.json` (keys and `{token}` placeholders), and the desktop build re-checks typed keys via `RawMessages` in `desktop/frontend/src/i18n.ts`. Keys used only by the extension (e.g. `previewLabel`, `refreshHelp`, `savedToast`) are still listed in `RawMessages` so the desktop type check covers them too.
+- Adding a language or a key therefore spans both modules by design: edit `locales/`, run the sync script, and follow each module's guide for the code side (`SUPPORTED_LOCALES` in `desktop/frontend/src/i18n.ts`, `TEMPOC_LOCALES` in `chrome-extension/src/i18n.js`).
 
 ## Versioning
 

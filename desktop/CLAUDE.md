@@ -280,6 +280,7 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
 - **`wails3 dev` は bindings を内部で自動再生成する**（`build/Taskfile.yml` の `generate:bindings`、`-clean=true -ts`）。dev の前に手動で generate する必要はない
 - 手動で generate する場合（`npx tsc --noEmit` の前など）は **`-ts` を付ける**（dev と同一フォーマット＝TypeScript クラス）。**`-i` は付けない** — interface 生成になり、`new Settings()`（App.tsx）が `TS2693: 'Settings' only refers to a type` で壊れる。引数なし（JS 生成）でもコンパイルは通るが、dev と生成物が入れ替わり続けるので避ける
 - Go の Service やバインド対象の型を変えたら bindings の再生成を忘れない。忘れると無言で壊れる
+- **ログは slog 1本**（`slog.SetDefault` と `application.Options.Logger` に同一ロガー。渡さないと Wails は制御外の出力先に流す）。レベルは `production` ビルドタグで切り替え（`loglevel_dev.go` / `loglevel_production.go`）: 開発 = Info、正規ビルド（`wails3 task windows:build`）= Warn。`slog.Debug`（inject.js の debug 中継等）は既定では出ない — 見たいときはハンドラの Level を一時的に下げる
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
 
 ## バージョン管理・アプリ情報
@@ -295,7 +296,7 @@ go run ./_cmd/version.go -print  # 現在値を表示するだけ（CI 用）
 
 `frontend/package-lock.json` の `version` は**同期対象に含めていない**。ロック内の依存パッケージのバージョン行と同じインデント（6スペースの `"version": "..."`）で並んでおり、行パターンで置換すると全依存のバージョンを書き潰すため。ビルド時の `npm install`（`npm ci` ではない）が package.json に合わせて自動で書き直すので実害はなく、アプリの中身にも影響しない。
 
-`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`level=INFO msg=starting version=0.1.0`）に出る。
+`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`level=INFO msg=starting version=0.1.0`。開発ビルドのみ — 下記ログ方針参照）に出る。
 
 ### exe 名（`APP_NAME`）
 

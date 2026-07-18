@@ -163,18 +163,16 @@ func init() {
 }
 
 func main() {
-	// All Go-side logging goes through slog. The app's own logger runs at
-	// LevelDebug so the inject.js debug relay stays visible. Wails gets a
-	// separate logger (same format, same destination) capped at LevelInfo:
-	// its per-request DEBUG logs (Asset Request, handleWebViewRequest, …)
-	// would otherwise drown the app's output, and without Options.Logger a
-	// production build would discard Wails logs — errors included — entirely.
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelDebug,
-	})))
-	wailsLogger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+	// All Go-side logging goes through this one slog logger, shared between
+	// the app (slog.SetDefault) and Wails (Options.Logger below — left unset,
+	// Wails logs where WE don't control: its own dev logger, or nowhere at
+	// all in production builds). Normal operation runs at LevelInfo, so
+	// slog.Debug calls (the inject.js relay, Wails per-request internals)
+	// stay silent; lower the level here when debugging.
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	}))
+	slog.SetDefault(logger)
 
 	// The embedded file keeps its trailing newline.
 	version = strings.TrimSpace(version)
@@ -217,7 +215,7 @@ func main() {
 	app = application.New(application.Options{
 		Name:        "TEMPOC",
 		Description: "Claude usage monitor",
-		Logger:      wailsLogger,
+		Logger:      logger,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},

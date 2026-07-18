@@ -9,16 +9,19 @@ on:
   # workflow file, so a manual trigger is the way to retry after a CI fix.
   workflow_dispatch:
 
-# Shared with versionup-extension.yml: a push touching both modules starts both
-# workflows, and each one branches from main, merges a PR and moves main. They
-# touch different files, but serialising them keeps the two merges from racing.
-concurrency:
-  group: versionup
-  cancel-in-progress: false
-
 jobs:
   versionup:
     if: "!contains(github.event.head_commit.message, '[skip versionup]')"
+    # Shared with versionup-extension.yml: a push touching both modules starts
+    # both workflows, and each one branches from main, merges a PR and moves
+    # main. They touch different files, but serialising them keeps the two
+    # merges from racing. Job-level (not workflow-level) on purpose: the `if`
+    # above is evaluated first, so a run skipped by [skip versionup] never
+    # claims the group's single waiting slot — a workflow-level group let the
+    # bump-merge push's do-nothing run evict the other module's queued run.
+    concurrency:
+      group: versionup
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write

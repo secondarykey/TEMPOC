@@ -147,21 +147,23 @@ export function SettingsView({
         <h3 className="settings-section-title">{t.sectionFormatting}</h3>
         <label className="settings-row">
           <span>{t.language}</span>
-          {/* Language names stay in their own language (English / 日本語) —
-              standard practice so users can always find their own. */}
+          {/* Language names are the site's own region-qualified endonyms
+              (e.g. "English (United States)", "日本語 (日本)") — copied verbatim
+              from claude.ai, including its casing/spacing, so users find the
+              exact label they see on the site. */}
           <select value={settings.locale} onChange={(e) => onUpdate({ locale: e.target.value })}>
             <option value="">{t.languageAuto}</option>
-            <option value="en-US">English</option>
-            <option value="ja-JP">日本語</option>
-            <option value="fr-FR">Français</option>
-            <option value="de-DE">Deutsch</option>
-            <option value="hi-IN">हिन्दी</option>
-            <option value="id-ID">Bahasa Indonesia</option>
-            <option value="it-IT">Italiano</option>
-            <option value="ko-KR">한국어</option>
-            <option value="pt-BR">Português (Brasil)</option>
-            <option value="es-419">Español (Latinoamérica)</option>
-            <option value="es-ES">Español (España)</option>
+            <option value="en-US">English (United States)</option>
+            <option value="ja-JP">日本語 (日本)</option>
+            <option value="fr-FR">français (France)</option>
+            <option value="de-DE">Deutsch (Deutschland)</option>
+            <option value="hi-IN">हिन्दी (भारत)</option>
+            <option value="id-ID">Indonesia (Indonesia)</option>
+            <option value="it-IT">italiano (Italia)</option>
+            <option value="ko-KR">한국어(대한민국)</option>
+            <option value="pt-BR">português (Brasil)</option>
+            <option value="es-419">español (Latinoamérica)</option>
+            <option value="es-ES">español (España)</option>
           </select>
         </label>
         <label className="settings-row">

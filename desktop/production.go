@@ -4,5 +4,5 @@ package main
 
 import "log/slog"
 
-// Release builds only surface warnings and errors; see loglevel_dev.go.
+// Release builds only surface warnings and errors; see dev.go.
 const logLevel = slog.LevelWarn

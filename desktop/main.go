@@ -167,9 +167,9 @@ func main() {
 	// the app (slog.SetDefault) and Wails (Options.Logger below — left unset,
 	// Wails logs where WE don't control: its own dev logger, or nowhere at
 	// all in production builds). logLevel comes from the `production` build
-	// tag (loglevel_dev.go / loglevel_production.go): Info in dev, Warn in
-	// release. slog.Debug calls (the inject.js relay, Wails per-request
-	// internals) never show by default; lower the level when debugging.
+	// tag (dev.go / production.go): Info in dev, Warn in release. slog.Debug
+	// calls (the inject.js relay, Wails per-request internals) never show by
+	// default; lower the level when debugging.
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: logLevel,
 	}))

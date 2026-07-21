@@ -22,7 +22,7 @@
   "remaining": "{remain} 남음",
   "notStarted": "시작 안 됨",
 
-  "durationUnits": { "day": "일", "hour": "시간", "minute": "분" },
+  "durationUnits": { "day": "일", "hour": "시간", "minute": "분", "second": "초" },
   "justNow": "방금",
   "ago": {
     "second": { "one": "{value}초 전", "other": "{value}초 전" },

@@ -22,7 +22,7 @@
   "remaining": "{remain} शेष",
   "notStarted": "शुरू नहीं हुआ",
 
-  "durationUnits": { "day": "दि", "hour": "घं", "minute": "मि" },
+  "durationUnits": { "day": "दि", "hour": "घं", "minute": "मि", "second": "से" },
   "justNow": "अभी-अभी",
   "ago": {
     "second": { "one": "{value} सेकंड पहले", "other": "{value} सेकंड पहले" },

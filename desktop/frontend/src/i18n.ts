@@ -84,7 +84,7 @@ type RawMessages = {
   remaining: string;
   notStarted: string;
 
-  durationUnits: { day: string; hour: string; minute: string };
+  durationUnits: { day: string; hour: string; minute: string; second: string };
   justNow: string;
   ago: { second: PluralForms; minute: PluralForms; hour: PluralForms; day: PluralForms };
 
@@ -147,7 +147,7 @@ export type Messages = Omit<
   remaining: (remain: string) => string;
   // Fallbacks for when Intl.DurationFormat / Intl.RelativeTimeFormat are
   // unavailable in the WebView; assembled from durationUnits / ago.
-  durationFallback: (days: number, hours: number, minutes: number) => string;
+  durationFallback: (days: number, hours: number, minutes: number, seconds: number) => string;
   agoFallback: (value: number, unit: keyof RawMessages['ago']) => string;
 };
 
@@ -166,7 +166,10 @@ function build(raw: RawMessages): Messages {
     elapsed: (pct) => interpolate(elapsed, { pct }),
     resetsAt: (date) => interpolate(resetsAt, { date }),
     remaining: (remain) => interpolate(remaining, { remain }),
-    durationFallback: (days, hours, minutes) => {
+    durationFallback: (days, hours, minutes, seconds) => {
+      // Under a minute the caller counts down in seconds, so show that alone
+      // rather than a permanent "0m".
+      if (!days && !hours && !minutes) return `${seconds}${durationUnits.second}`;
       const parts: string[] = [];
       if (days) parts.push(`${days}${durationUnits.day}`);
       if (days || hours) parts.push(`${hours}${durationUnits.hour}`);

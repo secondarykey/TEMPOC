@@ -187,6 +187,7 @@ diff = util - elapsed
 ```
 色: accent `#7dd3fc` / warning `#fbbf24` / danger `#ef4444`。
 
+- **残り時間の表記**: 残り1分未満は**秒でカウントダウン**する（`formatRemaining`）。`Intl.DurationFormat` は 0 の単位を省くため、日/時/分だけを渡すと最後の1分は空文字になり「あと」「left」だけが残ってしまう。この間だけ `{ seconds }` を渡し、`durationFallback` も日/時/分がすべて 0 なら秒だけを返す
 - **使用率の表記**: `utilization` は API 上つねに整数（`percent`）なので `formatUtil()` で `100%` のように整数表示する（`decimalPlaces` / `percentFormat` は適用しない）。一方 **Elapsed（経過%）は計算値**なので `decimalPlaces` / `percentFormat` を適用（`formatPercent()`）。
 - **weekly_scoped のネスト表示**: `seven_day` と `weekly_scoped` はリセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけ。そこで **Weekly limit カード（`seven_day`）の中に副バーとしてネスト**する（`UsageBar` の `secondary` prop）。タイムライン（リセット日時・経過マーカー・残り時間）は主バーと共有し、副バーはラベル・使用率・色のみ独立。表示は `showDay7 && showWeeklyScoped` かつデータ存在時のみ。5時間バーは独立カードのまま。
 - **ウィンドウ高さの動的調整**: 副バー（weekly_scoped）が表示されるとき `Window.SetSize(520, 396)`、それ以外は `340`（`MainWindow` の `useEffect` が `weeklyBarVisible` を監視）。

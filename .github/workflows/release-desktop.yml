@@ -6,23 +6,20 @@ on:
       - "desktop-v*"
 
 jobs:
-  release:
-    # The app is Windows-only (WebView2), and the .syso resource step plus the
-    # frontend build are driven by the wails3 CLI on the target OS.
-    runs-on: windows-latest
-    permissions:
-      contents: write
-
+  # Fails fast, before any build runner spins up. The exe/app version is baked
+  # from build assets (build/windows/info.json etc., generated from config.yml),
+  # not from the tag -- so a mismatch would ship a binary whose version
+  # disagrees with the release it is attached to. Reads only committed text, so
+  # it needs no toolchain and runs on the cheapest runner.
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
 
-      # Fails fast, before any toolchain setup. The exe's baked-in metadata
-      # comes from build/windows/info.json (generated from build/config.yml),
-      # not from the tag — so a mismatch would ship an exe whose version
-      # disagrees with the release it is attached to.
       - name: Resolve and verify version
         id: version
-        shell: bash
         run: |
           tag_version="${GITHUB_REF_NAME#desktop-v}"
           file_version="$(cat desktop/version)"
@@ -37,7 +34,38 @@ jobs:
           fi
           echo "version=$file_version" >> "$GITHUB_OUTPUT"
 
-      # Only the KEY=VALUE lines: $GITHUB_ENV rejects the file's comments.
+  # One leg per target OS. Wails builds natively on each runner (no Docker
+  # cross-compilation): the platform Taskfiles dispatch to their `build:native`
+  # path when the host OS matches. fail-fast is off so one platform breaking
+  # still surfaces the others' results; `release` needs the whole matrix, so a
+  # single failure blocks the release rather than shipping a partial one.
+  #
+  # NOTE: the desktop app's usage interception is WebView2-specific (Windows
+  # only). The macOS/Linux binaries compile and launch but the claude.ai bridge
+  # (window.chrome.webview) is inert there, so they show no usage yet. They are
+  # published so the build stays green cross-platform and as a base for porting
+  # the bridge to WKWebView/WebKitGTK. See desktop/CLAUDE.md.
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          # macos-15, not macos-latest: `generate:icons` runs `actool`, which
+          # crashes under Xcode 26 on the macos-26 image. See the wails3 skill's
+          # references/pitfalls.md #11.
+          - os: macos-15
+            target: darwin
+          - os: ubuntu-latest
+            target: linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # Only the KEY=VALUE lines: $GITHUB_ENV rejects the file's comments. bash
+      # is present on every runner (Git Bash on Windows), so one step covers all.
       - name: Load pinned tool versions
         shell: bash
         run: grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"
@@ -53,8 +81,18 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/frontend/package-lock.json
 
+      # `go install` of the CLI compiles wails/v3, whose internal/operatingsystem
+      # needs GTK4/WebKitGTK via cgo on Linux -- so this is required before the
+      # CLI install below, not just for the GUI build. The package list lives
+      # next to WAILS_VERSION because the two must move together.
+      - name: Install Linux build dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${WAILS_LINUX_DEPS}
+
       # GOPATH/bin is added to PATH explicitly rather than assumed: `go install`
-      # drops wails3.exe there and the next step invokes it by name.
+      # drops wails3 there and the next steps invoke it by name.
       - name: Install wails3 CLI
         shell: bash
         run: |
@@ -63,24 +101,76 @@ jobs:
           "$(go env GOPATH)/bin/wails3" version
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      # Pulls in the frontend deps, regenerates the bindings (gitignored) and
-      # the .syso, then builds bin/tempoc.exe. See desktop/CLAUDE.md.
-      - name: Build
+      # Each task pulls in the frontend deps, regenerates the bindings
+      # (gitignored) and its platform assets, then builds. See desktop/CLAUDE.md.
+      - name: Build (Windows)
+        if: matrix.target == 'windows'
         shell: bash
         working-directory: desktop
         run: wails3 task windows:build
 
+      - name: Build (macOS universal)
+        if: matrix.target == 'darwin'
+        shell: bash
+        working-directory: desktop
+        run: wails3 task darwin:package:universal
+
+      - name: Build (Linux)
+        if: matrix.target == 'linux'
+        shell: bash
+        working-directory: desktop
+        run: wails3 task linux:build
+
       # Compress-Archive rather than `zip`: the Windows runners ship 7z and
       # PowerShell, but Git Bash there has no zip binary.
-      - name: Create zip
+      - name: Package artifact (Windows)
+        if: matrix.target == 'windows'
         shell: pwsh
         working-directory: desktop
-        run: Compress-Archive -Path bin\tempoc.exe -DestinationPath "$env:GITHUB_WORKSPACE\tempoc-desktop-${{ steps.version.outputs.version }}-windows-amd64.zip"
+        run: Compress-Archive -Path bin\tempoc.exe -DestinationPath "$env:GITHUB_WORKSPACE\tempoc-desktop-${{ needs.verify.outputs.version }}-windows-amd64.zip"
+
+      # ditto (not zip) preserves the .app bundle's symlinks, code signature and
+      # extended attributes.
+      - name: Package artifact (macOS)
+        if: matrix.target == 'darwin'
+        shell: bash
+        working-directory: desktop
+        run: ditto -c -k --keepParent bin/tempoc.app "$GITHUB_WORKSPACE/tempoc-desktop-${{ needs.verify.outputs.version }}-darwin-universal.zip"
+
+      # The bare binary dynamically links GTK4/WebKitGTK, which the user installs
+      # from their distro. A .deb/AppImage would carry that metadata; the tarball
+      # is the low-friction first cut.
+      - name: Package artifact (Linux)
+        if: matrix.target == 'linux'
+        shell: bash
+        working-directory: desktop
+        run: tar -czf "$GITHUB_WORKSPACE/tempoc-desktop-${{ needs.verify.outputs.version }}-linux-amd64.tar.gz" -C bin tempoc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: tempoc-desktop-*
+          if-no-files-found: error
+
+  # Single job so the three artifacts land on one release without the matrix
+  # legs racing to create it. Gated on the whole build matrix, so a partial
+  # release never happens.
+  release:
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          name: "TEMPOC Desktop v${{ steps.version.outputs.version }}"
-          files: "tempoc-desktop-${{ steps.version.outputs.version }}-windows-amd64.zip"
+          name: "TEMPOC Desktop v${{ needs.verify.outputs.version }}"
+          files: "tempoc-desktop-*"
           generate_release_notes: true
           draft: true

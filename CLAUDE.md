@@ -45,7 +45,7 @@ The two modules version independently, and **each release tag is namespaced by m
 | Module | Tag | Source of truth | Release artifact |
 |---|---|---|---|
 | `chrome-extension/` | `extension-v*` | `chrome-extension/version` | zip of `src/` |
-| `desktop/` | `desktop-v*` | `desktop/version` | per-OS: `tempoc.exe` zip (Windows), `.app` zip (macOS universal), binary tarball (Linux) |
+| `desktop/` | `desktop-v*` | `desktop/version` | per-OS: `tempoc.exe` zip (Windows), `.app` zip (macOS arm64), binary tarball (Linux) |
 
 Tags of the form `v*` are pre-split extension releases (up to `v1.2.6`). They are left in place but trigger nothing; only `chrome-extension/scripts/versionup.py` still reads them, so that the next version computed after `v1.2.6` is `1.2.7`. Do not add new `v*` tags.
 

@@ -109,11 +109,14 @@ jobs:
         working-directory: desktop
         run: wails3 task windows:build
 
-      - name: Build (macOS universal)
+      # Native arm64 only. macos-15 is Apple Silicon; an amd64 slice would be a
+      # CGO cross-compile against the universal SDK (possible, but unverified
+      # here and moot while the app is non-functional on macOS).
+      - name: Build (macOS arm64)
         if: matrix.target == 'darwin'
         shell: bash
         working-directory: desktop
-        run: wails3 task darwin:package:universal
+        run: wails3 task darwin:package
 
       - name: Build (Linux)
         if: matrix.target == 'linux'
@@ -135,7 +138,7 @@ jobs:
         if: matrix.target == 'darwin'
         shell: bash
         working-directory: desktop
-        run: ditto -c -k --keepParent bin/tempoc.app "$GITHUB_WORKSPACE/tempoc-desktop-${{ needs.verify.outputs.version }}-darwin-universal.zip"
+        run: ditto -c -k --keepParent bin/tempoc.app "$GITHUB_WORKSPACE/tempoc-desktop-${{ needs.verify.outputs.version }}-darwin-arm64.zip"
 
       # The bare binary dynamically links GTK4/WebKitGTK, which the user installs
       # from their distro. A .deb/AppImage would carry that metadata; the tarball

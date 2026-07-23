@@ -194,17 +194,25 @@ tasks:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts
 
   generate:icons:
-    summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).
+    summary: Generates Windows `.ico` and Mac `.icns` from appicon.png.
+    # Deliberately NO -iconcomposerinput/-macassetdir. Those build an Assets.car
+    # asset catalog, and whenever one exists `update build-assets` writes
+    # CFBundleIconName into Info.plist — which macOS prefers over
+    # CFBundleIconFile (icons.icns). The template's .icon source was still the
+    # stock Wails logo, so that logo, not appicon.png, was what actually showed
+    # on macOS. Dropping the catalog also means actool is never invoked (it runs
+    # only for -iconcomposerinput; see the wails3 skill's pitfalls #11).
+    # Trade-off: no macOS 26 Liquid Glass layered icon. To restore it, supply a
+    # real TEMPOC .icon bundle rather than re-adding the Wails default.
     run: once
     dir: build
     sources:
       - "appicon.png"
-      - "appicon.icon"
     generates:
       - "darwin/icons.icns"
       - "windows/icon.ico"
     cmds:
-      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin
+      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico
 
   dev:frontend:
     summary: Runs the frontend in development mode

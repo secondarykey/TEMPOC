@@ -52,9 +52,11 @@ jobs:
         include:
           - os: windows-latest
             target: windows
-          # macos-15, not macos-latest: `generate:icons` runs `actool`, which
-          # crashes under Xcode 26 on the macos-26 image. See the wails3 skill's
-          # references/pitfalls.md #11.
+          # Pinned, not macos-latest, so the macOS/Xcode version can't change
+          # under us without a commit. (The original reason was the actool crash
+          # on macos-26 -- wails3 skill pitfalls #11 -- which no longer applies
+          # now that generate:icons builds no asset catalog, but a pinned image
+          # is still what we want for a release build.)
           - os: macos-15
             target: darwin
           - os: ubuntu-latest

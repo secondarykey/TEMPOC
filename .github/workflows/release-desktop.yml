@@ -40,11 +40,10 @@ jobs:
   # still surfaces the others' results; `release` needs the whole matrix, so a
   # single failure blocks the release rather than shipping a partial one.
   #
-  # NOTE: the desktop app's usage interception is WebView2-specific (Windows
-  # only). The macOS/Linux binaries compile and launch but the claude.ai bridge
-  # (window.chrome.webview) is inert there, so they show no usage yet. They are
-  # published so the build stays green cross-platform and as a base for porting
-  # the bridge to WKWebView/WebKitGTK. See desktop/CLAUDE.md.
+  # NOTE: inject.js picks its page->Go transport at runtime (WebView2 on
+  # Windows, webkit.messageHandlers.external on macOS/Linux), so all three
+  # binaries carry the interception bridge. macOS/Linux are not yet verified on
+  # real hardware -- see desktop/multios.md.
   build:
     needs: verify
     strategy:

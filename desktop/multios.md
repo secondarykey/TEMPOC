@@ -1,143 +1,144 @@
-# multios.md — 傍受を macOS / Linux で動かすための移植ガイド
+# multios.md — 傍受の macOS / Linux 対応
 
-> このファイルは、TEMPOC デスクトップ版の **claude.ai 使用量傍受を Windows 以外でも
-> 機能させる**作業を担当するセッション向けのメモ。CI は既に mac(arm64)/Linux の
-> ビルド成果物を出しているが（`.github/workflows/release-desktop.yml`）、**傍受ブリッジが
-> WebView2 固有なので、それらのバイナリは起動しても使用量が表示されない**。
-> このドキュメントは「なぜ動かないか」と「どこを直せば動くか」をまとめる。
->
-> 前提知識は [`CLAUDE.md`](CLAUDE.md)（特に「使用量の傍受の仕組み」節）と、
-> リポジトリの `.claude/skills/wails3/references/external-page-automation.md`
-> （**Windows/WebView2 専用**と明記されている）を先に読むこと。
+> TEMPOC デスクトップ版の claude.ai 使用量傍受を Windows 以外でも動かすための
+> 調査結果と実装メモ。前提は [`CLAUDE.md`](CLAUDE.md)（「使用量の傍受の仕組み」節）と
+> `.claude/skills/wails3/references/external-page-automation.md`（Windows/WebView2 前提と明記）。
 
-## 現状の到達点
+## ステータス
 
-- ✅ `release-desktop.yml` は `windows-latest` / `macos-15` / `ubuntu-latest` の
-  マトリクスで各 OS ネイティブビルド → 3成果物を draft リリースへ添付する。
-- ✅ mac/Linux でも **Go はコンパイルされ、ウィンドウは起動する**（自前 UI・設定・
-  ウィンドウ状態などは動く見込み）。
-- ❌ **claude.ai から使用量データが Go に届かない** → メインウィンドウは空のまま。
-  原因は下記「WebView2 固有の3点」がいずれも `window.chrome.webview` 前提であること。
+| プラットフォーム | ビルド | 傍受ブリッジ | 実機確認 |
+|---|---|---|---|
+| Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
+| macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ⏳ **未確認** |
+| Linux (WebKitGTK) | ✅ CI (`ubuntu-latest`, amd64) | ✅ 実装済み（mac と同一経路） | ⏳ **未確認** |
 
-## 動かない理由：WebView2 固有の3点セット
+実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
 
-傍受は「注入 → ページ→Go 送信 → Go→ページ実行」の3点が噛み合って初めて動く
-（skill の `external-page-automation.md` の 1/2/3 に対応）。3点とも WebView2 固有 API に
-依存している。
+## Wails alpha2.114 の調査結果（実コードで確認済み）
 
-### (1) document-start でのスクリプト注入
+`WAILS_VERSION`（`.github/variables`）= `v3.0.0-alpha2.114` のソースを読んで確定した事実。
+**alpha 更新で変わりうるので、上げたら再確認すること。**
 
-- **現状**: `claude.win` を **HTML モード**で生成し（[`main.go:386-394`](main.go)、
-  `HTML: claudeBootstrapHTML` + `JS: resolvedInjectJS`）、Wails が WebView2 の
-  `AddScriptToExecuteOnDocumentCreated`（= `chromium.Init(script)`）として登録する。
-  `claudeBootstrapHTML`（[`main.go:100`](main.go)）が `location.replace` で claude.ai へ
-  遷移し、登録済みスクリプトが document-start で走る。
-- **mac/Linux で確認すべきこと**: Wails v3 alpha が `WebviewWindowOptions.JS`（HTML モード）を
-  **WKWebView / WebKitGTK でも document-start のユーザースクリプトとして登録するか**。
-  - WKWebView 相当: `WKUserScript(injectionTime: .atDocumentStart, forMainFrameOnly: false)`
-  - WebKitGTK 相当: `WebKitUserContentManager` に `webkit_user_script_new(... AT_DOCUMENT_START ...)`
-  - Wails 側の実装は `pkg/application/webview_window_darwin.go` /
-    `..._linux.go`（あるいは各プラットフォームの `webview_window_*` / `webkit` ラッパ）を
-    grep して、`options.JS` / `options.HTML` がどう扱われるか確認する。**Windows だけ
-    分岐して他は無視**なら、ここが第一の欠落。
+### (1) ページ → Go の送信口：ハンドラ名は `external`
 
-### (2) ページ → Go の送信（最重要の欠落）
+Wails は WKWebView / WebKitGTK の両方に **`external`** という名前のスクリプトメッセージ
+ハンドラを登録している:
 
-- **現状**: inject.js の `post()`（[`inject.js:2-10`](inject.js)）が
-  `window.chrome.webview.postMessage(JSON.stringify(obj))` でホストへ送る。Go 側は
-  `application.Options.RawMessageHandler`（[`main.go:266`](main.go)）で受信し、
-  `originInfo.Origin` に `claude.ai` が含まれるか検証してから `usage` / `auth-required` /
-  `location` / `debug` を処理する。
-- **mac/Linux で `window.chrome.webview` は `undefined`** → `post()` は無言で no-op
-  （`if (window.chrome && window.chrome.webview)` ガードで握り潰される）。**これが
-  「使用量が出ない」直接の原因**。
-- **確認すべきこと**:
-  1. `RawMessageHandler` が mac/Linux でも **第三者ページ（Wails ランタイム非注入）からの
-     メッセージを受け取るか**。受け取るなら、ページ側が呼ぶべき JS API 名は何か。
-     - WKWebView: `window.webkit.messageHandlers.<name>.postMessage(...)`（`<name>` は
-       Wails が登録するハンドラ名。Wails ソースで確認）
-     - WebKitGTK: 同じく `window.webkit.messageHandlers.<name>.postMessage(...)`
-  2. `OriginInfo.Origin` が mac/Linux でも埋まるか（オリジン検証が成立するか）。埋まらない
-     場合は検証ロジックの代替が必要。
+- macOS: `[userContentController addScriptMessageHandler:delegate name:@"external"]`
+  （`pkg/application/webview_window_darwin.go:120`）
+- Linux: `webkit_user_content_manager_register_script_message_handler(manager, "external", nil)`
+  （`pkg/application/linux_cgo.go:1211`）
 
-### (3) Go → ページ の実行（ExecJS）と runtimeLoaded 解錠
+→ ページ側は **`window.webkit.messageHandlers.external.postMessage(payload)`**。
+`didReceiveScriptMessage` は body が `NSString` ならそのまま使う（`webview_window_darwin.m:332`）ので、
+**WebView2 と同じく文字列を渡せばよい**。JSON 化の仕方も含めペイロードは全 OS 共通。
 
-- **現状**: 手動更新（[`main.go:538`](main.go)）とログイン後の usage 再オープン
-  （[`main.go:529`](main.go)）で `claude.win.ExecJS(...)` を使う。ExecJS は
-  `runtimeLoaded == true` でしか実行されないが、claude.ai は Wails ハンドシェイクを
-  送らない。そこで inject.js が document-start で **生文字列 `"wails:runtime:ready"` を
-  `window.chrome.webview.postMessage`**（[`inject.js:30-36`](inject.js)）して解錠している。
-- **mac/Linux で確認すべきこと**:
-  - ExecJS 自体が各プラットフォームで実装されているか、その `runtimeLoaded` ゲートの
-    有無・解錠方法。Windows と同じ生文字列トリックが効くのか、そもそもゲートが無いのか、
-    別 API（例: WKWebView の `evaluateJavaScript`）に Wails がどうつないでいるか。
-  - この (3) は自動更新（`__tempocClickRefresh`）・手動更新・ログイン後復帰に効く。
-    最悪 (1)(2) だけ直せば **受動傍受（fetch パッチ）** は動くので、(3) は次段でよい。
+### (2) 受信・ルーティング・ExecJS ゲートは「共通コード」
 
-## 推奨アプローチ：ブリッジを抽象化する
+プラットフォーム分岐は無く、Windows と同じ経路を通る。**だから Go 側は無改修で済んだ**:
 
-`inject.js` を WebView 実装に依存しない形にするのが本筋。プラットフォーム分岐を
-**JS 側の feature detection に寄せ**、Go 側は受信ハンドラを各プラットフォームで
-用意する。
+- `wails:` プレフィクスで内部処理と `RawMessageHandler` に振り分け → `application.go:775-780`
+- `wails:runtime:ready` で `runtimeLoaded = true` → `webview_window.go:777-780`
+- `ExecJS` は `runtimeLoaded` ゲート付き → `webview_window.go:610-615`
 
-1. **送信の抽象化（inject.js）**: `post()` を、利用可能なブリッジを実行時に選ぶ実装にする。
-   ```js
-   function hostPost(payload) {
-     if (window.chrome && window.chrome.webview) {          // WebView2
-       window.chrome.webview.postMessage(payload);
-     } else if (window.webkit && window.webkit.messageHandlers
-                && window.webkit.messageHandlers.<name>) {   // WKWebView / WebKitGTK
-       window.webkit.messageHandlers.<name>.postMessage(payload);
-     }
-   }
-   ```
-   `<name>` と、JSON 文字列を渡すのか オブジェクトを渡すのかは **Wails の各プラットフォーム
-   実装に合わせる**（WebView2 は文字列、webkit 系はオブジェクトのことが多い — 要確認）。
-   `"wails:runtime:ready"` 解錠メッセージも同じ経路に通す（Windows 以外で不要／別手段なら
-   分岐）。
-2. **受信の確認（main.go）**: `RawMessageHandler` が全プラットフォームで発火するなら Go 側は
-   ほぼ無改修でよい。発火しない／API が違うなら、プラットフォーム別のメッセージ受信を
-   `_cmd`/`main` 側で吸収する（`internal/` に Wails を持ち込まない方針は維持）。
-3. **注入の確認（main.go）**: (1) が Windows 限定なら、Wails のバージョンアップ待ち or
-   Wails へパッチ、あるいは各プラットフォームのユーザースクリプト API を叩く薄い層を足す。
+→ **ExecJS 解錠の生文字列ハンドシェイクは mac/Linux でも必要**。`inject.js` はこれも
+同じ `sendToHost()` 経由で送るようにした。
 
-## 最初にやること（スパイク）
+### (3) `OriginInfo.Origin` は Windows も mac も「フル URL」
 
-コードを書く前に、**Wails v3（`.github/variables` の `WAILS_VERSION` 固定版）の
-mac/Linux 実装を読んで**次を確定させる。ここが不明なままだと設計が空回りする。
+- macOS: `[url absoluteString]`（`webview_window_darwin.m:332` → `application_darwin.go:396-410`）
+- Windows: WebView2 の `Source`（`webview_window_windows.go:2243`）
 
-- [ ] `WebviewWindowOptions.JS`（HTML モード）は WKWebView / WebKitGTK で document-start
-      注入になるか？（Wails ソースの該当プラットフォームファイルを grep）
-- [ ] 第三者ページ→Go の受信経路（`RawMessageHandler` 発火の有無、JS 側 API 名、
-      ペイロード型、`OriginInfo.Origin` の充足）
-- [ ] `ExecJS` の `runtimeLoaded` ゲートは mac/Linux でどう振る舞うか（解錠要否）
+どちらもフル URL なので、`main.go` のオリジン検証（`strings.Contains(origin, "claude.ai")` と、
+`location` の `strings.HasPrefix(msg.Msg, origin)` によるなりすまし防止）は**そのまま成立する**。
+検証ロジックの変更は不要かつ**してはいけない**（セキュリティの要）。
 
-まず最小確認として、claude.ai を載せる前に **極小 HTML + `JS:` で「document-start に走って
-ホストへ1発 postMessage する」だけ**のスパイクを mac/Linux 実機（or CI）で回し、
-`RawMessageHandler` にメッセージが届くかを見るのが速い。届けば (2) の API 名が判明する。
+### (4) ⚠️ 注入タイミングだけは Windows と違う（document-END）
 
-## 検証
+ここが唯一の設計上の差分で、**要注意点**。
 
-- 受動傍受が動いたかは、claude.ai ログイン状態で起動し **`tempoc:usage` イベントが
-  フロントに届く（使用量バーが出る）**ことで判定する。
-- ⚠️ 既存の実機検証レシピ `.claude/skills/tempoc-desktop-verify` は **WebView2 の CDP
-  リモートデバッグ前提**で、そのままでは mac/Linux に使えない。mac(WKWebView)/Linux
-  (WebKitGTK) 向けの検証手段（Web Inspector / GTK の inspector 等）は別途必要。
-- オリジン検証（`originInfo.Origin` の `claude.ai` チェック、`location` だけ他オリジン許可）は
-  セキュリティ上の要なので、プラットフォームを跨いでも**必ず維持**する（[`main.go:277-292`](main.go)）。
+- **Windows**: `HTML` モード + `JS` → WebView2 の `AddScriptToExecuteOnDocumentCreated`。
+  **document-START**（claude.ai 自身の JS より前）で走り、全ナビゲーションで永続。
+- **macOS**: `options.JS` は document-start ユーザースクリプトとして登録**されない**。
+  `WebViewDidFinishNavigation` のリスナ内で `execJS(options.JS)` されるだけ
+  （`webview_window_darwin.go:1573-1576`）= **document-END**。
 
-## 影響を受けない（プラットフォーム非依存で流用できる）部分
+  ただし `OnWindowEvent` は永続リスナ（`webview_window.go:837-850`）で、
+  `didFinishNavigation` は毎ナビゲーションで発火する（`webview_window_darwin.m:788`）ため、
+  **bootstrap HTML → `location.replace` → claude.ai の遷移後にもきちんと再実行される**。
 
-- inject.js の DOM ロジック全般：fetch パッチ、`__tempocRefetch`、`findRefreshButton` /
-  `__tempocClickRefresh`、`watchAuthTransition`、アドレスバーオーバーレイ、1秒ティック。
-  **送受信の口（(2)(3)）だけ**が WebView2 依存で、中身の監視ロジックはそのまま使える。
-- Go 側の使用量→フロント配信（`app.Event.Emit("tempoc:usage", ...)`）、設定、ウィンドウ状態、
-  i18n、UI。これらは WebView 種別に依存しない。
+**影響**: claude.ai の JS が先に走るので、**サイト自身の初回 usage リクエストを
+fetch パッチが取り逃す可能性がある**。ただし `inject.js` には元々
+`setTimeout(window.__tempocRefetch, 1500)` の能動取得があり、再注入時も
+`__tempocPatched` 分岐から `__tempocRefetch()` を呼ぶので、**初回データは能動取得で埋まる**想定。
+以後の更新はサイトの更新ボタン経由（`__tempocClickRefresh`）で従来どおり。
+
+→ もし実機で「初回に出ない／たまに出ない」なら、まずこのタイミング差を疑う。
+document-start 注入が必要になったら、Wails に WKUserScript
+（`WKUserScript(injectionTime: .atDocumentStart, forMainFrameOnly: false)`）対応を
+入れる／パッチする方向になる。
+
+## 実装内容
+
+`inject.js` の送信口を feature detection で切り替えるだけ（[`inject.js`](inject.js) 冒頭の `sendToHost`）:
+
+```js
+function sendToHost(payload) {
+  try {
+    if (window.chrome && window.chrome.webview) {   // Windows: WebView2
+      window.chrome.webview.postMessage(payload);
+      return true;
+    }
+    var handlers = window.webkit && window.webkit.messageHandlers;
+    if (handlers && handlers.external) {            // macOS / Linux: webkit
+      handlers.external.postMessage(payload);
+      return true;
+    }
+  } catch (e) { /* ignore */ }
+  return false;
+}
+```
+
+- `post(obj)` は `sendToHost(JSON.stringify(obj))`、解錠ハンドシェイクは
+  `sendToHost("wails:runtime:ready")`。
+- **WebView2 を先に判定**しているので Windows の挙動は一切変わらない。
+- fetch パッチ・`__tempocRefetch`・`findRefreshButton`・`watchAuthTransition`・
+  アドレスバー等の監視ロジックは**全て無変更**（WebView 非依存）。
+
+## テスト
+
+`desktop/inject.test.mjs`（`node:test` + `node:vm`。**依存パッケージ無し**）:
+
+```bash
+cd desktop && node --test
+```
+
+`inject.js` を各プラットフォーム相当のスタブ環境（WebView2 のみ / webkit のみ / 両方 / どちらも無し）で
+実行し、送信口の選択とペイロードを検証する。特に:
+
+- **WebView2 優先**（両方ある場合に webkit を使わない）= Windows 無影響の担保
+- 両環境で**ペイロード列が完全一致**すること（プロトコルが分岐しない担保）
+- 生文字列 `wails:runtime:ready` が JSON 化されずに送られること
+
+> 現状 CI では実行していない（frontend にテスト基盤が無く、この1ファイルだけ `node --test`）。
+> 回帰検知したいならワークフローに `node --test` の1ステップを足すのが最小。
+
+## 実機確認の観点（macOS / Linux）
+
+1. claude.ai にログイン済みの状態で起動 → **使用量バーが出るか**（= `tempoc:usage` が届くか）。
+2. 出ない場合の切り分け:
+   - 傍受ウィンドウを表示（設定の Claude interceptor トグル）して Web Inspector で
+     `window.webkit.messageHandlers.external` が存在するか、`__tempocPatched` が立っているか。
+   - `-log debug` 付き起動で `inject.js` からの `debug` 中継（`slog.Debug`）を見る。
+     ログは実行ディレクトリの `YYYY-MM-DD.log`（[`CLAUDE.md`](CLAUDE.md) のログ方針参照）。
+   - `debug` は届くのに `usage` が来ない → 上記 (4) の注入タイミング差を疑う。
+3. 手動更新ボタン（タイトルバー）が効くか = ExecJS 解錠が成立しているか。
+4. ⚠️ 既存の検証レシピ `.claude/skills/tempoc-desktop-verify` は **WebView2 の CDP 前提**で
+   mac/Linux には使えない。mac は Safari の Web Inspector、Linux は WebKitGTK inspector を使う。
 
 ## 関連
 
-- [`CLAUDE.md`](CLAUDE.md) — 傍受設計の詳細（本ドキュメントの前提）
-- `.claude/skills/wails3/references/external-page-automation.md` — Windows 版の3点セットの原典
-  （mac/Linux は手段が異なると明記）
-- [`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml) — mac/Linux
-  ビルドを出している CI。傍受が移植できたらこのドキュメントの前提（非機能）も更新すること
+- [`CLAUDE.md`](CLAUDE.md) — 傍受設計の詳細
+- [`inject.js`](inject.js) / [`inject.test.mjs`](inject.test.mjs) — 実装とテスト
+- [`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml) — 3 OS のビルド
+- `.claude/skills/wails3/references/external-page-automation.md` — Windows 版3点セットの原典

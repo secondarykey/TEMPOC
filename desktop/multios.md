@@ -10,9 +10,9 @@
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
 | macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
-| Linux (WebKitGTK) | ✅ CI + WSL2 実機ビルド | ✅ 実装済み（mac と同一経路） | 🟡 **ブリッジ実証済み・UI 表示確認済み**（WSL2/Ubuntu 24.04）。ログイン後の使用量表示は未確認 |
+| Linux (WebKitGTK) | ✅ CI + WSL2 実機ビルド | ✅ 実装済み（mac と同一経路） | 🟡 **ブリッジ・UI とも確認済み**（WSL2/Ubuntu 24.04）。ただし**ログイン不可**のため使用量表示まで未到達（下記「既知の制約」） |
 
-Linux の傍受ブリッジは WSL2 上で**ログにより実証済み**（`inject: fetch patched` → `wails:runtime:ready` → `refetch: unauthorized (403)` → `login required` が Go 側まで到達）。`window.webkit.messageHandlers.external` 経由の実装が正しく機能している。
+Linux の傍受ブリッジは WSL2 上で**ログにより実証済み**（`inject: fetch patched` → `wails:runtime:ready` → `refetch` → `login required` が Go 側まで到達）。`window.webkit.messageHandlers.external` 経由の実装が正しく機能している。**残る未確認は「claude.ai にログインできた場合に使用量が出るか」だけ**で、これは実装ではなく環境（下記 1）に阻まれている。
 
 実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
 
@@ -257,6 +257,46 @@ WebKitGTK には remote inspector があり `WEBKIT_INSPECTOR_SERVER=127.0.0.1:2
 ### 7. Linux 固有の差分（トラブル時の容疑者）
 
 Linux だけ `RegisterHook(events.Linux.WindowLoadFinished, ...)` で **Wails のランタイム core JS（`window._wails`）を全ページに注入**している（`webview_window_linux.go:382-389`）。Windows/macOS には無い挙動で claude.ai にも入る。基本無害だが、挙動差が出たらここを思い出すこと。
+
+## Linux の既知の制約（実測。要・実機での再確認）
+
+WSL2 で確認できた範囲の課題。**いずれも WSL 固有か Linux 全般かは実機で切り分ける必要がある。**
+
+### 1. claude.ai が WebKitGTK の WebView を拒否する（ログイン不可）
+
+WSL2 では claude.ai にログインできなかった。ログイン画面で Cloudflare のボット検査
+（"This website uses a security service to protect against malicious bots"）が通過できず、
+API も **403** を返し続ける。
+
+```
+refetch: unauthorized (403)   ← /api/organizations
+received usage payload         0
+```
+
+⚠️ **この 403 を「未ログイン」と読み違えないこと。** 未ログインなら通常 401、または 200 + 空配列
+（`inject.js` の `__tempocRefetch` はこの前提で分岐している）。**403 はリクエスト自体が
+弾かれているサイン**で、実際ログイン UI にもボット検査が出た。
+
+つまり**傍受の実装は正常**で（`inject.js` はパッチ・API 呼び出し・403 の解釈・`auth-required`
+の送出まで完遂している）、止まっているのは claude.ai 側の受け入れである。
+
+この環境ではハードウェア GL が完全に不在（Mesa が d3d12 を初期化できず ZINK にフォールバックして
+失敗。`/dev/dxg` も `libd3d12.so` も `d3d12_dri.so` も揃っているのに解消しない）ため、
+**ブラウザとして成立していないことが一因**の可能性が高い。GPU が動く実機 Linux なら結果が
+変わりうるので、そこで再確認するまで「Linux ではログインできない」と断定はしない。
+
+> ボット検査を迂回する小細工でこれを通そうとしないこと。環境が不十分なことのシグナルとして扱い、
+> まともに動く環境で検証する。
+
+### 2. cookie が永続化されない見込み（ログインが再起動で消える）
+
+Wails の Linux 実装は `webkit_network_session_get_default()` を使うだけで、
+**`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（`linux_cgo.go:1205` 付近）。
+WebKitGTK は明示指定が無いと cookie を SQLite に永続化しないため、**アプリを再起動すると
+claude.ai のログインが消える**と考えられる。
+
+Windows は WebView2 のユーザーデータフォルダ（`%APPDATA%\tempoc\EBWebView`）に永続化されるので、
+これは実質的な機能差。Linux 対応を進めるなら対処が要る（1 が解決して初めて表面化する課題）。
 
 ## 関連
 

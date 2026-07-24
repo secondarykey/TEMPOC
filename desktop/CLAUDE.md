@@ -329,6 +329,19 @@ wails3 task common:update:build-assets   # -name/-binaryname/-config/-dir を AP
 - 副次効果として **`actool` は一切呼ばれなくなった**（`-iconcomposerinput` 指定時のみ実行されるため）。skill pitfalls #11 の macOS CI クラッシュ要因も消えている
 - トレードオフ: **macOS 26 の Liquid Glass 階層アイコンには非対応**（従来形式）。対応したくなったら、Wails 既定ではなく **TEMPOC 用に作った `.icon` バンドル**を用意してからフラグを戻すこと
 
+### ⚠️ macOS の .app バンドルは毎回作り直す（codesign の detritus エラー）
+
+`build/darwin/Taskfile.yml` の `run`（= `wails3 dev` の起動段）と `create:app:bundle`（= `package`）は、テンプレート既定では**既存バンドルに上書きコピーするだけ**だった。そのため2回目以降は**すでに署名済みのバンドルを再署名**することになり、`codesign` が
+
+```
+replacing existing signature
+<bundle>: resource fork, Finder information, or similar detritus not allowed
+```
+
+で **exit 1** し、`run` の最終行（アプリの起動）に到達せず**起動しなくなる**（`wails3 dev` はその後 Vite を起動するので、一見動いているように見えるのが厄介）。
+
+対策として両タスクの先頭に **`rm -rf` でバンドルを消してから組み立て直す**のと、署名直前の **`xattr -cr`** を入れてある（`cp` は macOS で拡張属性を引き継ぐため）。**この2行を消さないこと。** 副次的に、生成されなくなったファイル（旧 `Assets.car` 等）がバンドル内に残り続ける問題も同時に防いでいる。`rm -rf` の対象は `bin/<name>.app` / `bin/<name>.dev.app` であって**ビルド成果物の `bin/<name>` 本体ではない**。
+
 **`build/windows/msix/` だけは例外で、`wails3 init` 時にしか生成されず update でも再生成されない**（＝手で直すと恒久的に残る一方、`config.yml` や `APP_NAME` を変えても自動追従しない）。`app_manifest.xml` / `template.xml` の表示名・exe 名・`Version="0.1.0.0"` は手で同期させてある。**バージョン番号は `_cmd/version.go` の同期対象外なので、MSIX で配布するなら bump のたびに手で直すこと**。現状の既定パッケージ形式は NSIS（`wails3 task windows:package`）で MSIX は使っていない。
 
 exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが毎回実行）→ `.syso` を go build がリンク、という順で起こる。したがって `config.yml` を直しただけでは何も変わらず、`update build-assets` → 再ビルドまでやって初めて反映される。

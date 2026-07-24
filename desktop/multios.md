@@ -9,8 +9,8 @@
 | プラットフォーム | ビルド | 傍受ブリッジ | 実機確認 |
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
-| macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ⏳ **未確認** |
-| Linux (WebKitGTK) | ✅ CI (`ubuntu-latest`, amd64) | ✅ 実装済み（mac と同一経路） | ⏳ **未確認** |
+| macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
+| Linux (WebKitGTK) | ✅ CI (`ubuntu-latest`, amd64) | ✅ 実装済み（mac と同一経路） | ⏳ **未確認** — 下記「WSL2 で確認する手順」 |
 
 実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
 
@@ -135,6 +135,90 @@ cd desktop && node --test
 3. 手動更新ボタン（タイトルバー）が効くか = ExecJS 解錠が成立しているか。
 4. ⚠️ 既存の検証レシピ `.claude/skills/tempoc-desktop-verify` は **WebView2 の CDP 前提**で
    mac/Linux には使えない。mac は Safari の Web Inspector、Linux は WebKitGTK inspector を使う。
+
+## WSL2 で Linux 版を確認する手順
+
+Windows 機だけで Linux の UI + 傍受を確認するための手順。**WebKitGTK が WSLg で描画できるかが最大の未知数**なので、まず「ウィンドウが白くならずに出るか」を確認してから先に進むこと。
+
+### 1. WSL2 + Ubuntu 24.04
+
+**24.04 必須**。GTK4 + WebKitGTK 6.0 が要る（22.04 は webkit2gtk-4.1 = GTK3 世代で `libwebkitgtk-6.0` が無い）。
+
+```powershell
+wsl --install -d Ubuntu-24.04    # 管理者 PowerShell。要再起動
+```
+
+WSLg（GUI）は Windows 11 なら標準同梱なので追加設定は不要。
+
+### 2. リポジトリは WSL 側のファイルシステムに置く
+
+⚠️ **`/mnt/d/...` の Windows 側で直接ビルドしない**。極端に遅く、パーミッションと inotify（`wails3 dev` のファイル監視）で問題が出る。WSL のホーム配下に clone すること。Windows 側 worktree の `node_modules` ジャンクションも WSL からは使えないので、`npm install` はやり直しになる。
+
+```bash
+git clone <repo> ~/TEMPOC && cd ~/TEMPOC
+```
+
+### 3. 依存パッケージとツールチェイン
+
+パッケージ名は `.github/variables` の `WAILS_LINUX_DEPS` が正（CI と同一に保つこと）:
+
+```bash
+sudo apt update
+sudo apt install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+```
+
+Go は **1.25 以上**（`desktop/go.mod`）、Node は **22**（CI と揃える）。apt の Go は古いことがあるので公式 tarball 推奨。wails3 CLI は**必ずピン留め版**を入れる（`go.mod` の wails/v3 と一致させる。ズレると bindings 生成が壊れる）:
+
+```bash
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.114
+export PATH="$PATH:$(go env GOPATH)/bin"
+```
+
+### 4. ビルドして起動
+
+```bash
+cd desktop
+wails3 task linux:build     # bin/tempoc
+./bin/tempoc
+```
+
+`wails3 dev` でもよいが、下記の環境変数を効かせたい／`-log debug` を渡したいので、**まずは直接起動**が切り分けやすい。
+
+### 5. ⚠️ 画面が白い・落ちるとき（WSLg での WebKitGTK）
+
+WebKitGTK は DMA-BUF レンダラとコンポジティングを使うため、WSL や VM では描画できないことがある。順に試す:
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 ./bin/tempoc
+WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ./bin/tempoc
+LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ./bin/tempoc
+GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./bin/tempoc   # XWayland 経由に落とす
+```
+
+これらは WebKitGTK 自身が読む変数なので、シェルで export すれば効くはず。効かない場合は Wails 側が上書きしていないか疑う（WebView2 で `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` が Wails に無効化された前例がある。`.claude/skills/tempoc-desktop-verify` 参照）。
+
+**どれでも駄目なら WSL は諦める**。実機 Linux か GPU の使える VM に切り替えた方が早い。ここで粘っても TEMPOC 側の問題ではない。
+
+### 6. 傍受が動いているかの確認
+
+UI が出たら:
+
+1. claude.ai にログイン（傍受ウィンドウを表示して操作する必要がある）
+2. **使用量バーが出れば成功**（= `tempoc:usage` が届いている）
+3. 出ない場合は `-log debug` でログを取る（実行ディレクトリの `YYYY-MM-DD.log` に出る）:
+
+```bash
+./bin/tempoc -log debug
+```
+
+- `inject.js` からの `debug` 中継が出ていれば **ブリッジは生きている** → 使用量だけ来ないなら上記「注入タイミング（document-END）」を疑う
+- `debug` すら出ないなら `window.webkit.messageHandlers.external` に届いていない → Wails のバージョン差を疑う
+
+WebKitGTK には remote inspector があり `WEBKIT_INSPECTOR_SERVER=127.0.0.1:2999` で有効化できるが、**CDP ではなく WebKit 独自プロトコル**なので Chrome からは繋がらない（同じ WSL 内の Epiphany 等 WebKit 系ブラウザが要る）。`-log debug` の方が手軽。
+
+### 7. Linux 固有の差分（トラブル時の容疑者）
+
+Linux だけ `RegisterHook(events.Linux.WindowLoadFinished, ...)` で **Wails のランタイム core JS（`window._wails`）を全ページに注入**している（`webview_window_linux.go:382-389`）。Windows/macOS には無い挙動で claude.ai にも入る。基本無害だが、挙動差が出たらここを思い出すこと。
 
 ## 関連
 

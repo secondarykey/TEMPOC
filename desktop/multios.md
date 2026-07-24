@@ -10,7 +10,9 @@
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
 | macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
-| Linux (WebKitGTK) | ✅ CI (`ubuntu-latest`, amd64) | ✅ 実装済み（mac と同一経路） | ⏳ **未確認** — 下記「WSL2 で確認する手順」 |
+| Linux (WebKitGTK) | ✅ CI + WSL2 実機ビルド | ✅ 実装済み（mac と同一経路） | 🟡 **ブリッジ実証済み・UI 表示確認済み**（WSL2/Ubuntu 24.04）。ログイン後の使用量表示は未確認 |
+
+Linux の傍受ブリッジは WSL2 上で**ログにより実証済み**（`inject: fetch patched` → `wails:runtime:ready` → `refetch: unauthorized (403)` → `login required` が Go 側まで到達）。`window.webkit.messageHandlers.external` 経由の実装が正しく機能している。
 
 実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
 
@@ -136,19 +138,24 @@ cd desktop && node --test
 4. ⚠️ 既存の検証レシピ `.claude/skills/tempoc-desktop-verify` は **WebView2 の CDP 前提**で
    mac/Linux には使えない。mac は Safari の Web Inspector、Linux は WebKitGTK inspector を使う。
 
-## WSL2 で Linux 版を確認する手順
+## WSL2 で Linux 版を確認する手順（実施・検証済み）
 
-Windows 機だけで Linux の UI + 傍受を確認するための手順。**WebKitGTK が WSLg で描画できるかが最大の未知数**なので、まず「ウィンドウが白くならずに出るか」を確認してから先に進むこと。
+Windows 機だけで Linux の UI + 傍受を確認する手順。**2026-07-24 に実際に通した内容**で、ビルド・UI 表示・傍受ブリッジまで到達している。
+
+> ⚠️ **WSL は「Ubuntu のデスクトップ画面」を出さない。** WSLg は Linux の GUI アプリを個別の Windows ウィンドウとして表示する（シームレス統合）。ターミナルから GUI アプリを起動すると、ウィンドウが 1 枚 Windows 上に現れるのが正しい挙動。
 
 ### 1. WSL2 + Ubuntu 24.04
 
-**24.04 必須**。GTK4 + WebKitGTK 6.0 が要る（22.04 は webkit2gtk-4.1 = GTK3 世代で `libwebkitgtk-6.0` が無い）。
+**24.04 必須**。GTK4 + WebKitGTK 6.0 が要る（22.04 は webkit2gtk-4.1 = GTK3 世代で `libwebkitgtk-6.0` が無い）。実測で `libgtk-4-dev` 4.14.5 / `libwebkitgtk-6.0-dev` 2.52.3 が入る。
 
 ```powershell
-wsl --install -d Ubuntu-24.04    # 管理者 PowerShell。要再起動
+wsl --install                    # WSL 本体。要再起動
+wsl --install -d Ubuntu-24.04    # 再起動後にディストロを明示指定して導入
 ```
 
-WSLg（GUI）は Windows 11 なら標準同梱なので追加設定は不要。
+⚠️ `wsl --install` は **WSL 本体だけ入れて再起動待ちになる**ことがある。再起動後に `wsl -l -v` で確認し、ディストロが無ければ上記 2 行目を実行する。ディストロ名は `Ubuntu` ではなく **`Ubuntu-24.04` を明示**すること（`Ubuntu` は将来 26.04 を指しうる）。
+
+WSLg（GUI）は Windows 11 なら標準同梱。`wsl --version` に `WSLg バージョン` が出れば入っている。
 
 ### 2. リポジトリは WSL 側のファイルシステムに置く
 
@@ -184,20 +191,51 @@ wails3 task linux:build     # bin/tempoc
 
 `wails3 dev` でもよいが、下記の環境変数を効かせたい／`-log debug` を渡したいので、**まずは直接起動**が切り分けやすい。
 
-### 5. ⚠️ 画面が白い・落ちるとき（WSLg での WebKitGTK）
+### 5. 🔥 ウィンドウが出ないとき：まず `wsl --shutdown`
 
-WebKitGTK は DMA-BUF レンダラとコンポジティングを使うため、WSL や VM では描画できないことがある。順に試す:
+**これが実際の原因だった。** WSLg のセッションは壊れた状態でスタックすることがあり、そうなると **GUI アプリが一切表示されなくなる**。厄介なのは、この状態が「それらしい別の原因」に見えるエラーを大量に出すこと:
 
-```bash
-WEBKIT_DISABLE_DMABUF_RENDERER=1 ./bin/tempoc
-WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ./bin/tempoc
-LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 ./bin/tempoc
-GDK_BACKEND=x11 WEBKIT_DISABLE_DMABUF_RENDERER=1 ./bin/tempoc   # XWayland 経由に落とす
+```
+libEGL warning: MESA-LOADER: failed to retrieve device information
+MESA: error: ZINK: failed to choose pdev
+libEGL warning: egl: failed to create dri2 screen
+Fontconfig error: "/etc/fonts/fonts.conf", line 86: out of memory
 ```
 
-これらは WebKitGTK 自身が読む変数なので、シェルで export すれば効くはず。効かない場合は Wails 側が上書きしていないか疑う（WebView2 で `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` が Wails に無効化された前例がある。`.claude/skills/tempoc-desktop-verify` 参照）。
+GPU ドライバやフォント設定を疑いたくなるが**どれも真因ではない**（`/dev/dxg`・`/usr/lib/wsl/lib/libd3d12.so`・`d3d12_dri.so` は揃っており、`fc-list` も正常に 200 件超を返す）。
 
-**どれでも駄目なら WSL は諦める**。実機 Linux か GPU の使える VM に切り替えた方が早い。ここで粘っても TEMPOC 側の問題ではない。
+```powershell
+wsl --shutdown     # Windows 側で実行。数十秒待ってから再度 wsl を起動する
+```
+
+これで復帰した。**ウィンドウが出ない＝まず WSL を再起動**、を最初に試すこと。
+
+#### 切り分けは軽い順に（TEMPOC から始めない）
+
+TEMPOC 固有の問題と決めつけないため、必ずこの順で確認する:
+
+| コマンド | 意味 |
+|---|---|
+| `xeyes` | X11(XWayland) だけの極小アプリ。**出なければ WSLg 全滅** → `wsl --shutdown` |
+| `gtk4-widget-factory` | 標準 GTK4 アプリ（`apt install gtk-4-examples`）。出なければ GTK4 側の問題で TEMPOC は無関係 |
+| `~/run-tempoc.sh` | ここまで通って初めて TEMPOC を疑う |
+
+実際、切り分け中に `gtk4-widget-factory` が TEMPOC と**全く同じ EGL/MESA エラー**を出したことで、TEMPOC 無罪がすぐ確定した。
+
+#### レンダリング系の環境変数
+
+WSLg 復帰後も描画が怪しい場合の保険。上記の壊れたセッションが原因のときは**これらを足しても直らない**ので、先に `wsl --shutdown` を試すこと。
+
+```bash
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=llvmpipe
+```
+
+⚠️ `GDK_BACKEND=x11` は**避ける**。XWayland 経由にすると WebKit の WebProcess が落ちてアプリごと終了した（`Error releasing name org.wails.tempoc.Sandboxed.WebProcess-...: The connection is closed`）。Wayland のままにすること。
+
+**それでも駄目なら WSL は諦める**。実機 Linux か GPU の使える VM に切り替えた方が早い。ここで粘っても TEMPOC 側の問題ではない。
 
 ### 6. 傍受が動いているかの確認
 

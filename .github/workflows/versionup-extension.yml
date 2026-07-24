@@ -10,14 +10,14 @@ on:
   # file from the original commit, so fixes to this file are not picked up.
   workflow_dispatch:
 
-# Shared with versionup-desktop.yml — see the note there.
-concurrency:
-  group: versionup
-  cancel-in-progress: false
-
 jobs:
   versionup:
     if: "!contains(github.event.head_commit.message, '[skip versionup]')"
+    # Shared with versionup-desktop.yml — see the note there for why this is
+    # job-level rather than workflow-level.
+    concurrency:
+      group: versionup
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     permissions:
       contents: write

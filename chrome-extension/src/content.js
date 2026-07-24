@@ -122,7 +122,8 @@ async function createElement(id, path) {
     let bar = meter.children[0];
     if (!bar) {
       bar = document.createElement("div");
-      bar.className = "h-full rounded-full transition-[width] duration-base ease-out motion-reduce:transition-none";
+      // Claude 現行メーターに合わせ w-full + transition-transform（塗りは translateX）
+      bar.className = "h-full w-full rounded-full transition-transform duration-base ease-out motion-reduce:transition-none";
       meter.appendChild(bar);
     }
     bar.classList.remove("bg-fill-danger", "bg-fill-warning");
@@ -210,10 +211,16 @@ function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
     weekday: 'short'
   }) + suffix;
 
-  // 経過時間バー（TEMPOC 注入）: 幅と色を更新し、Observerで保護
+  // 経過時間バー（TEMPOC 注入）: 塗り量と色を更新し、Observerで保護。
+  // Claude はメーターの塗りを width ではなく full幅 + translateX オフセットで
+  // 表現する（fill は w-full のまま、左に translateX して見える部分を出す）。
+  // width を書き替えるとクローン元の translateX が残って左にずれるため、
+  // width は 100% 固定にし、Claude と同じ translateX 方式で塗り量を出す。
   const bar = divs[1].children[0]?.children[0]?.children[0];
   if (!bar) return false;
-  bar.style.width = notStarted ? "0%" : percent + "%";
+  const fill = notStarted ? 0 : Math.min(percent, 100);
+  bar.style.width = "100%";
+  bar.style.transform = "translateX(-" + (100 - fill) + "%)";
   bar.classList.remove("bg-fill-danger", "bg-fill-warning");
   bar.classList.add("bg-fill-accent");
   if (elm.id === Day7ProgressElementId) {

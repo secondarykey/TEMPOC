@@ -123,20 +123,27 @@ function formatUtil(n: number): string {
 // TS lib yet, so it's accessed dynamically and wrapped in try/catch, falling
 // back to a localized "1d 3h 20m"-style string when unsupported or given
 // bad input.
+type DurationParts = { days?: number; hours?: number; minutes?: number; seconds?: number };
+
 function formatRemaining(ms: number, durationStyle: string, locale: LocaleCode, t: Messages): string {
   if (ms < 0) ms = 0;
-  const duration = {
-    days: Math.floor(ms / (1000 * 60 * 60 * 24)),
-    hours: Math.floor((ms / (1000 * 60 * 60)) % 24),
-    minutes: Math.floor((ms / (1000 * 60)) % 60),
-  };
+  // Intl.DurationFormat omits zero-valued fields, so during the last minute a
+  // days/hours/minutes duration formats to the empty string and the label reads
+  // as a bare "left". Count down in seconds over that final minute instead —
+  // it both fills the label and shows the reset really is seconds away.
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
+  const minutes = Math.floor((ms / (1000 * 60)) % 60);
+  const seconds = Math.floor((ms / 1000) % 60);
+  const underMinute = !days && !hours && !minutes;
+  const duration: DurationParts = underMinute ? { seconds } : { days, hours, minutes };
   try {
-    const DurationFormat = (Intl as unknown as { DurationFormat?: new (locale: string, opts: { style: string }) => { format: (d: typeof duration) => string } }).DurationFormat;
+    const DurationFormat = (Intl as unknown as { DurationFormat?: new (locale: string, opts: { style: string }) => { format: (d: DurationParts) => string } }).DurationFormat;
     if (!DurationFormat) throw new Error('Intl.DurationFormat unsupported');
     const df = new DurationFormat(locale, { style: durationStyle });
     return df.format(duration);
   } catch {
-    return t.durationFallback(duration.days, duration.hours, duration.minutes);
+    return t.durationFallback(days, hours, minutes, seconds);
   }
 }
 

@@ -22,7 +22,7 @@
   "remaining": "{remain} übrig",
   "notStarted": "nicht gestartet",
 
-  "durationUnits": { "day": "T", "hour": "Std", "minute": "Min" },
+  "durationUnits": { "day": "T", "hour": "Std", "minute": "Min", "second": "Sek" },
   "justNow": "gerade eben",
   "ago": {
     "second": { "one": "vor {value} Sekunde", "other": "vor {value} Sekunden" },

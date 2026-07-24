@@ -22,7 +22,7 @@
   "remaining": "{remain} left",
   "notStarted": "not started",
 
-  "durationUnits": { "day": "d", "hour": "h", "minute": "m" },
+  "durationUnits": { "day": "d", "hour": "h", "minute": "m", "second": "s" },
   "justNow": "just now",
   "ago": {
     "second": { "one": "{value} second ago", "other": "{value} seconds ago" },

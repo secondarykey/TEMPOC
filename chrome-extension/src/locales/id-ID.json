@@ -22,7 +22,7 @@
   "remaining": "{remain} tersisa",
   "notStarted": "belum dimulai",
 
-  "durationUnits": { "day": "h", "hour": "j", "minute": "mnt" },
+  "durationUnits": { "day": "h", "hour": "j", "minute": "mnt", "second": "dtk" },
   "justNow": "baru saja",
   "ago": {
     "second": { "one": "{value} detik lalu", "other": "{value} detik lalu" },

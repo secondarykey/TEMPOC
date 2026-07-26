@@ -10,9 +10,9 @@
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
 | macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
-| Linux (WebKitGTK) | ✅ CI + WSL2 実機ビルド | ✅ 実装済み（mac と同一経路） | 🟡 **ブリッジ・UI とも確認済み**（WSL2/Ubuntu 24.04）。ただし**ログイン不可**のため使用量表示まで未到達（下記「既知の制約」） |
+| Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン・使用量表示・傍受すべて動作 |
 
-Linux の傍受ブリッジは WSL2 上で**ログにより実証済み**（`inject: fetch patched` → `wails:runtime:ready` → `refetch` → `login required` が Go 側まで到達）。`window.webkit.messageHandlers.external` 経由の実装が正しく機能している。**残る未確認は「claude.ai にログインできた場合に使用量が出るか」だけ**で、これは実装ではなく環境（下記 1）に阻まれている。
+Linux の傍受ブリッジは `window.webkit.messageHandlers.external` 経由で正しく機能する。**実機 Ubuntu でログインから使用量表示まで動作を確認済み**（ただし起動には下記「既知の制約」の 2 つ — 非特権 user namespace の有効化と `GSK_RENDERER=gl` — が要る）。WSL2 では claude.ai の Cloudflare 検査を通過できず使用量表示まで到達しなかったが、実機では問題なかった。
 
 実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
 
@@ -235,7 +235,7 @@ export GALLIUM_DRIVER=llvmpipe
 
 ⚠️ `GDK_BACKEND=x11` は**避ける**。XWayland 経由にすると WebKit の WebProcess が落ちてアプリごと終了した（`Error releasing name org.wails.tempoc.Sandboxed.WebProcess-...: The connection is closed`）。Wayland のままにすること。
 
-**それでも駄目なら WSL は諦める**。実機 Linux か GPU の使える VM に切り替えた方が早い。ここで粘っても TEMPOC 側の問題ではない。
+**それでも駄目なら WSL は諦める**。実際、WSL2 では claude.ai の Cloudflare 検査を通過できず使用量表示まで到達しなかった一方、**GPU の使える実機 Ubuntu では全機能が動いた**（要件は下記「起動要件・既知の制約」の 1・2）。描画が怪しい時点で実機に切り替えた方が早い。ここで粘っても TEMPOC 側の問題ではない。
 
 ### 6. 傍受が動いているかの確認
 
@@ -258,37 +258,66 @@ WebKitGTK には remote inspector があり `WEBKIT_INSPECTOR_SERVER=127.0.0.1:2
 
 Linux だけ `RegisterHook(events.Linux.WindowLoadFinished, ...)` で **Wails のランタイム core JS（`window._wails`）を全ページに注入**している（`webview_window_linux.go:382-389`）。Windows/macOS には無い挙動で claude.ai にも入る。基本無害だが、挙動差が出たらここを思い出すこと。
 
-## Linux の既知の制約（実測。要・実機での再確認）
+## Linux の起動要件・既知の制約（実機で確認済み）
 
-WSL2 で確認できた範囲の課題。**いずれも WSL 固有か Linux 全般かは実機で切り分ける必要がある。**
+実機 Ubuntu で**全機能が動いた**が、素の状態では起動しない。次の 2 つが要る。
 
-### 1. claude.ai が WebKitGTK の WebView を拒否する（ログイン不可）
+### 1. 🔴 非特権 user namespace を有効化する（無いとクラッシュ）
 
-WSL2 では claude.ai にログインできなかった。ログイン画面で Cloudflare のボット検査
-（"This website uses a security service to protect against malicious bots"）が通過できず、
-API も **403** を返し続ける。
+WebKitGTK は Web コンテンツを **bubblewrap（`bwrap`）サンドボックス**内で動かす。**Ubuntu 24.04 は
+非特権 user namespace を AppArmor で既定オフにしている**ため、`bwrap` が uid map を作れず
+サンドボックスが起動できない。すると WebProcess が立ち上がらず、Wails が起動時に呼ぶ
+`webkit_web_view_evaluate_javascript`（`setResizable` の ExecJS）が死んだ WebProcess を叩いて
+**SIGTRAP でプロセスごと落ちる**:
 
 ```
-refetch: unauthorized (403)   ← /api/organizations
-received usage payload         0
+bwrap: setting up uid map: Permission denied
+ERROR: Failed to fully launch dbus-proxy: 子プロセスがコード 1 で終了しました
+SIGTRAP: trace trap  ... signal arrived during cgo execution
+  → webkit_web_view_evaluate_javascript → setResizable → run (webview_window_linux.go)
 ```
 
-⚠️ **この 403 を「未ログイン」と読み違えないこと。** 未ログインなら通常 401、または 200 + 空配列
-（`inject.js` の `__tempocRefetch` はこの前提で分岐している）。**403 はリクエスト自体が
-弾かれているサイン**で、実際ログイン UI にもボット検査が出た。
+⚠️ **この SIGTRAP スタックトレースに惑わされないこと。** クラッシュ地点は `evaluate_javascript`
+だが**原因ではない**（死んだ WebProcess を叩いた結果）。真因は先頭 2 行の `bwrap` 失敗。
 
-つまり**傍受の実装は正常**で（`inject.js` はパッチ・API 呼び出し・403 の解釈・`auth-required`
-の送出まで完遂している）、止まっているのは claude.ai 側の受け入れである。
+確認と対処:
 
-この環境ではハードウェア GL が完全に不在（Mesa が d3d12 を初期化できず ZINK にフォールバックして
-失敗。`/dev/dxg` も `libd3d12.so` も `d3d12_dri.so` も揃っているのに解消しない）ため、
-**ブラウザとして成立していないことが一因**の可能性が高い。GPU が動く実機 Linux なら結果が
-変わりうるので、そこで再確認するまで「Linux ではログインできない」と断定はしない。
+```bash
+unshare --user --map-root-user true && echo OK || echo BLOCKED   # BLOCKED なら該当
+sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0     # 一時的に有効化
+# 恒久化:
+echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/60-tempoc-userns.conf
+```
 
-> ボット検査を迂回する小細工でこれを通そうとしないこと。環境が不十分なことのシグナルとして扱い、
-> まともに動く環境で検証する。
+これは `wails3 dev` 固有ではなく**ビルド済みバイナリでも同じ**（実行時の WebProcess 起動で起きる）。
+Wails 側はサンドボックスに触れていない（`linux_cgo.go` に sandbox 制御なし）ので、WebKitGTK の
+既定挙動 × システムの userns 制限がぶつかっているだけ。**セキュリティ的には保護を 1 段下げる**
+設定なので、開発機での検証用途と割り切ること。Chrome/Flatpak 等も同じ仕組みを使う。
 
-### 2. cookie が永続化されない見込み（ログインが再起動で消える）
+### 2. 🟡 `GSK_RENDERER=gl` を指定する（無いと画面が真っ白）
+
+起動しても**ウィンドウが何も描画されない**ことがある。GTK4 の既定 GPU レンダラが古い/不完全な
+ドライバ（実機は Intel Haswell、`MESA-INTEL: Haswell Vulkan support is incomplete`）で描画に
+失敗するため。
+
+実測では **`GSK_RENDERER=gl` で解決**した。意外なことに**ソフトウェアレンダラの
+`GSK_RENDERER=cairo` では駄目**だった（cairo → 真っ白のまま、gl → 正常描画）。ハードウェアや
+ドライバで最適値は変わるので、`gl` → `cairo` → `ngl` の順で試すとよい。
+
+```bash
+GSK_RENDERER=gl wails3 dev            # or ./bin/tempoc
+```
+
+これも環境変数だけで、TEMPOC のコード変更は不要。`GSK_RENDERER` は GTK4 自身が読む。
+
+> ⚠️ WSL2（GPU 無し・Mesa が d3d12 を初期化できず ZINK にフォールバックして失敗する環境）では、
+> どのレンダラ設定でもまともに描画できず、claude.ai の Cloudflare 検査も通過できなかった
+> （API が 403 を返し続ける。**この 403 を「未ログイン」と読み違えないこと** — 未ログインなら
+> 通常 401 か空の 200 で、`__tempocRefetch` はその前提で分岐する）。**実機の GPU があれば問題なく
+> ログイン・表示できる**ので、検証は GPU の使える実機で行うこと。ボット検査を迂回する小細工は
+> しないこと（環境不足のシグナルとして扱う）。
+
+### 3. cookie が永続化されない見込み（ログインが再起動で消える）
 
 Wails の Linux 実装は `webkit_network_session_get_default()` を使うだけで、
 **`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（`linux_cgo.go:1205` 付近）。

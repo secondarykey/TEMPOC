@@ -19,21 +19,30 @@ type Settings struct {
 	ShowRemainHour5   bool `json:"showRemainHour5"`
 	// weekly_scoped is an additional window that may or may not exist in the
 	// API response. Its bar/settings only take effect when the data is present.
-	ShowWeeklyScoped         bool   `json:"showWeeklyScoped"`
-	WeeklyScopedDanger       int    `json:"weeklyScopedDanger"`
-	WeeklyScopedWarning      int    `json:"weeklyScopedWarning"`
-	WeeklyScopedColorEnabled bool   `json:"weeklyScopedColorEnabled"`
-	ShowRemainWeeklyScoped bool `json:"showRemainWeeklyScoped"`
+	ShowWeeklyScoped         bool `json:"showWeeklyScoped"`
+	WeeklyScopedDanger       int  `json:"weeklyScopedDanger"`
+	WeeklyScopedWarning      int  `json:"weeklyScopedWarning"`
+	WeeklyScopedColorEnabled bool `json:"weeklyScopedColorEnabled"`
+	ShowRemainWeeklyScoped   bool `json:"showRemainWeeklyScoped"`
 	// WeeklyScopedLabel overrides the sub-bar's label. Empty means "use the
 	// UI language's default label" (i18n.ts's weeklyScopedFallback), so the
 	// label follows the selected language unless the user typed their own.
 	WeeklyScopedLabel string `json:"weeklyScopedLabel"`
-	DecimalPlaces            int    `json:"decimalPlaces"`
-	DurationStyle            string `json:"durationStyle"`
-	PercentFormat            string `json:"percentFormat"`
-	RefreshInterval          int    `json:"refreshInterval"`
-	UtilizationWarning       int    `json:"utilizationWarning"`
-	UtilizationDanger        int    `json:"utilizationDanger"`
+	// Usage credits (the API's extra_usage): pay-as-you-go spending against a
+	// monthly limit. Off by default — most users never enable credits, and the
+	// bar is about money rather than plan usage. Its bar/settings only take
+	// effect when the data is present, like weekly_scoped above.
+	ShowCredits         bool   `json:"showCredits"`
+	CreditsDanger       int    `json:"creditsDanger"`
+	CreditsWarning      int    `json:"creditsWarning"`
+	CreditsColorEnabled bool   `json:"creditsColorEnabled"`
+	ShowRemainCredits   bool   `json:"showRemainCredits"`
+	DecimalPlaces       int    `json:"decimalPlaces"`
+	DurationStyle       string `json:"durationStyle"`
+	PercentFormat       string `json:"percentFormat"`
+	RefreshInterval     int    `json:"refreshInterval"`
+	UtilizationWarning  int    `json:"utilizationWarning"`
+	UtilizationDanger   int    `json:"utilizationDanger"`
 	// Locale selects the UI language and the locale for date/time and duration
 	// formatting. Values are Claude's official locale codes, which always carry
 	// a region subtag ("en-US", "ja-JP"; the supported list lives in
@@ -80,13 +89,20 @@ func Default() Settings {
 		WeeklyScopedColorEnabled: true,
 		ShowRemainWeeklyScoped:   true,
 		WeeklyScopedLabel:        "",
-		DecimalPlaces:            2,
-		DurationStyle:            "short",
-		PercentFormat:            "{}%",
-		RefreshInterval:          5,
-		UtilizationWarning:       98,
-		UtilizationDanger:        100,
-		SizeMode:                 "normal",
-		Theme:                    "system",
+
+		ShowCredits:         false,
+		CreditsDanger:       10,
+		CreditsWarning:      0,
+		CreditsColorEnabled: true,
+		ShowRemainCredits:   true,
+
+		DecimalPlaces:      2,
+		DurationStyle:      "short",
+		PercentFormat:      "{}%",
+		RefreshInterval:    5,
+		UtilizationWarning: 98,
+		UtilizationDanger:  100,
+		SizeMode:           "normal",
+		Theme:              "system",
 	}
 }

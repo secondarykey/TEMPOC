@@ -16,6 +16,7 @@
   "currentSession": "Current session",
   "weeklyLimit": "Weekly limit",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "creditsLabel": "Usage credits",
   "usage": "Usage {pct}",
   "elapsed": "Elapsed {pct}",
   "resetsAt": "Resets {date}",

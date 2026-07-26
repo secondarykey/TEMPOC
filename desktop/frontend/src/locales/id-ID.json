@@ -16,6 +16,7 @@
   "currentSession": "Sesi saat ini",
   "weeklyLimit": "Batas mingguan",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "creditsLabel": "Kredit penggunaan",
   "usage": "Penggunaan {pct}",
   "elapsed": "Berlalu {pct}",
   "resetsAt": "Reset {date}",

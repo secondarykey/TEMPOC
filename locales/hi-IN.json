@@ -16,6 +16,7 @@
   "currentSession": "वर्तमान सत्र",
   "weeklyLimit": "साप्ताहिक सीमा",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "creditsLabel": "उपयोग क्रेडिट",
   "usage": "उपयोग {pct}",
   "elapsed": "बीता {pct}",
   "resetsAt": "{date} को रीसेट",

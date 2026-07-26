@@ -78,6 +78,10 @@ type RawMessages = {
   currentSession: string;
   weeklyLimit: string;
   weeklyScopedFallback: string;
+  // Names claude.ai's "Usage credits" both as a bar label (with the amounts
+  // appended by App.tsx) and as the settings section heading — the two would
+  // read identically, so they share one key.
+  creditsLabel: string;
   usage: string;
   elapsed: string;
   resetsAt: string;

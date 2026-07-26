@@ -78,10 +78,12 @@ export function SettingsView({
   settings,
   onUpdate,
   hasWeeklyScoped,
+  hasCredits,
 }: {
   settings: Settings;
   onUpdate: (patch: Partial<Settings>) => void;
   hasWeeklyScoped: boolean;
+  hasCredits: boolean;
 }) {
   const toggleClaude = () => {
     Events.Emit('tempoc:toggle-claude');
@@ -281,6 +283,32 @@ export function SettingsView({
         </section>
       )}
 
+      {hasCredits && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">{t.creditsLabel}</h3>
+          <label className="settings-check-row">
+            <span>{t.show}</span>
+            <input type="checkbox" checked={settings.showCredits} onChange={(e) => onUpdate({ showCredits: e.target.checked })} />
+          </label>
+          <label className="settings-check-row">
+            <span>{t.showRemaining}</span>
+            <input type="checkbox" checked={settings.showRemainCredits} onChange={(e) => onUpdate({ showRemainCredits: e.target.checked })} />
+          </label>
+          <label className="settings-check-row">
+            <span>{t.colorThreshold}</span>
+            <input type="checkbox" checked={settings.creditsColorEnabled} onChange={(e) => onUpdate({ creditsColorEnabled: e.target.checked })} />
+          </label>
+          <DualRange
+            min={-50}
+            max={50}
+            warning={settings.creditsWarning}
+            danger={settings.creditsDanger}
+            onChange={(w, d) => onUpdate({ creditsWarning: w, creditsDanger: d })}
+            t={t}
+          />
+        </section>
+      )}
+
       <section className="settings-section">
         <h3 className="settings-section-title">{t.sectionUtilization}</h3>
         <div className="settings-help-text">{t.utilizationHelp}</div>
@@ -336,6 +364,7 @@ export default function SettingsWindow() {
   // "the user touched something" is all the Apply button needs to know.
   const [dirty, setDirty] = useState(false);
   const [hasWeeklyScoped, setHasWeeklyScoped] = useState(false);
+  const [hasCredits, setHasCredits] = useState(false);
 
   useEffect(() => {
     const reload = () => {
@@ -369,14 +398,18 @@ export default function SettingsWindow() {
     // next time the window is opened.
     reload();
     const offOpen = Events.On('tempoc:open-settings', reload);
-    // Same condition as MainWindow's weeklyScopedHasData (App.tsx): the
-    // Weekly (scoped) section only appears once real data has been seen.
+    // Same conditions as MainWindow's weeklyScopedHasData / creditsHasData
+    // (App.tsx): these sections only appear once real data has been seen.
     const offUsage = Events.On('tempoc:usage', (e: any) => {
-      const usage = e.data as { weekly_scoped?: { utilization?: number; resets_at?: string | null } };
+      const usage = e.data as {
+        weekly_scoped?: { utilization?: number; resets_at?: string | null };
+        extra_usage?: { monthly_limit?: number | null };
+      };
       setHasWeeklyScoped(
         !!usage?.weekly_scoped &&
           (usage.weekly_scoped.utilization != null || usage.weekly_scoped.resets_at != null)
       );
+      setHasCredits(!!usage?.extra_usage && usage.extra_usage.monthly_limit != null);
     });
     return () => {
       if (typeof offOpen === 'function') offOpen();
@@ -427,7 +460,14 @@ export default function SettingsWindow() {
     <div className="root">
       <SettingsTitleBar t={t} />
       <main className="app">
-        {loaded && <SettingsView settings={draft} onUpdate={updateDraft} hasWeeklyScoped={hasWeeklyScoped} />}
+        {loaded && (
+          <SettingsView
+            settings={draft}
+            onUpdate={updateDraft}
+            hasWeeklyScoped={hasWeeklyScoped}
+            hasCredits={hasCredits}
+          />
+        )}
       </main>
       <footer className="settings-footer">
         <button className="settings-btn" onClick={() => Window.Close()}>{t.close}</button>

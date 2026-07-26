@@ -16,6 +16,7 @@
   "currentSession": "現在のセッション",
   "weeklyLimit": "週間上限",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "creditsLabel": "使用クレジット",
   "usage": "使用量 {pct}",
   "elapsed": "経過 {pct}",
   "resetsAt": "{date} にリセット",

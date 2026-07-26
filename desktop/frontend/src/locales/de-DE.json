@@ -16,6 +16,7 @@
   "currentSession": "Aktuelle Sitzung",
   "weeklyLimit": "Wochenlimit",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "creditsLabel": "Nutzungsguthaben",
   "usage": "Nutzung {pct}",
   "elapsed": "Verstrichen {pct}",
   "resetsAt": "Zurücksetzung {date}",

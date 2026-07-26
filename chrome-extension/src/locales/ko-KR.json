@@ -16,6 +16,7 @@
   "currentSession": "현재 세션",
   "weeklyLimit": "주간 한도",
   "weeklyScopedFallback": "Weekly (scoped)",
+  "creditsLabel": "사용 크레딧",
   "usage": "사용량 {pct}",
   "elapsed": "경과 {pct}",
   "resetsAt": "{date}에 초기화",

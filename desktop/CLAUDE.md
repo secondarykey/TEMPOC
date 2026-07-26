@@ -103,6 +103,12 @@ postMessage の `type` で分岐:
 - `seven_day` / `five_hour` — レスポンスのトップレベル。それぞれ 7日 / 5時間ウィンドウ
 - `weekly_scoped` — トップレベルではなく `limits` 配列の要素（`kind === "weekly_scoped"`）。存在しない場合がある（新しめ・一時的な可能性あり）。group は "weekly" のため**時間枠は 7日**として扱う
 - `inject.js` の `findLimit()` が `limits` から `kind` で抽出、`normalizeWindow()` が使用量を正規化する。`limits` 要素は使用量を `percent` で持つため `percent` → `utilization` に変換（トップレベルの `utilization` にもフォールバック）。5時間/7日もトップレベルが無ければ `limits` から拾う
+- `extra_usage` — トップレベル。claude.ai の **Usage credits**（プラン上限到達後の従量課金）。他のウィンドウと**形が違う**ので `normalizeCredits()` で別扱いにする:
+  - フィールドは `is_enabled` / `monthly_limit`（月額上限）/ `used_credits`（消費額）/ `utilization` / `currency` / `decimal_places`
+  - **金額は通貨の最小単位の整数**。実額は `decimal_places` で割る（`5000` + `2` → $50.00）
+  - **`resets_at` が無い**（レスポンス全体で `resets_at` を持つのは `five_hour` / `seven_day` / `limits[]` だけ）。claude.ai 自身の UI も "Resets Aug 1" としか出さない。よってリセット時刻は**フロントで UTC 月初として合成**する（App.tsx の `nextUtcMonthStart()`）
+  - **`utilization` は実測で常に null**。使用率は `used_credits / monthly_limit` から自前計算する（API が値を入れてきたらそちらを優先）
+  - 残高・プロモクレジット（claude.ai の "Current balance"）は**このAPIには無い**。`/api/organizations/{id}/prepaid/credits` と `/overage_credit_grant` という別エンドポイントなので、表示したくなったら傍受対象を増やす必要がある（サイトの更新ボタンでは再取得されず、モーダルを開いた時だけ飛ぶ点にも注意）
 
 ### 自動再取得（refreshInterval）
 
@@ -191,6 +197,11 @@ diff = util - elapsed
 - **使用率の表記**: `utilization` は API 上つねに整数（`percent`）なので `formatUtil()` で `100%` のように整数表示する（`decimalPlaces` / `percentFormat` は適用しない）。一方 **Elapsed（経過%）は計算値**なので `decimalPlaces` / `percentFormat` を適用（`formatPercent()`）。
 - **weekly_scoped のネスト表示**: `seven_day` と `weekly_scoped` はリセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけ。そこで **Weekly limit カード（`seven_day`）の中に副バーとしてネスト**する（`UsageBar` の `secondary` prop）。タイムライン（リセット日時・経過マーカー・残り時間）は主バーと共有し、副バーはラベル・使用率・色のみ独立。表示は `showDay7 && showWeeklyScoped` かつデータ存在時のみ。5時間バーは独立カードのまま。
 - **ウィンドウ高さの動的調整**: 副バー（weekly_scoped）が表示されるとき `Window.SetSize(520, 396)`、それ以外は `340`（`MainWindow` の `useEffect` が `weeklyBarVisible` を監視）。
+- **Usage credits バー（`kind: 'credits'`）**: 他のバーと同じ `UsageBar` で描くが、データ源が金額なので前処理が違う（`MainWindow` 内で算出）。
+  - **ラベルに金額を入れる**: `Usage credits ($1.69/50.00)` の形。`formatCredits()` が最小単位の整数を `decimal_places` で実額に直し、`Intl.NumberFormat` で UI ロケール整形する。通貨記号は**左の消費額だけ**に付け、右の上限は素の数値（記号の重複を避ける）
+  - **リセットは UTC 月初**（API に `resets_at` が無いため合成。上記「対象 API」参照）。バーの時間軸だけ月単位になるので、`WINDOW_MS` の定数引きではなく `windowStart()` が「終端から1か月戻す」を担当する（月の長さが可変なため。`Date.UTC` が month `-1` を前年12月に正規化するので1月も特別扱い不要）。**表示は他のバーと同じくユーザーのロケール/タイムゾーン**なので、JST では「8/1 9:00 にリセット」と出る
+  - 表示条件は `settings.showCredits && monthly_limit != null`。**既定は非表示**（`ShowCredits: false`。クレジット未使用のユーザーが大半で、内容も使用量ではなく金額のため）。設定セクションも weekly_scoped と同様データがある時だけ出す
+  - 月替わり直後は消費額が次回取得まで古いまま（バーの時間軸だけ先に新しい月へ切り替わる）。5分の自動更新で追いつく
 
 ## 設定（Chrome 拡張から移植 + 追加）
 
@@ -220,8 +231,12 @@ diff = util - elapsed
 | `weeklyScopedColorEnabled` | `true` | weekly_scoped の色分け有効 |
 | `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
 | `weeklyScopedLabel` | `""` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可）。空は UI 言語の既定ラベル（`i18n.ts` の `weeklyScopedFallback`）に従う |
+| `showCredits` | `false` | Usage credits バーの表示（**既定オフ**） |
+| `creditsWarning` / `creditsDanger` | `0` / `10` | Usage credits の色閾値 |
+| `creditsColorEnabled` | `true` | Usage credits の色分け有効 |
+| `showRemainCredits` | `true` | Usage credits の残り時間表示 |
 
-設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / Formatting / 5-Hour / 7-Day / (weekly_scoped 存在時のみ) Weekly (scoped) / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped セクションは **データが存在するときだけ表示**され、5h/7d と同じ設定に加え Label（名称）入力を持つ（`hasWeeklyScoped` prop で制御。設定ウィンドウ自身も `tempoc:usage` を購読して導出）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
+設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / Formatting / 5-Hour / 7-Day / (weekly_scoped 存在時のみ) Weekly (scoped) / (extra_usage 存在時のみ) Usage credits / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped セクションは **データが存在するときだけ表示**され、5h/7d と同じ設定に加え Label（名称）入力を持つ（`hasWeeklyScoped` prop で制御。設定ウィンドウ自身も `tempoc:usage` を購読して導出）。Usage credits セクションも同型で、`monthly_limit` が来ているときだけ表示する（`hasCredits` prop。設定項目は 5h/7d と同じ4つで、ラベルは金額入りの自動生成なので Label 入力は持たない）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
 
 ### 設定を追加する手順
 

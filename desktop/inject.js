@@ -1,12 +1,35 @@
 (function () {
-  function post(obj) {
+  // Host bridge. The WebView — and therefore the JS API that reaches Go —
+  // differs per platform:
+  //   Windows: WebView2   → window.chrome.webview.postMessage
+  //   macOS:   WKWebView  → window.webkit.messageHandlers.external.postMessage
+  //   Linux:   WebKitGTK  → same as macOS
+  // Wails registers the handler name "external" on both webkit backends
+  // (pkg/application/webview_window_darwin.go, linux_cgo.go). All three accept a
+  // string body and funnel into the same Go-side routing, where payloads
+  // starting with "wails:" are handled internally by Wails and everything else
+  // reaches Options.RawMessageHandler — so the payloads below are identical on
+  // every platform. WebView2 is probed first, leaving Windows behaviour
+  // unchanged. Returns whether a transport accepted the payload.
+  function sendToHost(payload) {
     try {
       if (window.chrome && window.chrome.webview) {
-        window.chrome.webview.postMessage(JSON.stringify(obj));
+        window.chrome.webview.postMessage(payload);
+        return true;
+      }
+      var handlers = window.webkit && window.webkit.messageHandlers;
+      if (handlers && handlers.external) {
+        handlers.external.postMessage(payload);
+        return true;
       }
     } catch (e) {
       // ignore
     }
+    return false;
+  }
+
+  function post(obj) {
+    sendToHost(JSON.stringify(obj));
   }
 
   if (window.__tempocPatched) {
@@ -27,13 +50,10 @@
   // does. Sending the literal string ourselves flips the gate so the frontend's
   // refresh button can drive us via ExecJS (see main.go "tempoc:refresh").
   // Must be the raw string (not JSON) so Wails routes it to HandleMessage.
-  try {
-    if (window.chrome && window.chrome.webview) {
-      window.chrome.webview.postMessage("wails:runtime:ready");
-    }
-  } catch (e) {
-    // ignore
-  }
+  // The gate and this routing both live in Wails' shared code
+  // (pkg/application/webview_window.go), so the handshake is needed on every
+  // platform — only the transport underneath sendToHost differs.
+  sendToHost("wails:runtime:ready");
 
   // アドレスバー: 現在の location.href をページ最下部に常時表示する
   // 読み取り専用オーバーレイ。アプリ内描画なので厳密な証明にはならない

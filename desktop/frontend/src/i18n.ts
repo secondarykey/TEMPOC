@@ -126,6 +126,9 @@ type RawMessages = {
   sectionWeeklyScoped: string;
   show: string;
   showRemaining: string;
+  // Usage credits only: hold the bar back until a plan limit is exhausted.
+  showOnlyWhenNeeded: string;
+  showOnlyWhenNeededHelp: string;
   colorThreshold: string;
   labelField: string;
   // Shown in place of nothing when a window's section is present but inert

@@ -62,6 +62,8 @@
   "sectionWeeklyScoped": "Ventana Weekly (scoped)",
   "show": "Mostrar",
   "showRemaining": "Mostrar tiempo restante",
+  "showOnlyWhenNeeded": "Mostrar solo cuando sea necesario",
+  "showOnlyWhenNeededHelp": "Solo cuando un límite de 5 horas o 7 días llegue al 100 %.",
   "colorThreshold": "Umbral de color",
   "labelField": "Etiqueta",
   "sectionUnavailable": "Actualmente Claude no lo informa.",

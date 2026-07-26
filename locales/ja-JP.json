@@ -62,6 +62,8 @@
   "sectionWeeklyScoped": "Weekly (scoped) ウィンドウ",
   "show": "表示",
   "showRemaining": "残り時間を表示",
+  "showOnlyWhenNeeded": "必要な時のみ表示",
+  "showOnlyWhenNeededHelp": "5時間または7日の上限が100%に達したときだけ表示します。",
   "colorThreshold": "色分けしきい値",
   "labelField": "ラベル",
   "sectionUnavailable": "現在 Claude から取得できていません。",

@@ -62,6 +62,8 @@
   "sectionWeeklyScoped": "Janela Weekly (scoped)",
   "show": "Mostrar",
   "showRemaining": "Mostrar tempo restante",
+  "showOnlyWhenNeeded": "Mostrar apenas quando necessário",
+  "showOnlyWhenNeededHelp": "Somente quando um limite de 5 horas ou 7 dias chegar a 100%.",
   "colorThreshold": "Limite de cor",
   "labelField": "Rótulo",
   "sectionUnavailable": "No momento, não informado pelo Claude.",

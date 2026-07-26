@@ -542,6 +542,12 @@ body { background: transparent; }
     color: var(--muted);
 }
 
+/* A note that belongs to the row right above it (e.g. the credits
+   "only when needed" condition) rather than to the section as a whole. */
+.settings-check-row + .settings-help-text {
+    margin: 0.35rem 4px 0.15rem;
+}
+
 .settings-debug-row {
     background: var(--glass);
     border: 1px solid var(--glass-border);

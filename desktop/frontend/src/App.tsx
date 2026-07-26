@@ -668,6 +668,16 @@ function MainWindow() {
   // refresh lands; the bar itself flips to the new month immediately.
   const credits = usage?.extra_usage;
   const creditsHasData = !!credits && credits.monthly_limit != null;
+  // "Show only when needed": credits are what Claude bills once a plan limit is
+  // exhausted, so until then the bar is just noise. Needed = the 5-hour or the
+  // 7-day window has reached 100%. weekly_scoped is deliberately not counted:
+  // it's a sub-limit of the weekly window, not a limit that sends you to
+  // credits on its own.
+  const creditsNeeded = [usage?.five_hour, usage?.seven_day].some(
+    (w) => (w?.utilization ?? 0) >= 100,
+  );
+  const creditsVisible =
+    settings.showCredits && creditsHasData && (!settings.creditsOnlyWhenNeeded || creditsNeeded);
   const creditsDecimals = credits?.decimal_places ?? 2;
   const creditsLimit = credits?.monthly_limit ?? 0;
   const creditsUsed = credits?.used_credits ?? 0;
@@ -750,7 +760,7 @@ function MainWindow() {
                 />
               )
             )}
-            {settings.showCredits && creditsHasData && (
+            {creditsVisible && (
               <UsageBar label={t.creditsLabel} kind="credits" data={creditsWindow} now={now} settings={settings} sizeMode={sizeMode} utilText={creditsUtilText} locale={locale} t={t} />
             )}
           </div>

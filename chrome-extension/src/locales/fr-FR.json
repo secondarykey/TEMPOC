@@ -62,6 +62,8 @@
   "sectionWeeklyScoped": "Fenêtre Weekly (scoped)",
   "show": "Afficher",
   "showRemaining": "Afficher le temps restant",
+  "showOnlyWhenNeeded": "Afficher uniquement si nécessaire",
+  "showOnlyWhenNeededHelp": "Seulement lorsqu'une limite de 5 heures ou 7 jours atteint 100 %.",
   "colorThreshold": "Seuil de couleur",
   "labelField": "Étiquette",
   "sectionUnavailable": "Actuellement non communiqué par Claude.",

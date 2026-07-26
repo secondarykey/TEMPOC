@@ -32,17 +32,22 @@ type Settings struct {
 	// monthly limit. Off by default — most users never enable credits, and the
 	// bar is about money rather than plan usage. Its bar/settings only take
 	// effect when the data is present, like weekly_scoped above.
-	ShowCredits         bool   `json:"showCredits"`
-	CreditsDanger       int    `json:"creditsDanger"`
-	CreditsWarning      int    `json:"creditsWarning"`
-	CreditsColorEnabled bool   `json:"creditsColorEnabled"`
-	ShowRemainCredits   bool   `json:"showRemainCredits"`
-	DecimalPlaces       int    `json:"decimalPlaces"`
-	DurationStyle       string `json:"durationStyle"`
-	PercentFormat       string `json:"percentFormat"`
-	RefreshInterval     int    `json:"refreshInterval"`
-	UtilizationWarning  int    `json:"utilizationWarning"`
-	UtilizationDanger   int    `json:"utilizationDanger"`
+	ShowCredits bool `json:"showCredits"`
+	// CreditsOnlyWhenNeeded holds the bar back until credits can actually be
+	// spent — that is, until the 5-hour or 7-day limit has reached 100%, the
+	// point from which Claude starts drawing on credits. Only meaningful
+	// together with ShowCredits.
+	CreditsOnlyWhenNeeded bool   `json:"creditsOnlyWhenNeeded"`
+	CreditsDanger         int    `json:"creditsDanger"`
+	CreditsWarning        int    `json:"creditsWarning"`
+	CreditsColorEnabled   bool   `json:"creditsColorEnabled"`
+	ShowRemainCredits     bool   `json:"showRemainCredits"`
+	DecimalPlaces         int    `json:"decimalPlaces"`
+	DurationStyle         string `json:"durationStyle"`
+	PercentFormat         string `json:"percentFormat"`
+	RefreshInterval       int    `json:"refreshInterval"`
+	UtilizationWarning    int    `json:"utilizationWarning"`
+	UtilizationDanger     int    `json:"utilizationDanger"`
 	// Locale selects the UI language and the locale for date/time and duration
 	// formatting. Values are Claude's official locale codes, which always carry
 	// a region subtag ("en-US", "ja-JP"; the supported list lives in
@@ -90,11 +95,14 @@ func Default() Settings {
 		ShowRemainWeeklyScoped:   true,
 		WeeklyScopedLabel:        "",
 
-		ShowCredits:         false,
-		CreditsDanger:       10,
-		CreditsWarning:      0,
-		CreditsColorEnabled: true,
-		ShowRemainCredits:   true,
+		ShowCredits: false,
+		// Off, so that turning the bar on shows it immediately rather than
+		// leaving the user wondering why nothing appeared.
+		CreditsOnlyWhenNeeded: false,
+		CreditsDanger:         10,
+		CreditsWarning:        0,
+		CreditsColorEnabled:   true,
+		ShowRemainCredits:     true,
 
 		DecimalPlaces:      2,
 		DurationStyle:      "short",

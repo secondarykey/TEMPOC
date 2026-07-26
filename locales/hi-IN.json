@@ -62,6 +62,8 @@
   "sectionWeeklyScoped": "Weekly (scoped) विंडो",
   "show": "दिखाएँ",
   "showRemaining": "शेष समय दिखाएँ",
+  "showOnlyWhenNeeded": "केवल ज़रूरत होने पर दिखाएँ",
+  "showOnlyWhenNeededHelp": "केवल तब जब 5-घंटे या 7-दिन की सीमा 100% पर पहुँच जाए।",
   "colorThreshold": "रंग सीमा",
   "labelField": "लेबल",
   "sectionUnavailable": "फ़िलहाल Claude इसकी जानकारी नहीं दे रहा है।",

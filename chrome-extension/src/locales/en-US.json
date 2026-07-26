@@ -62,6 +62,8 @@
   "sectionWeeklyScoped": "Weekly (scoped) Window",
   "show": "Show",
   "showRemaining": "Show remaining time",
+  "showOnlyWhenNeeded": "Show only when needed",
+  "showOnlyWhenNeededHelp": "Only once a 5-hour or 7-day limit hits 100%.",
   "colorThreshold": "Color threshold",
   "labelField": "Label",
   "sectionUnavailable": "Not currently reported by Claude.",

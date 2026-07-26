@@ -202,6 +202,7 @@ diff = util - elapsed
   - 値セルの列幅は既定 4rem（"100%" 用）では足りないので、`utilText` があるカードに `usage-bar--wide-util` が付き **`--util-col: 18rem`**（コンパクトは `--compact-util-col: 10rem`）に広げる。他のバーの列幅には影響しない
   - **リセットは UTC 月初**（API に `resets_at` が無いため合成。上記「対象 API」参照）。バーの時間軸だけ月単位になるので、`WINDOW_MS` の定数引きではなく `windowStart()` が「終端から1か月戻す」を担当する（月の長さが可変なため。`Date.UTC` が month `-1` を前年12月に正規化するので1月も特別扱い不要）。**表示は他のバーと同じくユーザーのロケール/タイムゾーン**なので、JST では「8/1 9:00 にリセット」と出る
   - 表示条件は `settings.showCredits && monthly_limit != null`。**既定は非表示**（`ShowCredits: false`。クレジット未使用のユーザーが大半で、内容も使用量ではなく金額のため）。設定セクションは weekly_scoped と同様、データが無いときは消さずに無効化する（下記「設定」参照）
+  - **「必要な時のみ表示」（`creditsOnlyWhenNeeded`）**: クレジットが実際に消費され始めるのはプラン上限を使い切った後なので、それまでバーを出さない選択肢。条件は `five_hour` か `seven_day` の `utilization >= 100`（`creditsNeeded`）。**weekly_scoped は数えない** — 週ウィンドウの内訳であって、それ単独でクレジット消費に落ちる上限ではないため。既定オフ（オンにすると Show を入れても何も出ない状況が起き、設定が効いていないように見えるため）。設定 UI 上は Show のサブ項目で、Show がオフの間は `disabled`
   - 月替わり直後は消費額が次回取得まで古いまま（バーの時間軸だけ先に新しい月へ切り替わる）。5分の自動更新で追いつく
 
 ## 設定（Chrome 拡張から移植 + 追加）
@@ -233,6 +234,7 @@ diff = util - elapsed
 | `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
 | `weeklyScopedLabel` | `""` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可）。空は UI 言語の既定ラベル（`i18n.ts` の `weeklyScopedFallback`）に従う |
 | `showCredits` | `false` | Usage credits バーの表示（**既定オフ**） |
+| `creditsOnlyWhenNeeded` | `false` | Usage credits を「必要な時のみ表示」。5時間 or 7日が 100% のときだけバーを出す |
 | `creditsWarning` / `creditsDanger` | `0` / `10` | Usage credits の色閾値 |
 | `creditsColorEnabled` | `true` | Usage credits の色分け有効 |
 | `showRemainCredits` | `true` | Usage credits の残り時間表示 |

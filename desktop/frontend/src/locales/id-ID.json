@@ -62,6 +62,8 @@
   "sectionWeeklyScoped": "Jendela Weekly (scoped)",
   "show": "Tampilkan",
   "showRemaining": "Tampilkan sisa waktu",
+  "showOnlyWhenNeeded": "Tampilkan hanya saat diperlukan",
+  "showOnlyWhenNeededHelp": "Hanya saat batas 5 jam atau 7 hari mencapai 100%.",
   "colorThreshold": "Ambang warna",
   "labelField": "Label",
   "sectionUnavailable": "Saat ini tidak dilaporkan oleh Claude.",

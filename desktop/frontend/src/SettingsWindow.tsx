@@ -302,6 +302,18 @@ export function SettingsView({
           <span>{t.show}</span>
           <input type="checkbox" checked={settings.showCredits} disabled={!hasCredits} onChange={(e) => onUpdate({ showCredits: e.target.checked })} />
         </label>
+        {/* Refines Show rather than standing on its own, so it is inert unless
+            the bar is switched on at all. */}
+        <label className="settings-check-row">
+          <span>{t.showOnlyWhenNeeded}</span>
+          <input
+            type="checkbox"
+            checked={settings.creditsOnlyWhenNeeded}
+            disabled={!hasCredits || !settings.showCredits}
+            onChange={(e) => onUpdate({ creditsOnlyWhenNeeded: e.target.checked })}
+          />
+        </label>
+        <div className="settings-help-text">{t.showOnlyWhenNeededHelp}</div>
         <label className="settings-check-row">
           <span>{t.showRemaining}</span>
           <input type="checkbox" checked={settings.showRemainCredits} disabled={!hasCredits} onChange={(e) => onUpdate({ showRemainCredits: e.target.checked })} />

@@ -64,6 +64,7 @@
   "showRemaining": "शेष समय दिखाएँ",
   "colorThreshold": "रंग सीमा",
   "labelField": "लेबल",
+  "sectionUnavailable": "फ़िलहाल Claude इसकी जानकारी नहीं दे रहा है।",
   "sectionUtilization": "उपयोग सीमा",
   "utilizationHelp": "जब पूर्ण उपयोग इन मानों तक पहुँचता है तो चेतावनी/खतरा रंग लागू करता है।",
   "warning": "चेतावनी",

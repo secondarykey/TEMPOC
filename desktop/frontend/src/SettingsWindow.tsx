@@ -14,6 +14,7 @@ function DualRange({
   warning,
   danger,
   onChange,
+  disabled,
   t,
 }: {
   min: number;
@@ -21,6 +22,7 @@ function DualRange({
   warning: number;
   danger: number;
   onChange: (warning: number, danger: number) => void;
+  disabled?: boolean;
   t: Messages;
 }) {
   const range = max - min;
@@ -56,6 +58,7 @@ function DualRange({
           max={max}
           value={warning}
           onChange={handleWarning}
+          disabled={disabled}
           style={{ zIndex: warning >= danger ? 5 : undefined }}
         />
         <input
@@ -65,6 +68,7 @@ function DualRange({
           max={max}
           value={danger}
           onChange={handleDanger}
+          disabled={disabled}
         />
       </div>
     </div>
@@ -247,67 +251,75 @@ export function SettingsView({
         />
       </section>
 
-      {hasWeeklyScoped && (
-        <section className="settings-section">
-          <h3 className="settings-section-title">{t.sectionWeeklyScoped}</h3>
-          <label className="settings-check-row">
-            <span>{t.show}</span>
-            <input type="checkbox" checked={settings.showWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
-          </label>
-          <label className="settings-row">
-            <span>{t.labelField}</span>
-            <input
-              type="text"
-              className="settings-text-input"
-              value={settings.weeklyScopedLabel}
-              placeholder={t.weeklyScopedFallback}
-              onChange={(e) => onUpdate({ weeklyScopedLabel: e.target.value })}
-            />
-          </label>
-          <label className="settings-check-row">
-            <span>{t.showRemaining}</span>
-            <input type="checkbox" checked={settings.showRemainWeeklyScoped} onChange={(e) => onUpdate({ showRemainWeeklyScoped: e.target.checked })} />
-          </label>
-          <label className="settings-check-row">
-            <span>{t.colorThreshold}</span>
-            <input type="checkbox" checked={settings.weeklyScopedColorEnabled} onChange={(e) => onUpdate({ weeklyScopedColorEnabled: e.target.checked })} />
-          </label>
-          <DualRange
-            min={-50}
-            max={50}
-            warning={settings.weeklyScopedWarning}
-            danger={settings.weeklyScopedDanger}
-            onChange={(w, d) => onUpdate({ weeklyScopedWarning: w, weeklyScopedDanger: d })}
-            t={t}
+      {/* weekly_scoped and Usage credits are optional parts of the API response:
+          either can be missing (weekly_scoped comes and goes; credits only exist
+          once a spend limit is set). Their sections stay in place regardless and
+          simply go inert — the saved values are still there and still applied the
+          moment the data returns, so removing the controls outright would only
+          make the settings list shift around and look like the options were
+          gone. `disabled` is driven by the data, never by the settings. */}
+      <section className={`settings-section${hasWeeklyScoped ? '' : ' settings-section--disabled'}`}>
+        <h3 className="settings-section-title">{t.sectionWeeklyScoped}</h3>
+        {!hasWeeklyScoped && <div className="settings-help-text">{t.sectionUnavailable}</div>}
+        <label className="settings-check-row">
+          <span>{t.show}</span>
+          <input type="checkbox" checked={settings.showWeeklyScoped} disabled={!hasWeeklyScoped} onChange={(e) => onUpdate({ showWeeklyScoped: e.target.checked })} />
+        </label>
+        <label className="settings-row">
+          <span>{t.labelField}</span>
+          <input
+            type="text"
+            className="settings-text-input"
+            value={settings.weeklyScopedLabel}
+            placeholder={t.weeklyScopedFallback}
+            disabled={!hasWeeklyScoped}
+            onChange={(e) => onUpdate({ weeklyScopedLabel: e.target.value })}
           />
-        </section>
-      )}
+        </label>
+        <label className="settings-check-row">
+          <span>{t.showRemaining}</span>
+          <input type="checkbox" checked={settings.showRemainWeeklyScoped} disabled={!hasWeeklyScoped} onChange={(e) => onUpdate({ showRemainWeeklyScoped: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>{t.colorThreshold}</span>
+          <input type="checkbox" checked={settings.weeklyScopedColorEnabled} disabled={!hasWeeklyScoped} onChange={(e) => onUpdate({ weeklyScopedColorEnabled: e.target.checked })} />
+        </label>
+        <DualRange
+          min={-50}
+          max={50}
+          warning={settings.weeklyScopedWarning}
+          danger={settings.weeklyScopedDanger}
+          onChange={(w, d) => onUpdate({ weeklyScopedWarning: w, weeklyScopedDanger: d })}
+          disabled={!hasWeeklyScoped}
+          t={t}
+        />
+      </section>
 
-      {hasCredits && (
-        <section className="settings-section">
-          <h3 className="settings-section-title">{t.creditsLabel}</h3>
-          <label className="settings-check-row">
-            <span>{t.show}</span>
-            <input type="checkbox" checked={settings.showCredits} onChange={(e) => onUpdate({ showCredits: e.target.checked })} />
-          </label>
-          <label className="settings-check-row">
-            <span>{t.showRemaining}</span>
-            <input type="checkbox" checked={settings.showRemainCredits} onChange={(e) => onUpdate({ showRemainCredits: e.target.checked })} />
-          </label>
-          <label className="settings-check-row">
-            <span>{t.colorThreshold}</span>
-            <input type="checkbox" checked={settings.creditsColorEnabled} onChange={(e) => onUpdate({ creditsColorEnabled: e.target.checked })} />
-          </label>
-          <DualRange
-            min={-50}
-            max={50}
-            warning={settings.creditsWarning}
-            danger={settings.creditsDanger}
-            onChange={(w, d) => onUpdate({ creditsWarning: w, creditsDanger: d })}
-            t={t}
-          />
-        </section>
-      )}
+      <section className={`settings-section${hasCredits ? '' : ' settings-section--disabled'}`}>
+        <h3 className="settings-section-title">{t.creditsLabel}</h3>
+        {!hasCredits && <div className="settings-help-text">{t.sectionUnavailable}</div>}
+        <label className="settings-check-row">
+          <span>{t.show}</span>
+          <input type="checkbox" checked={settings.showCredits} disabled={!hasCredits} onChange={(e) => onUpdate({ showCredits: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>{t.showRemaining}</span>
+          <input type="checkbox" checked={settings.showRemainCredits} disabled={!hasCredits} onChange={(e) => onUpdate({ showRemainCredits: e.target.checked })} />
+        </label>
+        <label className="settings-check-row">
+          <span>{t.colorThreshold}</span>
+          <input type="checkbox" checked={settings.creditsColorEnabled} disabled={!hasCredits} onChange={(e) => onUpdate({ creditsColorEnabled: e.target.checked })} />
+        </label>
+        <DualRange
+          min={-50}
+          max={50}
+          warning={settings.creditsWarning}
+          danger={settings.creditsDanger}
+          onChange={(w, d) => onUpdate({ creditsWarning: w, creditsDanger: d })}
+          disabled={!hasCredits}
+          t={t}
+        />
+      </section>
 
       <section className="settings-section">
         <h3 className="settings-section-title">{t.sectionUtilization}</h3>

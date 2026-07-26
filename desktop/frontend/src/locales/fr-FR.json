@@ -64,6 +64,7 @@
   "showRemaining": "Afficher le temps restant",
   "colorThreshold": "Seuil de couleur",
   "labelField": "Étiquette",
+  "sectionUnavailable": "Actuellement non communiqué par Claude.",
   "sectionUtilization": "Seuil d'utilisation",
   "utilizationHelp": "Force les couleurs d'avertissement/danger lorsque l'utilisation absolue atteint ces valeurs.",
   "warning": "Avertissement",

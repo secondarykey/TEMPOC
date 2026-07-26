@@ -64,6 +64,7 @@
   "showRemaining": "残り時間を表示",
   "colorThreshold": "色分けしきい値",
   "labelField": "ラベル",
+  "sectionUnavailable": "現在 Claude から取得できていません。",
   "sectionUtilization": "使用率しきい値",
   "utilizationHelp": "使用率がこの値に達したとき、警告/危険色を強制します。",
   "warning": "警告",

@@ -64,6 +64,7 @@
   "showRemaining": "Mostrar tempo restante",
   "colorThreshold": "Limite de cor",
   "labelField": "Rótulo",
+  "sectionUnavailable": "No momento, não informado pelo Claude.",
   "sectionUtilization": "Limite de utilização",
   "utilizationHelp": "Força cores de aviso/perigo quando o uso absoluto atinge esses valores.",
   "warning": "Aviso",

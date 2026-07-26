@@ -482,6 +482,16 @@ body { background: transparent; }
     flex-direction: column;
 }
 
+/* A section for a usage window claude.ai isn't currently reporting. It keeps
+   its place in the list (the settings are still stored and still apply the
+   moment the data returns) but reads as inert: dimmed, with its controls
+   disabled and a one-line note under the heading. */
+.settings-section--disabled {
+    opacity: 0.5;
+}
+
+.settings-section--disabled .settings-check-row { cursor: default; }
+
 .settings-section-title {
     margin: 0 0 0.6rem;
     font-size: 0.72rem;

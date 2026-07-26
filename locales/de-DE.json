@@ -64,6 +64,7 @@
   "showRemaining": "Verbleibende Zeit anzeigen",
   "colorThreshold": "Farbschwelle",
   "labelField": "Bezeichnung",
+  "sectionUnavailable": "Wird derzeit von Claude nicht gemeldet.",
   "sectionUtilization": "Auslastungsschwelle",
   "utilizationHelp": "Erzwingt Warn-/Gefahrfarben, wenn die absolute Nutzung diese Werte erreicht.",
   "warning": "Warnung",

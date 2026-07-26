@@ -128,6 +128,9 @@ type RawMessages = {
   showRemaining: string;
   colorThreshold: string;
   labelField: string;
+  // Shown in place of nothing when a window's section is present but inert
+  // (claude.ai isn't reporting that window right now).
+  sectionUnavailable: string;
   sectionUtilization: string;
   utilizationHelp: string;
   warning: string;

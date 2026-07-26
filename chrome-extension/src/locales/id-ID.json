@@ -64,6 +64,7 @@
   "showRemaining": "Tampilkan sisa waktu",
   "colorThreshold": "Ambang warna",
   "labelField": "Label",
+  "sectionUnavailable": "Saat ini tidak dilaporkan oleh Claude.",
   "sectionUtilization": "Ambang pemakaian",
   "utilizationHelp": "Memaksa warna peringatan/bahaya saat penggunaan absolut mencapai nilai ini.",
   "warning": "Peringatan",

@@ -64,6 +64,7 @@
   "showRemaining": "Mostrar tiempo restante",
   "colorThreshold": "Umbral de color",
   "labelField": "Etiqueta",
+  "sectionUnavailable": "Actualmente Claude no lo informa.",
   "sectionUtilization": "Umbral de utilización",
   "utilizationHelp": "Fuerza los colores de advertencia/peligro cuando el uso absoluto alcanza estos valores.",
   "warning": "Advertencia",

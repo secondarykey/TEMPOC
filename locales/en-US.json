@@ -64,6 +64,7 @@
   "showRemaining": "Show remaining time",
   "colorThreshold": "Color threshold",
   "labelField": "Label",
+  "sectionUnavailable": "Not currently reported by Claude.",
   "sectionUtilization": "Utilization Threshold",
   "utilizationHelp": "Forces warning/danger colors when absolute usage reaches these values.",
   "warning": "Warning",

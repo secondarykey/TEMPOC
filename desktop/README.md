@@ -1,6 +1,6 @@
 # TEMPOC Desktop
 
-A standalone desktop app (Wails v3, Windows / WebView2) that shows elapsed-time progress bars for Claude's 5-hour and 7-day usage windows — including exactly when each window resets, which claude.ai itself doesn't display.
+A standalone desktop app (Wails v3) that shows elapsed-time progress bars for Claude's 5-hour and 7-day usage windows — including exactly when each window resets, which claude.ai itself doesn't display. It runs on Windows (WebView2), macOS (WKWebView) and Linux (WebKitGTK).
 
 It works by loading claude.ai inside a hidden WebView, intercepting the usage API responses, and rendering the bars in its own compact, frameless window. All of the [Chrome extension](../chrome-extension/README.md)'s settings are available, plus desktop-only options (UI language — English / 日本語, following Claude's official locale codes; always-on-top; transparent window; size modes).
 
@@ -8,7 +8,26 @@ For what the bars mean, and for privacy and disclaimer, see the [project README]
 
 ## Installing
 
-Download the zip from the [Releases page](https://github.com/secondarykey/TEMPOC/releases) (tagged `desktop-v*`) and run `tempoc.exe` — there is no installer. On first launch you will be asked to log in to claude.ai (see below).
+Download the archive for your OS from the [Releases page](https://github.com/secondarykey/TEMPOC/releases) (tagged `desktop-v*`). There is no installer. On first launch you will be asked to log in to claude.ai (see below).
+
+- **Windows** (`…-windows-amd64.zip`) — unzip and run `tempoc.exe`. The WebView2 runtime it needs ships with Windows 10/11.
+- **macOS** (`…-darwin-arm64.zip`, Apple Silicon) — unzip and open `tempoc.app`. It is ad-hoc signed, so the first time you may need to right-click → **Open** (or allow it under System Settings → Privacy & Security).
+- **Linux** (`…-linux-amd64.tar.gz`) — extract and run `./tempoc`. The binary is dynamically linked, so **the GTK4 + WebKitGTK 6.0 runtime must be installed** (see below).
+
+### Linux runtime requirements
+
+The Linux build does **not** bundle its libraries; install them from your distro:
+
+| Distro family | Install |
+|---|---|
+| Ubuntu 24.04+ / Debian 13+ | `sudo apt install libgtk-4-1 libwebkitgtk-6.0-4` |
+| Fedora / RHEL / AlmaLinux | `sudo dnf install gtk4 webkitgtk6.0` |
+| Arch | `sudo pacman -S gtk4 webkitgtk-6.0` |
+
+The authoritative dependency list lives in [`build/linux/nfpm/nfpm.yaml`](build/linux/nfpm/nfpm.yaml) (used for future `.deb`/`.rpm` packaging); `ldd ./tempoc` shows the exact shared objects. Two environment-specific gotchas:
+
+- **Ubuntu 24.04+ crashes on launch** (`bwrap: setting up uid map: Permission denied`) because it restricts unprivileged user namespaces, which WebKitGTK's sandbox needs. Enable them: `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist via `/etc/sysctl.d/`).
+- **Blank window on older GPUs** — set `GSK_RENDERER=gl` (e.g. `GSK_RENDERER=gl ./tempoc`). See [`multios.md`](multios.md) for details on both.
 
 ## Logging in
 

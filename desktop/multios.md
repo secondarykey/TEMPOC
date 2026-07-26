@@ -351,6 +351,55 @@ claude.ai のログインが消える**と考えられる。
 Windows は WebView2 のユーザーデータフォルダ（`%APPDATA%\tempoc\EBWebView`）に永続化されるので、
 これは実質的な機能差。Linux 対応を進めるなら対処が要る（1 が解決して初めて表面化する課題）。
 
+## Linux の配布・必要ライブラリ（現状 tar.gz / 将来 deb）
+
+### 必要ライブラリの「正」はどこにあるか
+
+Linux バイナリは**動的リンク**で、GTK4/WebKitGTK を**同梱しない**（`ldd bin/tempoc` で `libgtk-4.so.1`
+`libwebkitgtk-6.0.so.4` 等がシステムの `/lib/x86_64-linux-gnu/...` を指す）。よって実行環境に
+ランタイムが要る。**必要ライブラリの正は [`build/linux/nfpm/nfpm.yaml`](build/linux/nfpm/nfpm.yaml)
+の `depends`**（ディストロ別に整備済み）:
+
+| ディストロ | ランタイムパッケージ |
+|---|---|
+| Ubuntu 24.04+ / Debian 13+ | `libgtk-4-1` `libwebkitgtk-6.0-4` |
+| Fedora / RHEL 系 | `gtk4` `webkitgtk6.0` |
+| Arch | `gtk4` `webkitgtk-6.0` |
+
+実際に何がリンクされているかは `ldd bin/tempoc` が一次情報。ユーザー向けの案内は
+[`README.md`](README.md) の「Linux runtime requirements」に転記してある（README と nfpm.yaml が
+食い違わないよう、変更時は両方直すこと）。ビルド時は `-dev` 付き（`WAILS_LINUX_DEPS`、
+`.github/variables`）、実行時は `-dev` 無し、の対応も忘れない。
+
+### 現状のリリース: tar.gz（裸バイナリ）
+
+`release-desktop.yml` は Linux 成果物を **`…-linux-amd64.tar.gz`（`linux:build` の裸バイナリ）**
+として出す。ライブラリは同梱されないので、**ユーザーが上表のランタイムを自分で入れる**前提。
+加えて起動要件（userns / `GSK_RENDERER`）は tar.gz でも回避されない（上記「起動要件」参照）。
+
+### 後日 deb 化する場合
+
+Wails テンプレートに **deb/rpm/AppImage/AUR のパッケージ機構が既に用意されている**:
+
+- `wails3 task linux:package` が **AppImage + deb + rpm + aur を一括生成**（個別タスクもある:
+  `linux:create:deb` 等）。deb/rpm は nfpm、AppImage は linuxdeploy を使う。
+- **deb/rpm（nfpm）は同梱ではなく依存宣言**。`.deb` 自体に GTK は入らないが、`nfpm.yaml` の
+  `depends` により **`apt install ./tempoc.deb` で `libgtk-4-1`/`libwebkitgtk-6.0-4` が自動で入る**。
+  Ubuntu 配布ならこれが一番素直（設定は完成済み。`version`/`arch`/`maintainer` は生成時に埋まる）。
+- **AppImage は概ね同梱**（linuxdeploy が依存 `.so` をバンドル）。ただし ⚠️ WebKitGTK は本体 `.so`
+  だけでなく別プロセス実行ファイル（`WebKitNetworkProcess`/`WebKitWebProcess`）や GStreamer/GIO
+  モジュールも要り、素の linuxdeploy では取りこぼして実行時に落ちることがある（WebKit 用プラグインが
+  要る場合あり）。加えて `build.sh` が linuxdeploy を **GitHub から wget** するので CI にネットワーク
+  依存が増える。実機検証が要る。
+
+⚠️ **パッケージ化しても userns と `GSK_RENDERER` は解決しない。** これらは同梱ライブラリの話ではなく
+GPU ドライバ/カーネル設定の話なので、deb でも AppImage でも残る（deb の postinstall で userns を
+書き換えるのは行儀が悪い＝「必要コマンドを表示」に留める。上記「起動要件 1」の表参照）。
+
+**CI への組み込み方針（未実施）**: まず低リスクな **deb だけ** を `release-desktop.yml` の Linux レグに
+足す（nfpm はネット不要・設定済み）。AppImage はネット wget と WebKit バンドルの検証コストがあるので
+後回しが無難。tar.gz と deb の併存でよい。
+
 ## 関連
 
 - [`CLAUDE.md`](CLAUDE.md) — 傍受設計の詳細

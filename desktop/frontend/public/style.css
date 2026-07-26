@@ -272,6 +272,15 @@ body { background: transparent; }
     font-variant-numeric: tabular-nums;
 }
 
+/* Cards whose value cell holds more than a percentage — the credits bar shows
+   "$13.63/50.00 | 27%". The default 4rem column is sized for "100%", so widen
+   it here rather than for every bar. Compact mode has its own, smaller column
+   (font-size drops to 0.8rem there). */
+.usage-bar--wide-util {
+    --util-col: 18rem;
+    --compact-util-col: 10rem;
+}
+
 /* Nested secondary window (e.g. weekly_scoped) inside the same card. */
 .usage-bar-head--sub {
     margin-top: 0.8rem;

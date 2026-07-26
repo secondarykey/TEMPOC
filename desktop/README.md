@@ -4,7 +4,7 @@ A standalone desktop app (Wails v3) that shows elapsed-time progress bars for Cl
 
 It works by loading claude.ai inside a hidden WebView, intercepting the usage API responses, and rendering the bars in its own compact, frameless window. All of the [Chrome extension](../chrome-extension/README.md)'s settings are available, plus desktop-only options (UI language — English / 日本語, following Claude's official locale codes; always-on-top; transparent window; size modes).
 
-If you have **Usage credits** enabled on claude.ai, an extra bar can show how much of your monthly spend limit is used — its header carries the amounts, e.g. `Usage credits ($1.69/50.00)`. It is **off by default**; turn it on under Settings → Usage credits (the section only appears once a spend limit is reported). Credits reset at the start of the UTC month, shown — like every other reset time here — in your own timezone.
+If you have **Usage credits** enabled on claude.ai, an extra bar can show how much of your monthly spend limit is used — it reads `$13.63/50.00 | 27%`, amounts and percentage together. It is **off by default**; turn it on under Settings → Usage credits (the section only appears once a spend limit is reported). Credits reset at the start of the UTC month, shown — like every other reset time here — in your own timezone.
 
 For what the bars mean, and for privacy and disclaimer, see the [project README](../README.md).
 

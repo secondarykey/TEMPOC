@@ -285,6 +285,7 @@ function UsageBar({
   settings,
   secondary,
   sizeMode,
+  utilText,
   locale,
   t,
 }: {
@@ -295,6 +296,11 @@ function UsageBar({
   settings: Settings;
   secondary?: { label: string; kind: WindowKind; data: UsageWindow | undefined };
   sizeMode: SizeMode;
+  // Replaces the bare percentage in the value cell — credits show their amounts
+  // alongside it ("$13.63/50.00 | 27%"). Since that needs far more room than a
+  // percentage, its presence also widens the value column (--util-col, see
+  // .usage-bar--wide-util in style.css).
+  utilText?: string;
   locale: LocaleCode;
   t: Messages;
 }) {
@@ -350,27 +356,31 @@ function UsageBar({
   // fixed value columns (style.css --compact-*-col) keep cells lined up across
   // every row (and across cards, each its own grid); the secondary row shares
   // the primary's timeline, so its elapsed cell stays empty.
+  // Only the primary bar can carry a custom value text (utilText); the nested
+  // secondary is always a plain percentage.
+  const cardClass = `usage-bar${utilText ? ' usage-bar--wide-util' : ''}`;
+
   if (sizeMode === 'compact') {
-    const row = (lbl: string, u: number, c: string, tip: string, sub?: boolean) => (
+    const row = (lbl: string, value: string, c: string, tip: string, sub?: boolean) => (
       <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={tip}>
         <span className="usage-bar-label">{lbl}</span>
         <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatPercent(elapsed, settings) : '—'}</span>
-        <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
+        <span className="usage-bar-util" style={{ color: c }}>{value}</span>
       </div>
     );
     return (
-      <div className="usage-bar">
-        {row(label, util, color, tooltip)}
-        {secondary && row(secondary.label, secUtil, secColor, secTooltip, true)}
+      <div className={cardClass}>
+        {row(label, utilText ?? formatUtil(util), color, tooltip)}
+        {secondary && row(secondary.label, formatUtil(secUtil), secColor, secTooltip, true)}
       </div>
     );
   }
 
   return (
-    <div className="usage-bar" title={tooltip}>
+    <div className={cardClass} title={tooltip}>
       <div className="usage-bar-head">
         <span className="usage-bar-label">{label}</span>
-        <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
+        <span className="usage-bar-util" style={{ color }}>{utilText ?? formatUtil(util)}</span>
       </div>
       <div className="usage-bar-track-wrap">
         <div className="usage-bar-track">
@@ -665,9 +675,13 @@ function MainWindow() {
     utilization: credits?.utilization ?? (creditsLimit > 0 ? (creditsUsed / creditsLimit) * 100 : 0),
     resets_at: nextUtcMonthStart(now),
   };
-  const creditsLabel =
-    `${t.creditsLabel} (${formatCredits(creditsUsed, creditsDecimals, locale, credits?.currency ?? undefined)}` +
-    `/${formatCredits(creditsLimit, creditsDecimals, locale)})`;
+  // The value cell carries the amounts as well as the percentage — money is the
+  // whole point of this bar, and the label column stays a plain window name like
+  // every other bar. The currency symbol goes on the spent figure only.
+  const creditsUtilText =
+    `${formatCredits(creditsUsed, creditsDecimals, locale, credits?.currency ?? undefined)}` +
+    `/${formatCredits(creditsLimit, creditsDecimals, locale)}` +
+    ` | ${formatUtil(clamp(creditsWindow.utilization ?? 0))}`;
 
   const lastUpdatedLabel =
     lastUpdated != null ? formatLastUpdated(now - lastUpdated, locale, t) : null;
@@ -737,7 +751,7 @@ function MainWindow() {
               )
             )}
             {settings.showCredits && creditsHasData && (
-              <UsageBar label={creditsLabel} kind="credits" data={creditsWindow} now={now} settings={settings} sizeMode={sizeMode} locale={locale} t={t} />
+              <UsageBar label={t.creditsLabel} kind="credits" data={creditsWindow} now={now} settings={settings} sizeMode={sizeMode} utilText={creditsUtilText} locale={locale} t={t} />
             )}
           </div>
         )}

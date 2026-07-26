@@ -198,7 +198,8 @@ diff = util - elapsed
 - **weekly_scoped のネスト表示**: `seven_day` と `weekly_scoped` はリセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけ。そこで **Weekly limit カード（`seven_day`）の中に副バーとしてネスト**する（`UsageBar` の `secondary` prop）。タイムライン（リセット日時・経過マーカー・残り時間）は主バーと共有し、副バーはラベル・使用率・色のみ独立。表示は `showDay7 && showWeeklyScoped` かつデータ存在時のみ。5時間バーは独立カードのまま。
 - **ウィンドウ高さの動的調整**: 副バー（weekly_scoped）が表示されるとき `Window.SetSize(520, 396)`、それ以外は `340`（`MainWindow` の `useEffect` が `weeklyBarVisible` を監視）。
 - **Usage credits バー（`kind: 'credits'`）**: 他のバーと同じ `UsageBar` で描くが、データ源が金額なので前処理が違う（`MainWindow` 内で算出）。
-  - **ラベルに金額を入れる**: `Usage credits ($1.69/50.00)` の形。`formatCredits()` が最小単位の整数を `decimal_places` で実額に直し、`Intl.NumberFormat` で UI ロケール整形する。通貨記号は**左の消費額だけ**に付け、右の上限は素の数値（記号の重複を避ける）
+  - **金額は使用率セルに入れる**: 右側の値セルが `$13.63/50.00 | 27%` になる（ラベルは他のバーと同じ素のウィンドウ名）。`UsageBar` の `utilText` prop で `formatUtil()` の代わりに描画する。`formatCredits()` が最小単位の整数を `decimal_places` で実額に直し、`Intl.NumberFormat` で UI ロケール整形する。通貨記号は**左の消費額だけ**に付け、右の上限は素の数値（記号の重複を避ける）
+  - 値セルの列幅は既定 4rem（"100%" 用）では足りないので、`utilText` があるカードに `usage-bar--wide-util` が付き **`--util-col: 18rem`**（コンパクトは `--compact-util-col: 10rem`）に広げる。他のバーの列幅には影響しない
   - **リセットは UTC 月初**（API に `resets_at` が無いため合成。上記「対象 API」参照）。バーの時間軸だけ月単位になるので、`WINDOW_MS` の定数引きではなく `windowStart()` が「終端から1か月戻す」を担当する（月の長さが可変なため。`Date.UTC` が month `-1` を前年12月に正規化するので1月も特別扱い不要）。**表示は他のバーと同じくユーザーのロケール/タイムゾーン**なので、JST では「8/1 9:00 にリセット」と出る
   - 表示条件は `settings.showCredits && monthly_limit != null`。**既定は非表示**（`ShowCredits: false`。クレジット未使用のユーザーが大半で、内容も使用量ではなく金額のため）。設定セクションは weekly_scoped と同様、データが無いときは消さずに無効化する（下記「設定」参照）
   - 月替わり直後は消費額が次回取得まで古いまま（バーの時間軸だけ先に新しい月へ切り替わる）。5分の自動更新で追いつく

@@ -318,6 +318,30 @@ wails3 task common:update:build-assets   # -name/-binaryname/-config/-dir を AP
 
 **素の `wails3 update build-assets` を叩いてはいけない** — フラグが無いと全項目がテンプレート既定値で上書きされ、`windows/wails.exe.manifest` の `com.github.secondarykey.tempoc.desktop`（`productIdentifier` 由来）も失われる。
 
+### アイコン（`appicon.png` 一本。Assets.car は使わない）
+
+アイコンの正は **`build/appicon.png`（TEMPOC 独自アイコン）だけ**。`common:generate:icons` がここから `darwin/icons.icns` と `windows/icon.ico` を作る。
+
+⚠️ **`-iconcomposerinput` / `-macassetdir` を復活させてはいけない**（`build/Taskfile.yml` の `generate:icons`）。このフラグは Icon Composer 形式の `.icon` から `Assets.car`（アセットカタログ）を生成するが、**`Assets.car` が存在すると `update build-assets` が Info.plist に `CFBundleIconName` を書き込み**（`internal/commands/build-assets.go`）、macOS は**それを `CFBundleIconFile`（= `icons.icns`）より優先する**。テンプレート既定の `appicon.icon` は中身が **Wails のロゴ（`wails_icon_vector.svg`）のまま**だったため、macOS だけ TEMPOC ではなく Wails ロゴが表示されていた（2026-07 に `appicon.icon` と `Assets.car` を削除して解消）。
+
+- Info.plist の `CFBundleIconName` は**テンプレート側で条件付き**（`{{- if .CFBundleIconName}}`）で、`Assets.car` が無ければ書かれない。よって `update build-assets` を再実行しても**この修正は巻き戻らない**
+- Taskfile は `update build-assets` の再生成対象外（`updatable_build_assets` に含まれない）なので、`generate:icons` の編集も残る
+- 副次効果として **`actool` は一切呼ばれなくなった**（`-iconcomposerinput` 指定時のみ実行されるため）。skill pitfalls #11 の macOS CI クラッシュ要因も消えている
+- トレードオフ: **macOS 26 の Liquid Glass 階層アイコンには非対応**（従来形式）。対応したくなったら、Wails 既定ではなく **TEMPOC 用に作った `.icon` バンドル**を用意してからフラグを戻すこと
+
+### ⚠️ macOS の .app バンドルは毎回作り直す（codesign の detritus エラー）
+
+`build/darwin/Taskfile.yml` の `run`（= `wails3 dev` の起動段）と `create:app:bundle`（= `package`）は、テンプレート既定では**既存バンドルに上書きコピーするだけ**だった。そのため2回目以降は**すでに署名済みのバンドルを再署名**することになり、`codesign` が
+
+```
+replacing existing signature
+<bundle>: resource fork, Finder information, or similar detritus not allowed
+```
+
+で **exit 1** し、`run` の最終行（アプリの起動）に到達せず**起動しなくなる**（`wails3 dev` はその後 Vite を起動するので、一見動いているように見えるのが厄介）。
+
+対策として両タスクの先頭に **`rm -rf` でバンドルを消してから組み立て直す**のと、署名直前の **`xattr -cr`** を入れてある（`cp` は macOS で拡張属性を引き継ぐため）。**この2行を消さないこと。** 副次的に、生成されなくなったファイル（旧 `Assets.car` 等）がバンドル内に残り続ける問題も同時に防いでいる。`rm -rf` の対象は `bin/<name>.app` / `bin/<name>.dev.app` であって**ビルド成果物の `bin/<name>` 本体ではない**。
+
 **`build/windows/msix/` だけは例外で、`wails3 init` 時にしか生成されず update でも再生成されない**（＝手で直すと恒久的に残る一方、`config.yml` や `APP_NAME` を変えても自動追従しない）。`app_manifest.xml` / `template.xml` の表示名・exe 名・`Version="0.1.0.0"` は手で同期させてある。**バージョン番号は `_cmd/version.go` の同期対象外なので、MSIX で配布するなら bump のたびに手で直すこと**。現状の既定パッケージ形式は NSIS（`wails3 task windows:package`）で MSIX は使っていない。
 
 exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが毎回実行）→ `.syso` を go build がリンク、という順で起こる。したがって `config.yml` を直しただけでは何も変わらず、`update build-assets` → 再ビルドまでやって初めて反映される。
@@ -327,7 +351,9 @@ exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが�
 2本のワークフローが直列に動く。**通常運用で必要なのは main に push することだけ**:
 
 1. `versionup-desktop.yml` — `desktop/**` を触る push で起動。次バージョンを決めて `go run ./_cmd/version.go` + `wails3 task common:update:build-assets` を実行し、bump を PR 経由で main にマージして `desktop-v<version>` タグを打つ
-2. `release-desktop.yml` — そのタグで起動。`windows-latest` で `wails3 task windows:build` → `bin/tempoc.exe` を zip 化 → **draft** リリース（`tempoc-desktop-<version>-windows-amd64.zip`）
+2. `release-desktop.yml` — そのタグで起動。`verify`（タグ/version/info.json 一致チェック）→ `build`（`windows-latest` / `macos-15` / `ubuntu-latest` のマトリクスで各 OS ネイティブビルド）→ `release`（3成果物を1つの **draft** リリースへ添付）。成果物は Windows=`tempoc-desktop-<version>-windows-amd64.zip`（`windows:build` の `tempoc.exe`）、macOS=`…-darwin-arm64.zip`（`darwin:package` の `.app` を ditto 圧縮。`macos-15`=Apple Silicon のネイティブ arm64。Intel は非対応 — universal 化するなら amd64 の CGO クロスが要る）、Linux=`…-linux-amd64.tar.gz`（`linux:build` の裸バイナリ）。**macOS ランナーは `macos-15` 固定**（リリースビルドの Xcode/macOS が勝手に変わらないように。元は `macos-latest`=macos-26 の `actool` クラッシュ回避＝skill pitfalls #11 だったが、下記のとおり actool は現在呼ばれない）。Linux ビルドは `WAILS_LINUX_DEPS`（GTK4/WebKitGTK）が必要
+
+**傍受ブリッジのマルチ OS 対応**: `inject.js` の page→Go 送信は WebView ごとに口が違う（Windows=`window.chrome.webview` / macOS・Linux=`window.webkit.messageHandlers.external`）。`sendToHost()` が実行時に検出して切り替える（**WebView2 を先に判定するので Windows は無変更**）。受信・`wails:` ルーティング・`ExecJS` の `runtimeLoaded` ゲートは Wails の共通コードなので **Go 側は無改修**。⚠️ ただし **macOS は注入が document-END**（`options.JS` が `WebViewDidFinishNavigation` で `execJS` される）で Windows の document-START と異なり、初回の usage リクエストを取り逃しうる（能動取得 `__tempocRefetch` で埋める想定）。詳細・調査根拠・実機確認の観点は **[`multios.md`](multios.md)**。mac/Linux の実機確認は未了。
 
 次バージョンの決め方は拡張と同じ規則: **`desktop/version` の値が未タグならその値をそのまま使い、タグ済みなら patch を上げる**。したがって **minor/major を上げたいときは `go run ./_cmd/version.go 0.2.0` して commit するだけでよい**（CI はその値を尊重してリリースする）。CI が bump する場合、生成アセットも一緒にコミットされる。
 

@@ -87,22 +87,46 @@ function TitleBar({ onOpenSettings, onRefresh, onTop, onToggleOnTop, lastUpdated
 type SizeMode = 'normal' | 'small' | 'compact';
 
 type UsageWindow = { utilization?: number; resets_at?: string | null };
-type WindowKind = 'five_hour' | 'seven_day' | 'weekly_scoped';
+type WindowKind = 'five_hour' | 'seven_day' | 'weekly_scoped' | 'credits';
+// The API's extra_usage object ("Usage credits"): pay-as-you-go spending once a
+// plan limit is hit. Amounts are integers in the currency's minor units, scaled
+// by decimal_places (monthly_limit 5000 + decimal_places 2 => $50.00).
+type CreditsData = {
+  is_enabled?: boolean;
+  monthly_limit?: number | null;
+  used_credits?: number | null;
+  utilization?: number | null;
+  currency?: string | null;
+  decimal_places?: number | null;
+};
 type UsagePayload = {
   seven_day?: UsageWindow;
   five_hour?: UsageWindow;
   // weekly_scoped is a newer window Claude added; may be absent/temporary.
   weekly_scoped?: UsageWindow;
+  extra_usage?: CreditsData;
 };
 
 // Length of each usage window in milliseconds. The window start is derived by
 // subtracting this from resets_at (the window end), matching the Chrome
-// extension's calculation. weekly_scoped is treated as a 7-day window.
-const WINDOW_MS: Record<WindowKind, number> = {
+// extension's calculation. weekly_scoped is treated as a 7-day window; credits
+// are excluded because a calendar month has no fixed length (see windowStart).
+const WINDOW_MS: Record<Exclude<WindowKind, 'credits'>, number> = {
   five_hour: 5 * 60 * 60 * 1000,
   seven_day: 7 * 24 * 60 * 60 * 1000,
   weekly_scoped: 7 * 24 * 60 * 60 * 1000,
 };
+
+// Start of the window that ends at `end`. Credits follow the calendar month,
+// which varies in length, so their start is one calendar month back from the
+// end rather than a fixed subtraction. Both ends of a credits window are UTC
+// month boundaries (see creditsResetsAt), and Date.UTC normalises month -1 into
+// the previous December, so January needs no special case.
+function windowStart(kind: WindowKind, end: number): number {
+  if (kind !== 'credits') return end - WINDOW_MS[kind];
+  const d = new Date(end);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - 1, 1);
+}
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
@@ -188,12 +212,47 @@ function formatResetDate(d: Date, locale: LocaleCode): string {
   }
 }
 
+// Format a credit amount for display. Amounts come from the API as integers in
+// the currency's minor units, with decimal_places giving the scale. Passing
+// `currency` renders the symbol; the label pairs a currency-bearing figure with
+// a bare one — "($1.69/50.00)" — so the symbol isn't repeated. Both are
+// formatted for the UI locale, and an unknown currency code (which would make
+// Intl throw) falls back to the plain number.
+function formatCredits(minor: number, decimals: number, locale: LocaleCode, currency?: string): string {
+  const value = minor / Math.pow(10, decimals);
+  const opts: Intl.NumberFormatOptions = {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  };
+  try {
+    return new Intl.NumberFormat(
+      locale,
+      currency ? { ...opts, style: 'currency', currency } : opts,
+    ).format(value);
+  } catch {
+    return value.toFixed(decimals);
+  }
+}
+
+// The start of the next UTC month as an ISO timestamp: the moment Claude's
+// usage credits reset. The usage API reports no reset time for credits at all
+// (every other window carries resets_at), and claude.ai's own page just says
+// "Resets Aug 1" — i.e. the calendar month of the billing cycle, which is UTC.
+// The bar renders this moment in the user's locale and timezone like any other,
+// so in e.g. JST it correctly reads as the 1st at 09:00.
+function nextUtcMonthStart(now: number): string {
+  const d = new Date(now);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString();
+}
+
 // Per-window color thresholds / remaining-time preference.
 function pickCfg(kind: WindowKind, s: Settings) {
   if (kind === 'five_hour')
     return { colorEnabled: s.hour5ColorEnabled, danger: s.hour5Danger, warning: s.hour5Warning, showRemain: s.showRemainHour5 };
   if (kind === 'seven_day')
     return { colorEnabled: s.day7ColorEnabled, danger: s.day7Danger, warning: s.day7Warning, showRemain: s.showRemainDay7 };
+  if (kind === 'credits')
+    return { colorEnabled: s.creditsColorEnabled, danger: s.creditsDanger, warning: s.creditsWarning, showRemain: s.showRemainCredits };
   return {
     colorEnabled: s.weeklyScopedColorEnabled,
     danger: s.weeklyScopedDanger,
@@ -226,6 +285,7 @@ function UsageBar({
   settings,
   secondary,
   sizeMode,
+  utilText,
   locale,
   t,
 }: {
@@ -236,6 +296,11 @@ function UsageBar({
   settings: Settings;
   secondary?: { label: string; kind: WindowKind; data: UsageWindow | undefined };
   sizeMode: SizeMode;
+  // Replaces the bare percentage in the value cell — credits show their amounts
+  // alongside it ("$13.63/50.00 | 27%"). Since that needs far more room than a
+  // percentage, its presence also widens the value column (--util-col, see
+  // .usage-bar--wide-util in style.css).
+  utilText?: string;
   locale: LocaleCode;
   t: Messages;
 }) {
@@ -248,7 +313,7 @@ function UsageBar({
   if (resets && !Number.isNaN(resets.getTime())) {
     started = true;
     const end = resets.getTime();
-    const start = end - WINDOW_MS[kind];
+    const start = windowStart(kind, end);
     elapsed = clamp(((now - start) / (end - start)) * 100);
     remainMs = end - now;
   }
@@ -291,27 +356,31 @@ function UsageBar({
   // fixed value columns (style.css --compact-*-col) keep cells lined up across
   // every row (and across cards, each its own grid); the secondary row shares
   // the primary's timeline, so its elapsed cell stays empty.
+  // Only the primary bar can carry a custom value text (utilText); the nested
+  // secondary is always a plain percentage.
+  const cardClass = `usage-bar${utilText ? ' usage-bar--wide-util' : ''}`;
+
   if (sizeMode === 'compact') {
-    const row = (lbl: string, u: number, c: string, tip: string, sub?: boolean) => (
+    const row = (lbl: string, value: string, c: string, tip: string, sub?: boolean) => (
       <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={tip}>
         <span className="usage-bar-label">{lbl}</span>
         <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatPercent(elapsed, settings) : '—'}</span>
-        <span className="usage-bar-util" style={{ color: c }}>{formatUtil(u)}</span>
+        <span className="usage-bar-util" style={{ color: c }}>{value}</span>
       </div>
     );
     return (
-      <div className="usage-bar">
-        {row(label, util, color, tooltip)}
-        {secondary && row(secondary.label, secUtil, secColor, secTooltip, true)}
+      <div className={cardClass}>
+        {row(label, utilText ?? formatUtil(util), color, tooltip)}
+        {secondary && row(secondary.label, formatUtil(secUtil), secColor, secTooltip, true)}
       </div>
     );
   }
 
   return (
-    <div className="usage-bar" title={tooltip}>
+    <div className={cardClass} title={tooltip}>
       <div className="usage-bar-head">
         <span className="usage-bar-label">{label}</span>
-        <span className="usage-bar-util" style={{ color }}>{formatUtil(util)}</span>
+        <span className="usage-bar-util" style={{ color }}>{utilText ?? formatUtil(util)}</span>
       </div>
       <div className="usage-bar-track-wrap">
         <div className="usage-bar-track">
@@ -590,6 +659,40 @@ function MainWindow() {
   const locale = resolveLocale(settings.locale);
   const t = getMessages(locale);
 
+  // Usage credits: the API gives a monthly spend limit and the amount spent,
+  // both as integers in the currency's minor units, but no reset time and (in
+  // practice) no utilization — so the percentage is computed from the pair and
+  // the timeline from the UTC calendar month. Like weekly_scoped, the bar and
+  // its settings section only appear once a limit has actually been reported.
+  // Right after a month rollover the spent figure stays stale until the next
+  // refresh lands; the bar itself flips to the new month immediately.
+  const credits = usage?.extra_usage;
+  const creditsHasData = !!credits && credits.monthly_limit != null;
+  // "Show only when needed": credits are what Claude bills once a plan limit is
+  // exhausted, so until then the bar is just noise. Needed = the 5-hour or the
+  // 7-day window has reached 100%. weekly_scoped is deliberately not counted:
+  // it's a sub-limit of the weekly window, not a limit that sends you to
+  // credits on its own.
+  const creditsNeeded = [usage?.five_hour, usage?.seven_day].some(
+    (w) => (w?.utilization ?? 0) >= 100,
+  );
+  const creditsVisible =
+    settings.showCredits && creditsHasData && (!settings.creditsOnlyWhenNeeded || creditsNeeded);
+  const creditsDecimals = credits?.decimal_places ?? 2;
+  const creditsLimit = credits?.monthly_limit ?? 0;
+  const creditsUsed = credits?.used_credits ?? 0;
+  const creditsWindow: UsageWindow = {
+    utilization: credits?.utilization ?? (creditsLimit > 0 ? (creditsUsed / creditsLimit) * 100 : 0),
+    resets_at: nextUtcMonthStart(now),
+  };
+  // The value cell carries the amounts as well as the percentage — money is the
+  // whole point of this bar, and the label column stays a plain window name like
+  // every other bar. The currency symbol goes on the spent figure only.
+  const creditsUtilText =
+    `${formatCredits(creditsUsed, creditsDecimals, locale, credits?.currency ?? undefined)}` +
+    `/${formatCredits(creditsLimit, creditsDecimals, locale)}` +
+    ` | ${formatUtil(clamp(creditsWindow.utilization ?? 0))}`;
+
   const lastUpdatedLabel =
     lastUpdated != null ? formatLastUpdated(now - lastUpdated, locale, t) : null;
 
@@ -656,6 +759,9 @@ function MainWindow() {
                   t={t}
                 />
               )
+            )}
+            {creditsVisible && (
+              <UsageBar label={t.creditsLabel} kind="credits" data={creditsWindow} now={now} settings={settings} sizeMode={sizeMode} utilText={creditsUtilText} locale={locale} t={t} />
             )}
           </div>
         )}

@@ -55,6 +55,9 @@ type UsagePayload struct {
 	SevenDay     json.RawMessage `json:"seven_day"`
 	FiveHour     json.RawMessage `json:"five_hour"`
 	WeeklyScoped json.RawMessage `json:"weekly_scoped,omitempty"`
+	// ExtraUsage is the "Usage credits" object (spend limit / amount spent).
+	// Unlike the windows above it has no resets_at; see App.tsx's 'credits' kind.
+	ExtraUsage json.RawMessage `json:"extra_usage,omitempty"`
 }
 
 // clampToWorkArea moves (x, y) so a w×h window stays inside a screen work
@@ -107,6 +110,7 @@ type usageMessage struct {
 	SevenDay     json.RawMessage `json:"seven_day"`
 	FiveHour     json.RawMessage `json:"five_hour"`
 	WeeklyScoped json.RawMessage `json:"weekly_scoped"`
+	ExtraUsage   json.RawMessage `json:"extra_usage"`
 }
 
 // claudeCtl controls the visibility of the interception window. It is hidden by
@@ -306,6 +310,7 @@ func main() {
 					SevenDay:     msg.SevenDay,
 					FiveHour:     msg.FiveHour,
 					WeeklyScoped: msg.WeeklyScoped,
+					ExtraUsage:   msg.ExtraUsage,
 				})
 				// Data is flowing, so we're authenticated — hide the window
 				// (unless the user pinned it open for debugging).

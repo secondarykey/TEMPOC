@@ -78,6 +78,10 @@ type RawMessages = {
   currentSession: string;
   weeklyLimit: string;
   weeklyScopedFallback: string;
+  // Names claude.ai's "Usage credits" both as a bar label (with the amounts
+  // appended by App.tsx) and as the settings section heading — the two would
+  // read identically, so they share one key.
+  creditsLabel: string;
   usage: string;
   elapsed: string;
   resetsAt: string;
@@ -122,8 +126,14 @@ type RawMessages = {
   sectionWeeklyScoped: string;
   show: string;
   showRemaining: string;
+  // Usage credits only: hold the bar back until a plan limit is exhausted.
+  showOnlyWhenNeeded: string;
+  showOnlyWhenNeededHelp: string;
   colorThreshold: string;
   labelField: string;
+  // Shown in place of nothing when a window's section is present but inert
+  // (claude.ai isn't reporting that window right now).
+  sectionUnavailable: string;
   sectionUtilization: string;
   utilizationHelp: string;
   warning: string;

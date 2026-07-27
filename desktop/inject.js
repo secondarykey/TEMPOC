@@ -165,6 +165,24 @@
     return { utilization: util, resets_at: o.resets_at };
   }
 
+  // Normalize the top-level `extra_usage` object (claude.ai's "Usage credits":
+  // pay-as-you-go spending once a plan limit is hit) down to the fields the app
+  // renders. Amounts are integers in the currency's minor units — pair them with
+  // decimal_places to get the real value (5000 + 2 => $50.00). Unlike every other
+  // window this one carries NO reset timestamp; the cycle is the calendar month
+  // (see App.tsx's 'credits' kind), so nothing here to normalize for time.
+  function normalizeCredits(o) {
+    if (!o) return undefined;
+    return {
+      is_enabled: o.is_enabled,
+      monthly_limit: o.monthly_limit,
+      used_credits: o.used_credits,
+      utilization: o.utilization,
+      currency: o.currency,
+      decimal_places: o.decimal_places,
+    };
+  }
+
   function handleUsageResponse(response) {
     response
       .clone()
@@ -178,6 +196,7 @@
           seven_day: normalizeWindow(data.seven_day || findLimit(data, "seven_day")),
           five_hour: normalizeWindow(data.five_hour || findLimit(data, "five_hour")),
           weekly_scoped: normalizeWindow(findLimit(data, "weekly_scoped") || data.weekly_scoped),
+          extra_usage: normalizeCredits(data.extra_usage),
         });
       })
       .catch(function () {

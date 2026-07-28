@@ -181,26 +181,44 @@ tasks:
       - codesign --force --deep --sign - "{{.BIN_DIR}}/{{.APP_NAME}}.dev.app"
       - '"{{.BIN_DIR}}/{{.APP_NAME}}.dev.app/Contents/MacOS/{{.APP_NAME}}"'
 
+  # NOTE: the two tasks below take SIGN_IDENTITY / KEYCHAIN_PROFILE as task
+  # variables rather than the template's original `-- --identity ...` form.
+  # `wails3 task` does not implement CLI_ARGS: it stops parsing at `--` and only
+  # turns KEY=VALUE arguments into variables (internal/commands/task.go), so
+  # {{.CLI_ARGS}} always expanded to nothing and `wails3 tool sign` failed with
+  # "--identity is required". CLI_ARGS is kept as a suffix so the tasks still
+  # accept extra flags when driven by go-task directly.
+  #
+  # Never hardcode the values here -- pass them per invocation (CI reads them
+  # from secrets; see .github/workflows/release-desktop.yml). Unset variables
+  # fall back to whatever `wails3 setup` stored in ~/.config/wails/defaults.yaml.
   sign:
     summary: Signs the application bundle with Developer ID
     desc: |
       Signs the .app bundle for distribution.
-      Uses signing identity from `wails3 setup` (stored in ~/.config/wails/defaults.yaml).
-      Override with: task darwin:sign -- --identity "Developer ID Application: ..."
+
+      wails3 task darwin:sign SIGN_IDENTITY="Developer ID Application: name (TEAMID)"
     deps:
       - task: package
     cmds:
-      - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" {{.CLI_ARGS}}
+      - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" {{if .SIGN_IDENTITY}}--identity "{{.SIGN_IDENTITY}}"{{end}} {{.CLI_ARGS}}
 
   sign:notarize:
     summary: Signs and notarizes the application bundle
     desc: |
-      Signs the .app bundle and submits it for notarization.
-      Uses signing identity and keychain profile from `wails3 setup`.
+      Signs the .app bundle, submits it to Apple for notarization and staples the
+      ticket. This replaces the ad-hoc signature `package` leaves behind, which
+      Gatekeeper rejects on any machine that downloaded the app ("damaged and
+      can't be opened").
 
-      First-time setup:
-        wails3 setup
+      wails3 task darwin:sign:notarize \
+        SIGN_IDENTITY="Developer ID Application: name (TEAMID)" \
+        KEYCHAIN_PROFILE="tempoc-notarize"
+
+      The profile is created once with:
+        xcrun notarytool store-credentials "tempoc-notarize" \
+          --apple-id ... --team-id ... --password <app-specific-password>
     deps:
       - task: package
     cmds:
-      - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" --notarize {{.CLI_ARGS}}
+      - wails3 tool sign --input "{{.BIN_DIR}}/{{.APP_NAME}}.app" --notarize {{if .SIGN_IDENTITY}}--identity "{{.SIGN_IDENTITY}}"{{end}} {{if .KEYCHAIN_PROFILE}}--keychain-profile "{{.KEYCHAIN_PROFILE}}"{{end}} {{.CLI_ARGS}}

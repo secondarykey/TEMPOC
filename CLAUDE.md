@@ -34,7 +34,15 @@ The i18n message JSON is the one asset both modules consume. The master is `loca
 
 Consequences to keep in mind:
 
-- A translation change is one commit that touches both modules, so it triggers **both** versionup workflows and releases both modules. That is usually what you want for wording fixes; there is no way to ship a shared-string change to only one module.
+- A translation change is one commit that touches both modules, so by default it triggers **both** versionup workflows and releases both modules. That is usually what you want for wording fixes. When it is not — a label that only exists in the desktop UI, say — hold one module back with a per-module marker in the commit message:
+
+  | Marker in the commit message | Effect |
+  |---|---|
+  | `[skip versionup:extension]` | releases desktop only |
+  | `[skip versionup:desktop]` | releases the extension only |
+  | `[skip versionup]` | releases neither (what the automated bump merges use) |
+
+  The markers are read by each `versionup-<module>.yml`'s job-level `if`. This is a commit marker and not a `paths:` filter on the locale copies because the diff cannot tell a desktop-only label apart from a translation fix that both modules should ship — only the author knows. **Skipping defers, it does not drop**: the synced copy stays on `main` and goes out with that module's next release.
 - Key completeness is enforced twice: `sync_locales.py` compares every locale against `en-US.json` (keys and `{token}` placeholders), and the desktop build re-checks typed keys via `RawMessages` in `desktop/frontend/src/i18n.ts`. Keys used only by the extension (e.g. `previewLabel`, `refreshHelp`, `savedToast`) are still listed in `RawMessages` so the desktop type check covers them too.
 - Adding a language or a key therefore spans both modules by design: edit `locales/`, run the sync script, and follow each module's guide for the code side (`SUPPORTED_LOCALES` in `desktop/frontend/src/i18n.ts`, `TEMPOC_LOCALES` in `chrome-extension/src/i18n.js`).
 

@@ -115,6 +115,18 @@ def main():
         for p in rel:
             print(f"synced {p}")
         print(f"done: {len(files)} locales, {len(diffs)} file(s) updated")
+        # Said here because this is the moment the choice exists: the commit
+        # about to be made spans both modules, and only its author knows
+        # whether both should release for it. Gated on the write actually
+        # spanning both, so a one-sided drift fix does not claim otherwise.
+        touched = {t for t in TARGETS if any(t in p.parents for p in diffs)}
+        if len(touched) == len(TARGETS):
+            print(
+                "\nthis commit touches both modules, so both will release.\n"
+                "to hold one back, add to the commit message:\n"
+                "  [skip versionup:extension]   release desktop only\n"
+                "  [skip versionup:desktop]     release the extension only"
+            )
 
 
 if __name__ == "__main__":

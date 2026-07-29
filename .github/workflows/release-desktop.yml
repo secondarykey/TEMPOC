@@ -256,7 +256,12 @@ jobs:
         working-directory: desktop
         run: tar -czf "$GITHUB_WORKSPACE/tempoc-desktop-${{ needs.verify.outputs.version }}-linux-amd64.tar.gz" -C bin tempoc
 
-      - uses: actions/upload-artifact@v4
+      # v7, paired with download-artifact@v8 below -- the two repos' majors are
+      # offset by one, so the mismatched numbers are correct, not a typo. v4 ran
+      # on Node 20, which the runner now forces onto Node 24 with a deprecation
+      # warning. Default archiving is kept (v7 added `archive: false` for single
+      # unzipped files); the download side still expects a zip.
+      - uses: actions/upload-artifact@v7
         with:
           name: dist-${{ matrix.target }}
           path: tempoc-desktop-*
@@ -283,8 +288,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # v8 is the counterpart of upload-artifact@v7 above. Beyond Node 24 it
+      # makes a digest mismatch fail the run instead of warning, which is what
+      # we want for something about to be attached to a release.
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: dist-*
           merge-multiple: true

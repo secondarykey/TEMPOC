@@ -15,8 +15,22 @@ For what the bars mean, and for privacy and disclaimer, see the [project README]
 Download the archive for your OS from the [Releases page](https://github.com/secondarykey/TEMPOC/releases) (tagged `desktop-v*`). There is no installer. On first launch you will be asked to log in to claude.ai (see below).
 
 - **Windows** (`…-windows-amd64.zip`) — unzip and run `tempoc.exe`. The WebView2 runtime it needs ships with Windows 10/11.
-- **macOS** (`…-darwin-arm64.zip`, Apple Silicon) — unzip and open `tempoc.app`. It is ad-hoc signed, so the first time you may need to right-click → **Open** (or allow it under System Settings → Privacy & Security).
+- **macOS** (`…-darwin-arm64.zip`, Apple Silicon) — unzip and open `tempoc.app`. Releases are not yet notarized, so **one command is required before the first launch** (see below).
 - **Linux** (`…-linux-amd64.tar.gz`) — extract and run `./tempoc`. The binary is dynamically linked, so **the GTK4 + WebKitGTK 6.0 runtime must be installed** (see below).
+
+### macOS: "tempoc.app is damaged and can't be opened"
+
+If macOS shows this on first launch, **the download is not corrupt.** The app is ad-hoc signed rather than signed with an Apple Developer ID, and macOS attaches a `com.apple.quarantine` flag to anything downloaded from the web. Gatekeeper refuses that combination and reports it as damage.
+
+Remove the quarantine flag from the copy you extracted:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/tempoc.app
+```
+
+(Adjust the path if you keep it somewhere other than `/Applications`.) Then open it normally.
+
+Right-click → **Open** does *not* help here: macOS 15 removed that bypass, and the "damaged" dialog offers no override at all — the command above is the only way in. This step goes away once releases are signed with a Developer ID and notarized; the release workflow already does that automatically when the signing credentials are configured.
 
 ### Linux runtime requirements
 

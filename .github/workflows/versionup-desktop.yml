@@ -11,7 +11,13 @@ on:
 
 jobs:
   versionup:
-    if: "!contains(github.event.head_commit.message, '[skip versionup]')"
+    # `[skip versionup]` holds off both modules; `[skip versionup:desktop]` holds
+    # off this one only. See versionup-extension.yml for why the choice is a
+    # commit marker rather than a paths filter -- the mirror case (an extension-
+    # only wording change) is the more common one.
+    if: >-
+      !contains(github.event.head_commit.message, '[skip versionup]') &&
+      !contains(github.event.head_commit.message, '[skip versionup:desktop]')
     # Shared with versionup-extension.yml: a push touching both modules starts
     # both workflows, and each one branches from main, merges a PR and moves
     # main. They touch different files, but serialising them keeps the two

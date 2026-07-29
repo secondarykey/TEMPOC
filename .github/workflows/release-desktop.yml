@@ -5,6 +5,11 @@ on:
     tags:
       - "desktop-v*"
 
+env:
+  # Name of the notarytool credential profile created in the throwaway keychain
+  # below. Local only -- nothing outside this workflow refers to it.
+  KEYCHAIN_PROFILE: tempoc-notarize
+
 jobs:
   # Fails fast, before any build runner spins up. The exe/app version is baked
   # from build assets (build/windows/info.json etc., generated from config.yml),
@@ -15,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      macos_signing: ${{ steps.macos_signing.outputs.enabled }}
     steps:
       - uses: actions/checkout@v5
 
@@ -33,6 +39,31 @@ jobs:
             exit 1
           fi
           echo "version=$file_version" >> "$GITHUB_OUTPUT"
+
+      # Decided here, not in the macOS leg, because the release job needs the
+      # same answer to word the install instructions -- and only a job output
+      # can carry it there. Secrets are never evaluated in an `if:`; they go
+      # through GITHUB_OUTPUT so a missing one degrades to ad-hoc instead of
+      # failing the release. Signing stays optional on purpose: it needs a paid
+      # Apple Developer account, and everything else must still ship without it.
+      - name: Check macOS signing secrets
+        id: macos_signing
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          if [ -n "$MACOS_CERT_P12" ] && [ -n "$MACOS_CERT_PASSWORD" ] \
+            && [ -n "$MACOS_SIGN_IDENTITY" ] && [ -n "$MACOS_NOTARY_APPLE_ID" ] \
+            && [ -n "$MACOS_NOTARY_TEAM_ID" ] && [ -n "$MACOS_NOTARY_PASSWORD" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=macOS signing skipped::Signing secrets are not set, so the .app ships ad-hoc signed. Gatekeeper will report it as damaged until the user runs 'xattr -dr com.apple.quarantine'."
+          fi
 
   # One leg per target OS. Wails builds natively on each runner (no Docker
   # cross-compilation): the platform Taskfiles dispatch to their `build:native`
@@ -110,14 +141,89 @@ jobs:
         working-directory: desktop
         run: wails3 task windows:build
 
+      # Imports the Developer ID certificate into a throwaway keychain and
+      # registers the notarytool credentials in it, so the sign step below can
+      # run unattended. Both are torn down at the end of the job.
+      - name: Setup signing keychain (macOS)
+        if: matrix.target == 'darwin' && needs.verify.outputs.macos_signing == 'true'
+        shell: bash
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          CERT_PATH="$RUNNER_TEMP/certificate.p12"
+
+          echo "$MACOS_CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          # Notarization waits on Apple, so the job can outlive the default
+          # 5-minute auto-lock; 6 hours is comfortably past any release run.
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          # Both codesign and notarytool resolve through the search list, so the
+          # new keychain has to be the default and searched ahead of login.
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          security import "$CERT_PATH" -k "$KEYCHAIN_PATH" -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          # Without this, codesign blocks on a GUI prompt for the private key.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" > /dev/null
+          rm -f "$CERT_PATH"
+
+          # No --keychain flag: store-credentials must land in the same default
+          # keychain that `notarytool submit` will later read from.
+          xcrun notarytool store-credentials "$KEYCHAIN_PROFILE" \
+            --apple-id "$MACOS_NOTARY_APPLE_ID" \
+            --team-id "$MACOS_NOTARY_TEAM_ID" \
+            --password "$MACOS_NOTARY_PASSWORD"
+
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
       # Native arm64 only. macos-15 is Apple Silicon; an amd64 slice would be a
       # CGO cross-compile against the universal SDK (possible, but unverified
       # here and moot while the app is non-functional on macOS).
+      #
+      # `darwin:package` alone leaves the bundle ad-hoc signed, which Gatekeeper
+      # refuses once the download carries com.apple.quarantine -- it reports the
+      # app as damaged. `darwin:sign:notarize` depends on `package`, so it builds
+      # the same bundle and then replaces that signature with the Developer ID
+      # one, adds the hardened runtime, submits to Apple and staples the ticket.
+      # Without secrets we fall back to the ad-hoc bundle and say so in the
+      # release notes.
       - name: Build (macOS arm64)
         if: matrix.target == 'darwin'
         shell: bash
         working-directory: desktop
-        run: wails3 task darwin:package
+        env:
+          SIGN_ENABLED: ${{ needs.verify.outputs.macos_signing }}
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          if [ "$SIGN_ENABLED" = "true" ]; then
+            wails3 task darwin:sign:notarize \
+              SIGN_IDENTITY="$MACOS_SIGN_IDENTITY" \
+              KEYCHAIN_PROFILE="$KEYCHAIN_PROFILE"
+          else
+            wails3 task darwin:package
+          fi
+
+      # Proves the artifact is actually distributable before it reaches a
+      # release. codesign can pass while spctl still rejects (notarization
+      # missing), so the Gatekeeper verdict is the one that matters.
+      - name: Verify signature (macOS)
+        if: matrix.target == 'darwin' && needs.verify.outputs.macos_signing == 'true'
+        shell: bash
+        working-directory: desktop
+        run: |
+          codesign -dv --verbose=4 bin/tempoc.app
+          xcrun stapler validate bin/tempoc.app
+          spctl -a -vvv -t exec bin/tempoc.app
 
       - name: Build (Linux)
         if: matrix.target == 'linux'
@@ -156,6 +262,18 @@ jobs:
           path: tempoc-desktop-*
           if-no-files-found: error
 
+      # always(): the certificate and notary password must not survive a failed
+      # run either. Runners are ephemeral, but restoring the login keychain
+      # keeps any later step in this job from seeing a half-torn-down state.
+      - name: Cleanup signing keychain (macOS)
+        if: always() && matrix.target == 'darwin' && needs.verify.outputs.macos_signing == 'true'
+        shell: bash
+        run: |
+          security list-keychains -d user -s login.keychain-db
+          security default-keychain -s login.keychain-db
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
   # Single job so the three artifacts land on one release without the matrix
   # legs racing to create it. Gated on the whole build matrix, so a partial
   # release never happens.
@@ -171,10 +289,38 @@ jobs:
           pattern: dist-*
           merge-multiple: true
 
+      # An ad-hoc signed .app is rejected by Gatekeeper the moment it is
+      # downloaded, and the dialog it shows ("damaged and can't be opened")
+      # points at the file rather than at the signature -- so the notes have to
+      # say it outright, or every macOS user reads it as a broken build. Once
+      # signing secrets are configured the step emits nothing and the notes stay
+      # clean. action-gh-release appends the auto-generated notes to this body.
+      - name: Compose release body
+        env:
+          SIGN_ENABLED: ${{ needs.verify.outputs.macos_signing }}
+        run: |
+          if [ "$SIGN_ENABLED" != "true" ]; then
+            cat >> release-body.md <<'EOF'
+          ### macOS: "tempoc.app is damaged and can't be opened"
+
+          The download is fine. This build is ad-hoc signed rather than notarized,
+          and macOS quarantines anything fetched from the web; Gatekeeper reports
+          that combination as damage. Clear the quarantine flag once:
+
+          ```
+          xattr -dr com.apple.quarantine /Applications/tempoc.app
+          ```
+
+          Right-click -> Open does not work around this on macOS 15 or later.
+          EOF
+          fi
+          touch release-body.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           name: "TEMPOC Desktop v${{ needs.verify.outputs.version }}"
           files: "tempoc-desktop-*"
+          body_path: release-body.md
           generate_release_notes: true
           draft: true

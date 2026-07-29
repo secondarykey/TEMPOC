@@ -371,7 +371,7 @@ exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが�
 2本のワークフローが直列に動く。**通常運用で必要なのは main に push することだけ**:
 
 1. `versionup-desktop.yml` — `desktop/**` を触る push で起動。次バージョンを決めて `go run ./_cmd/version.go` + `wails3 task common:update:build-assets` を実行し、bump を PR 経由で main にマージして `desktop-v<version>` タグを打つ
-2. `release-desktop.yml` — そのタグで起動。`verify`（タグ/version/info.json 一致チェック）→ `build`（`windows-latest` / `macos-15` / `ubuntu-latest` のマトリクスで各 OS ネイティブビルド）→ `release`（3成果物を1つの **draft** リリースへ添付）。成果物は Windows=`tempoc-desktop-<version>-windows-amd64.zip`（`windows:build` の `tempoc.exe`）、macOS=`…-darwin-arm64.zip`（`darwin:package` の `.app` を ditto 圧縮。`macos-15`=Apple Silicon のネイティブ arm64。Intel は非対応 — universal 化するなら amd64 の CGO クロスが要る）、Linux=`…-linux-amd64.tar.gz`（`linux:build` の裸バイナリ）。**macOS ランナーは `macos-15` 固定**（リリースビルドの Xcode/macOS が勝手に変わらないように。元は `macos-latest`=macos-26 の `actool` クラッシュ回避＝skill pitfalls #11 だったが、下記のとおり actool は現在呼ばれない）。Linux ビルドは `WAILS_LINUX_DEPS`（GTK4/WebKitGTK）が必要
+2. `release-desktop.yml` — そのタグで起動。`verify`（タグ/version/info.json 一致チェック）→ `build`（`windows-latest` / `macos-15` / `ubuntu-latest` のマトリクスで各 OS ネイティブビルド）→ `release`（3成果物を1つの **draft** リリースへ添付）。成果物は Windows=`tempoc-desktop-<version>-windows-amd64.zip`（`windows:build` の `tempoc.exe`）、macOS=`…-darwin-arm64.zip`（`darwin:package` または署名 secrets がある場合は `darwin:sign:notarize` の `.app` を ditto 圧縮。下記「macOS の署名」参照。`macos-15`=Apple Silicon のネイティブ arm64。Intel は非対応 — universal 化するなら amd64 の CGO クロスが要る）、Linux=`…-linux-amd64.tar.gz`（`linux:build` の裸バイナリ）。**macOS ランナーは `macos-15` 固定**（リリースビルドの Xcode/macOS が勝手に変わらないように。元は `macos-latest`=macos-26 の `actool` クラッシュ回避＝skill pitfalls #11 だったが、下記のとおり actool は現在呼ばれない）。Linux ビルドは `WAILS_LINUX_DEPS`（GTK4/WebKitGTK）が必要
 
 **傍受ブリッジのマルチ OS 対応**: `inject.js` の page→Go 送信は WebView ごとに口が違う（Windows=`window.chrome.webview` / macOS・Linux=`window.webkit.messageHandlers.external`）。`sendToHost()` が実行時に検出して切り替える（**WebView2 を先に判定するので Windows は無変更**）。受信・`wails:` ルーティング・`ExecJS` の `runtimeLoaded` ゲートは Wails の共通コードなので **Go 側は無改修**。⚠️ ただし **macOS は注入が document-END**（`options.JS` が `WebViewDidFinishNavigation` で `execJS` される）で Windows の document-START と異なり、初回の usage リクエストを取り逃しうる（能動取得 `__tempocRefetch` で埋める想定）。詳細・調査根拠・実機確認の観点は **[`multios.md`](multios.md)**。mac/Linux の実機確認は未了。
 
@@ -380,6 +380,27 @@ exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが�
 CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定。**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、alpha 間のズレは壊れる）。
 
 ⚠️ **Linux で wails/v3 を import する物をコンパイルするには GTK4/WebKitGTK の開発パッケージが要る**。`internal/operatingsystem` が `#cgo linux pkg-config: gtk4 webkitgtk-6.0` を宣言しているため、**GUI をビルドしない `versionup-desktop` でも `go install .../cmd/wails3` の時点で失敗する**（`Package gtk4 was not found`）。パッケージ名は `.github/variables` の `WAILS_LINUX_DEPS` に `WAILS_VERSION` と並べて置いてある — **この2つは常にセットで更新すること**。alpha.84 で既定が GTK3/WebKit2（`libgtk-3-dev` / `webkit2gtk-4.1-dev`）から GTK4/WebKitGTK 6.0 に変わった前例がある（`.claude/skills/wails3/references/pitfalls.md` の 6）。
+
+### ⚠️ macOS の署名（未設定なら「壊れているため開けません」になる）
+
+`darwin:package` が最後に打つのは **ad-hoc 署名**（`codesign --sign -`）で、**ビルドしたマシンでしか通らない**。GitHub Releases からダウンロードすると macOS が `com.apple.quarantine` を付け、Gatekeeper が ad-hoc かつ未 notarize の `.app` を拒否して
+
+> 「"tempoc"は壊れているため開けません。ゴミ箱に入れる必要があります。」
+
+と出す。**バイナリは壊れていない**（`.claude/skills/wails3/references/macos-distribution.md` §1）。このメッセージが出たら真っ先に署名を疑うこと。
+
+`release-desktop.yml` は **secrets が揃っているときだけ Developer ID 署名 + notarize + staple** を行い、無ければ ad-hoc にフォールバックする（証明書が無い間もリリースを止めないため）。判定は `verify` ジョブの `macos_signing` output に一本化してあり、これは **macOS レグと `release` ジョブの両方が同じ答えを要る**ため（署名されていない回だけリリースノートに `xattr` の回避手順を出す）。必要な secrets:
+
+| Secret | 内容 |
+|---|---|
+| `MACOS_CERT_P12` | Developer ID Application 証明書（`.p12`）の base64 |
+| `MACOS_CERT_PASSWORD` | `.p12` 書き出し時のパスワード |
+| `MACOS_SIGN_IDENTITY` | `Developer ID Application: name (TEAMID)` |
+| `MACOS_NOTARY_APPLE_ID` / `MACOS_NOTARY_TEAM_ID` / `MACOS_NOTARY_PASSWORD` | notarytool の資格情報（password は **app-specific password**） |
+
+⚠️ **`build/darwin/Taskfile.yml` の `sign` / `sign:notarize` は `SIGN_IDENTITY` / `KEYCHAIN_PROFILE` を task 変数で受け取る**ように変更してある（テンプレート既定は `-- --identity ...` だった）。**`wails3 task` は CLI_ARGS を実装しておらず**、`--` で解析を打ち切って `KEY=VALUE` だけを変数にするため（`internal/commands/task.go`）、既定のままでは `{{.CLI_ARGS}}` が常に空に展開されて `wails3 tool sign` が `--identity is required` で落ちる。値は**呼び出しごとに渡す**こと（Taskfile に直書きしない）。Taskfile は `updatable_build_assets` に含まれないのでこの変更は `update build-assets` で巻き戻らない。
+
+CI は署名後に `codesign -dv` / `stapler validate` / `spctl -a -t exec` まで検証してからアーカイブする。**`codesign` が通っても `spctl` が reject することがある**（notarize 漏れ）ので、確認は必ず `spctl` まで。
 
 release 側の先頭には **タグ / `desktop/version` / `build/windows/info.json` の3者一致チェック**がある。exe のバージョンはタグではなく `info.json`（`config.yml` 由来）から焼かれるため、手で bump して `update build-assets` を忘れると中身が旧版のまま配布されうる。ズレていれば直し方を示してツールチェイン導入前に落ちる。
 

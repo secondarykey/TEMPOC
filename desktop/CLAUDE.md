@@ -5,7 +5,7 @@ TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extensio
 - Wails: `github.com/wailsapp/wails/v3` alpha2.114
 - Go module 名: `changeme`（テンプレート既定のまま。変更していない）
 - フロント: React + Vite + TypeScript、`@wailsio/runtime`
-- 対象プラットフォーム: Windows（WebView2 前提）
+- 対象プラットフォーム: Windows（WebView2）/ macOS（WKWebView）/ Linux（WebKitGTK）。OS 差の実装メモは [`multios.md`](multios.md)
 - Wails 全般の作法は `.claude/skills/wails3` を参照
 
 ## 全体像
@@ -42,8 +42,10 @@ Chrome 拡張は claude.ai のページ内に content script を注入して `wi
 |---|---|
 | `main.go` | エントリポイント。3 ウィンドウ生成（メイン・Claude 傍受・設定）、`RawMessageHandler`、イベント登録、傍受ウィンドウ表示制御 |
 | `inject.js` | claude.ai に注入される素の JS。`window.fetch` を monkeypatch し使用量を postMessage |
+| `cookies_linux.go` / `cookies_other.go` | **Linux のみ**: WebKitGTK の cookie 保存先を `~/.config/TEMPOC/cookies.sqlite` に指定する cgo（`enableCookiePersistence()`）。Wails がこれを呼ばないため、無いと再起動のたびに claude.ai のログインが消える。Windows/macOS 版は no-op（下記「cookie の永続化」） |
 | `settings/settings.go` | 設定モデル（`Settings` 構造体 + `Default()`）。Wails 非依存 |
-| `settings/repository.go` | 設定の永続化（`os.UserConfigDir()/TEMPOC/settings.json`） |
+| `settings/paths.go` | `ConfigDir()`（`os.UserConfigDir()/TEMPOC`）。永続化するファイルの置き場を一本化 |
+| `settings/repository.go` | 設定の永続化（`ConfigDir()/settings.json`） |
 | `settings/windowstate.go` | ウィンドウ位置の永続化（`windowstate.json`）。Wails 非依存 |
 | `settings_service.go` | `SettingsService`（`Get()` / `Set()`）。フロントにバインド |
 | `frontend/src/App.tsx` | URL クエリルーター（`?window=settings` で分岐）+ メインウィンドウ UI（タイトルバー・使用量バー） |
@@ -137,6 +139,16 @@ postMessage の `type` で分岐:
 - `claude.win.RegisterHook(events.Common.WindowClosing, ...)` で close を**フック**し、`e.Cancel()` + `claudeCtl.hideOnClose()`（ピン解除 + `Hide()`）に置換 → 破棄されず非表示になるだけ。フックはリスナーより先に走るので、Wails 既定の破棄リスナーを先取りしてキャンセルできる。
 - 例外はアプリ終了時。`main` は `appQuitting`（`atomic.Bool`）で判定し、真なら close を通す（`cleanup()` が全ウィンドウに `Close()` を呼ぶため）。
 - **メインウィンドウを閉じたらアプリ全体を終了**する（`mainWin.OnWindowEvent(events.Common.WindowClosing, ...)` → `appQuitting.Store(true)` + `app.Quit()`）。これが無いと、hide-on-close の傍受ウィンドウだけが登録済みウィンドウとして残り、UI 不在のままプロセスが終了しない（`PostQuitMessage` が呼ばれない）。
+
+## cookie の永続化（ログインの保持）
+
+claude.ai のログインは傍受ウィンドウの cookie に載っているので、これが消えると毎回ログインし直しになる。**Windows/macOS は WebView が勝手に永続化する**（WebView2 は `%APPDATA%\tempoc\EBWebView`）が、**Linux は自前で面倒を見る必要がある**:
+
+- Wails の Linux 実装は `webkit_network_session_get_default()` を取るだけで **`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（alpha2.114 の `linux_cgo.go:1214` 付近）。WebKitGTK は保存先ファイルの指定が無いと cookie をメモリにしか置かないため、**実機 Ubuntu で「再起動のたびにログインが必要」が発生していた**
+- `LinuxOptions` にレバーは無く、環境変数でも有効化できない。**端末側の設定では直せない**
+- そこで `cookies_linux.go` が同じデフォルトセッション（プロセス共通のシングルトン。Wails は webview 生成時に `network-session` を渡さないので全ウィンドウがこれを使う）を cgo で取り、`ConfigDir()/cookies.sqlite` を保存先に指定する
+
+⚠️ **`enableCookiePersistence()` は `app.Run()` より前に呼ぶこと**（`main.go` の末尾）。Wails はネイティブ webview を GTK ループ開始後に作るので、`Run()` 前なら傍受ウィンドウの最初のリクエストより確実に早い。後から指定すると、ディスクに有効な cookie があるのに初回ロードが空のまま飛んで `/login` に落ちる。gtk_init 前になるが `WebKitNetworkSession` は GTK ウィジェットに触らないので問題ない（ヘッドレスでの実測は [`multios.md`](multios.md) の「既知の制約」3）。
 
 ## メインウィンドウ UI
 

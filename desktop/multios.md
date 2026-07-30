@@ -14,7 +14,9 @@
 
 Linux の傍受ブリッジは `window.webkit.messageHandlers.external` 経由で正しく機能する。**実機 Ubuntu でログインから使用量表示まで動作を確認済み**（ただし起動には下記「既知の制約」の 2 つ — 非特権 user namespace の有効化と `GSK_RENDERER=gl` — が要る）。WSL2 では claude.ai の Cloudflare 検査を通過できず使用量表示まで到達しなかったが、実機では問題なかった。
 
-実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
+傍受そのものの実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
+Go 側で足したのは cookie の永続化（[`cookies_linux.go`](cookies_linux.go)）だけで、これは傍受ではなく
+**ログインを再起動後も保持する**ための Linux 専用の穴埋め（下記「既知の制約」の 3）。
 
 ## Wails alpha2.114 の調査結果（実コードで確認済み）
 
@@ -341,15 +343,39 @@ GPU は既定のままで動くことが多い）。「白画面か」をスク�
 > ログイン・表示できる**ので、検証は GPU の使える実機で行うこと。ボット検査を迂回する小細工は
 > しないこと（環境不足のシグナルとして扱う）。
 
-### 3. cookie が永続化されない見込み（ログインが再起動で消える）
+### 3. cookie が永続化されない（ログインが再起動で消える）→ 対処済み
 
-Wails の Linux 実装は `webkit_network_session_get_default()` を使うだけで、
-**`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（`linux_cgo.go:1205` 付近）。
-WebKitGTK は明示指定が無いと cookie を SQLite に永続化しないため、**アプリを再起動すると
-claude.ai のログインが消える**と考えられる。
+**実機 Ubuntu で発生を確認**（再起動のたびに claude.ai のログインが必要）。原因は予想どおりで、
+Wails の Linux 実装は `webkit_network_session_get_default()` を使うだけで
+**`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（alpha2.114 の
+`linux_cgo.go:1214` 付近。モジュール全体を grep しても cookie 系の呼び出しはゼロ）。WebKitGTK は
+保存先ファイルを指定しない限り cookie をメモリにしか置かないため、プロセス終了でセッションが消える。
+`application.Options.Linux`（`LinuxOptions`）にもデータディレクトリ／cookie のレバーは無く
+（`DisableQuitOnLastWindowClosed` と `ProgramName` だけ）、**環境変数で有効化する手段も無い**
+— つまり端末側の設定では直せない。
 
-Windows は WebView2 のユーザーデータフォルダ（`%APPDATA%\tempoc\EBWebView`）に永続化されるので、
-これは実質的な機能差。Linux 対応を進めるなら対処が要る（1 が解決して初めて表面化する課題）。
+**対処**: [`cookies_linux.go`](cookies_linux.go) が自前の cgo で同じデフォルトセッションを取り、
+`~/.config/TEMPOC/cookies.sqlite` を保存先に指定する（`main.go` が `app.Run()` の直前に
+`enableCookiePersistence()` を呼ぶ）。Wails 本体の改修は不要 — デフォルトセッションは
+プロセス共通のシングルトンで、Wails は webview 生成時に `network-session` プロパティを渡さない
+（`create_webview_with_user_content_manager` は `user-content-manager` だけを指定する）ため、
+全ウィンドウが自動的にこのセッションを使う。
+
+要点は**呼ぶ順序**で、`app.Run()` より前でなければならない。Wails はネイティブ webview を GTK
+ループが回り始めてから作るので、`Run()` 前なら傍受ウィンドウの最初のリクエストより確実に早い。
+後から付けると、ディスクに有効な cookie があるのに初回ロードが空のまま飛んで `/login` に落ちる。
+gtk_init 前になるが、`WebKitNetworkSession` は GTK ウィジェットに触らないので問題ない
+（下記のとおり実測で確認）。Windows/macOS は webview 自身が永続化するので
+[`cookies_other.go`](cookies_other.go) の no-op。
+
+**ヘッドレスでの検証**（WSL2 Ubuntu 24.04 / WebKitGTK 2.52.3。ログインまで通らない環境でも
+ここまでは確かめられる）: `webkit_network_session_get_default()` →
+`webkit_network_session_get_cookie_manager()` → `webkit_cookie_manager_set_persistent_storage()`
+→ `webkit_cookie_manager_add_cookie()` を **gtk_init 無し・`DISPLAY`/`WAYLAND_DISPLAY` 無し**の
+素の C プログラムで実行したところ、クラッシュせず指定パスに SQLite ファイルが生成され、
+`moz_cookies` テーブルに claude.ai の cookie が入ることを確認した。
+
+実機で残っている確認は「ログイン → アプリ再起動 → ログインが保持されている」の1点。
 
 ## Linux の配布・必要ライブラリ（現状 tar.gz / 将来 deb）
 

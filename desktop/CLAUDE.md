@@ -328,6 +328,13 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
 - Go の Service やバインド対象の型を変えたら bindings の再生成を忘れない。忘れると無言で壊れる
 - **ログは slog 1本**（`slog.SetDefault` と `application.Options.Logger` に同一ロガー。渡さないと Wails は制御外の出力先に流す）。レベルは `production` ビルドタグで切り替え（`dev.go` / `production.go`）: 開発 = Info、正規ビルド（`wails3 task windows:build`）= Warn
 - **`-log debug|info|warn` でファイル出力**: 指定時のみ、標準エラーの代わりに**実行位置（カレントディレクトリ）の `YYYY-MM-DD.log`** へ指定レベルで出力（同日は追記）。正規 exe（windowsgui でコンソール無し）からログを取る手段であり、`slog.Debug`（inject.js の debug 中継等）を見る手段でもある。フラグ無しの既定では Debug はどこにも出ない
+- **`wails3 dev` にアプリ引数を渡すには環境変数 `TEMPOC_ARGS`**:
+
+  ```bash
+  TEMPOC_ARGS="-log debug" wails3 dev     # wails3 task run でも同じ
+  ```
+
+  dev は `build/config.yml` の `dev_mode.executes`（`type: primary`）にある **`wails3 task run` 経由でアプリを起動**し、そのコマンドラインは固定で拡張できない。そこで各 OS の `run` タスク（`build/<os>/Taskfile.yml`）の起動行末尾に `$TEMPOC_ARGS` を付けてある — **タスク変数ではなく環境変数**なのは、dev から渡す唯一の経路がこれだから（`wails3 task` の CLI_ARGS 非対応は上記 macOS 署名の項も参照）。未設定なら空に展開されるだけ。ログの出力先は起動時のカレントなので、dev では `desktop/YYYY-MM-DD.log` に出る
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
 
 ## バージョン管理・アプリ情報

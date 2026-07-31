@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
 | macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
-| Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン・使用量表示・傍受すべて動作 |
+| Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン（再起動後の保持も）・使用量表示・傍受すべて動作。ただし起動には下記「既知の制約」1・2・4 の env が要る環境がある |
 
 Linux の傍受ブリッジは `window.webkit.messageHandlers.external` 経由で正しく機能する。**実機 Ubuntu でログインから使用量表示まで動作を確認済み**（ただし起動には下記「既知の制約」の 2 つ — 非特権 user namespace の有効化と `GSK_RENDERER=gl` — が要る）。WSL2 では claude.ai の Cloudflare 検査を通過できず使用量表示まで到達しなかったが、実機では問題なかった。
 
@@ -375,7 +375,41 @@ gtk_init 前になるが、`WebKitNetworkSession` は GTK ウィジェットに�
 素の C プログラムで実行したところ、クラッシュせず指定パスに SQLite ファイルが生成され、
 `moz_cookies` テーブルに claude.ai の cookie が入ることを確認した。
 
-実機で残っている確認は「ログイン → アプリ再起動 → ログインが保持されている」の1点。
+**実機 Ubuntu で「ログイン → アプリ再起動 → ログイン保持」を確認済み**（2026-07-31）。
+
+### 4. 🟡 `WEBKIT_DISABLE_DMABUF_RENDERER=1` を指定する（起動のたびに当たり外れで中身が真っ白）
+
+2 と症状が似ているが**別物**なので、まず切り分けること:
+
+| | 2（`GSK_RENDERER`） | 4（DMABUF） |
+|---|---|---|
+| 頻度 | 毎回 | **起動のたびに当たり外れ**（何度か起動し直すと描画される） |
+| 効く env | `GSK_RENDERER=gl` | `WEBKIT_DISABLE_DMABUF_RENDERER=1` |
+
+原因は WebKitGTK の **DMABUF ベースの合成経路**で、実機（Intel Haswell 内蔵 GPU）で外れを引く。
+Haswell は Mesa に Vulkan ドライバが無く（ANV は Gen9 以降）、GL 側もレガシー枠の `crocus` 担当という
+薄いスタックで、初期化のタイミング次第で描画に失敗する。**実測で
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` 単独で安定**した（`WEBKIT_DISABLE_COMPOSITING_MODE` や
+`GSK_RENDERER=cairo` の追加は不要）。
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 ./bin/tempoc
+```
+
+⚠️ **切り分けの決め手はログ**。`-log debug` で `path=/` の行があれば、`wails://localhost/` の配信は
+成功している ＝ アプリはページを渡せており、**描画側の問題**と確定する（配信が失敗しているなら
+別の原因）。この一行を見ずに追うと、直前のコード変更を疑って時間を使うことになる — 実際、
+cookie 永続化（上記 3）を疑って A/B まで回した末に無関係と分かった経緯がある。
+
+**`wails3 dev` では発生確率が上がるが、これは別要因が重なるため**。dev はフロントを Vite から
+HTTP 配信するので、Wails の dev 待機（`preRun` の 500ms × 10 回 = **最大5秒**）内に Vite が
+上がらないと、そもそも何も配信されずに空ウィンドウになる。`npm install` が走った回はまず間に合わない
+（`build/Taskfile.yml` の `install:frontend:deps:npm` は `package-lock.json` と `node_modules` の
+mtime 比較で再実行されるため、git 操作の後は走りがち）。**dev の空ウィンドウはこちらを先に疑う**こと。
+`cd frontend && npm install && touch node_modules` で install をスキップさせれば Vite は1秒程度で上がる。
+
+既定で env を設定しない方針は 2 と同じ（ハードウェア依存で、正常な環境を壊しうるため）。
+ユーザー向けの案内は [`README.md`](README.md) の Linux 節にある。
 
 ## Linux の配布・必要ライブラリ（現状 tar.gz / 将来 deb）
 

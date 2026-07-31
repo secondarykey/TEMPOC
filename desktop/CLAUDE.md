@@ -116,7 +116,20 @@ postMessage の `type` で分岐:
 
 `inject.js` 内で `setInterval(__tempocClickRefresh, ms)`。`ms` は Go が起動時に `settings.RefreshInterval*60000` を `__TEMPOC_REFRESH_MS__` プレースホルダへ文字列置換して埋め込む。**傍受スクリプトは傍受ウィンドウに再注入できない**（上記 ExecJS の制約）ため、`refreshInterval` の変更は**次回起動時**に反映される。
 
-繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタンをクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。ボタンは `findRefreshButton()` が **モーダル（`[role="dialog"]`）内の `aria-label="Refresh"`（または「更新」）** で構造的に探す — React の自動生成 ID（`_r_bb_` → `_r_h7_` と実際に変わった）には依存しない（旧 ID は最後の保険としてのみ参照）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。**API 直叩きは極力使わない**方針: ボタンが無い場合、まず「usage モーダルが開いていない（SPA 遷移でハッシュ喪失）」を疑い、claude.ai 上でハッシュが `#settings/usage` でなければ **usage URL を開き直してモーダルを復元**する（リロード後の初回取得がデータを届け、以後はボタンが押せる）。ハッシュが正しいのにボタンが無い（ID 変更等）ときだけ `__tempocRefetch` にフォールバック — この分岐が再リロードしないことでリロードループを防ぐ。ただし**初回1回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `setTimeout(__tempocRefetch, 1500)` の直叩きのまま。また **`/login` 上では `__tempocClickRefresh` は何もしない** — モーダル復元リロードが走るとログイン入力中のユーザーの画面が消えるため（ログイン完了後の復帰は watchAuthTransition が担う）。
+繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタンをクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。ボタンは `findRefreshButton()` が **モーダル（`[role="dialog"]`）内の `aria-label="Refresh"`（または「更新」）** で構造的に探す — React の自動生成 ID（`_r_bb_` → `_r_h7_` と実際に変わった）には依存しない（旧 ID は最後の保険としてのみ参照）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。**API 直叩きは極力使わない**方針: ボタンが無い場合、まず「usage モーダルが開いていない（SPA 遷移でハッシュ喪失）」を疑い、claude.ai 上でハッシュが `#settings/usage` でなければ **usage URL を開き直してモーダルを復元**する（リロード後の初回取得がデータを届け、以後はボタンが押せる）。ハッシュが正しいのにボタンが無い（ID 変更等）ときだけ `__tempocRefetch` にフォールバック — この分岐が再リロードしないことでリロードループを防ぐ。ただし**初回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `__tempocRefetch` の直叩き（下記「初回取得のリトライ」）。また **`/login` 上では `__tempocClickRefresh` は何もしない** — モーダル復元リロードが走るとログイン入力中のユーザーの画面が消えるため（ログイン完了後の復帰は watchAuthTransition が担う）。
+
+### 初回取得のリトライ（`refetchWithRetry`）
+
+初回の能動取得は `setTimeout` で 1.5 秒待ってから `__tempocRefetch` を叩くが、**1回では足りない**。ページがまだ出来ていない・一時的なネットワークエラーで取り逃すと、次に何かが動くのは自動更新（既定5分）で、しかもそれはモーダル内の更新ボタンを押す経路なので**モーダルが開いていなければ空振り**し、フロントは「使用量を待っています」のまま無反応になる。
+
+そこで `refetchWithRetry(attempt)` が **1.5s → 3s → 6s → 12s** の順に間隔を伸ばして再試行する。打ち切りは2つだけ:
+
+- **取得成功**
+- **未認証が確定**（何度叩いても同じ。ログイン完了の検知と再取得は `watchAuthTransition` の担当）
+
+一時障害（`__tempocRefetch` の `catch`）だけがリトライに値する、という区別が肝。`__tempocRefetch` は**成否の boolean しか返さない**契約（Go 側・ExecJS 経路もこれを前提にしている）ので理由を返り値には載せられない。代わりに **`postAuthRequired()` を通した回数（`authSignals`）を呼び出し前後で比べて**「未認証だったのか」を判定する。**`auth-required` の post は必ず `postAuthRequired()` 経由にすること** — 直接 `post({type:"auth-required"})` を書くとこのカウンタから漏れ、ログイン前なのにリトライし続ける。
+
+ログイン完了時（`watchAuthTransition` の `/login` から出た経路）も同じ `refetchWithRetry` を使う。挙動は `inject.test.mjs` が `setTimeout` を差し替えて固定している（バックオフの間隔・403 で止まること・打ち切ること）。
 
 ### 手動更新（タイトルバーの更新ボタン）
 

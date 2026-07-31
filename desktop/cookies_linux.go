@@ -61,17 +61,6 @@ import (
 // Failures are logged and swallowed: without persistence the app still works,
 // it just asks for a login again next time — not a reason to refuse to start.
 func enableCookiePersistence() {
-	// Diagnostic escape hatch, to be removed once we know whether this call is
-	// behind the blank-window reports on Linux. webkit_network_session_get_default()
-	// starts WebKitNetworkProcess right there (measured), i.e. before Wails
-	// registers its wails:// URI scheme, so it changes WebKit's startup order.
-	// TEMPOC_SKIP_COOKIES=1 runs the app with the old order for comparison; the
-	// only functional loss is that the claude.ai login stops surviving restarts.
-	if os.Getenv("TEMPOC_SKIP_COOKIES") != "" {
-		slog.Info("cookie persistence skipped (TEMPOC_SKIP_COOKIES set)")
-		return
-	}
-
 	dir, err := settings.ConfigDir()
 	if err != nil {
 		slog.Warn("cannot resolve config dir, cookies will not persist", "err", err)

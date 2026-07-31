@@ -32,6 +32,16 @@
     sendToHost(JSON.stringify(obj));
   }
 
+  // 未認証の通知は必ずここを通す。カウンタを見れば「取得に失敗した理由が
+  // 未認証だったか（＝リトライしても無駄）」が分かり、refetchWithRetry が
+  // 一時障害と区別できる。__tempocRefetch は成否の boolean しか返さないため
+  // （その契約は Go 側・ExecJS 経路も前提にしている）、判定はこの側で持つ。
+  var authSignals = 0;
+  function postAuthRequired() {
+    authSignals++;
+    post({ type: "auth-required" });
+  }
+
   if (window.__tempocPatched) {
     // 既にパッチ済み。再注入時は使用量の再取得を試みる（下の tryRefetch を呼ぶ）。
     post({ type: "debug", msg: "inject: already patched, re-run" });
@@ -108,7 +118,7 @@
     var isLogin = loginPath.test(path);
     lastPath = path;
     if (isLogin && !wasLogin) {
-      post({ type: "auth-required" });
+      postAuthRequired();
       console.debug("[TEMPOC] login page detected");
     } else if (wasLogin && !isLogin) {
       // ログイン成功。SPA は /new に着地してハッシュ（#settings/usage）が
@@ -119,7 +129,7 @@
       // 開いているので直接取得だけで足りる。
       if (window.location.hash === "#settings/usage") {
         post({ type: "debug", msg: "login completed, refetching" });
-        window.__tempocRefetch();
+        refetchWithRetry(0);
       } else {
         post({ type: "debug", msg: "login completed, opening usage page" });
         window.location.replace("https://claude.ai/new#settings/usage");
@@ -219,7 +229,7 @@
         if (response.status === 401 || response.status === 403) {
           // サイト自身の使用量リクエストが認証エラー = ログアウトされた。
           post({ type: "debug", msg: "usage: unauthorized (" + response.status + ")" });
-          post({ type: "auth-required" });
+          postAuthRequired();
         } else {
           handleUsageResponse(response);
         }
@@ -243,7 +253,7 @@
         // ログイン前表示に戻す。
         if (r.status === 401 || r.status === 403) {
           post({ type: "debug", msg: "refetch: unauthorized (" + r.status + ")" });
-          post({ type: "auth-required" });
+          postAuthRequired();
           return false;
         }
         return r.json().then(function (orgs) {
@@ -252,7 +262,7 @@
             // 返ることがある。正規アカウントに組織ゼロは無いので、これも
             // 未認証として扱う。
             post({ type: "debug", msg: "refetch: no organizations" });
-            post({ type: "auth-required" });
+            postAuthRequired();
             return false;
           }
           var orgId = orgs[0].uuid || orgs[0].id;
@@ -262,7 +272,7 @@
             { credentials: "include" }
           ).then(function (r2) {
             if (r2.status === 401 || r2.status === 403) {
-              post({ type: "auth-required" });
+              postAuthRequired();
               return false;
             }
             handleUsageResponse(r2);
@@ -275,6 +285,35 @@
         return false;
       });
   };
+
+  // 能動取得を、成功するまで間隔を伸ばしながら数回試す。
+  //
+  // 1回きりだと、起動直後に取り逃したとき（ページがまだ出来ていない・一時的な
+  // ネットワークエラー）にフロントが「使用量を待っています」のまま無反応になる。
+  // 次に何かが動くのは自動更新（既定5分）で、しかもそれはモーダル内の更新ボタンを
+  // 押す経路なので、モーダルが開いていなければ空振りする。
+  //
+  // 打ち切り条件は2つ:
+  //   - 取得成功
+  //   - 未認証が確定（authSignals が増える）… ログイン前なので何度叩いても同じ。
+  //     ログイン完了の検知と再取得は watchAuthTransition の担当
+  // それ以外（catch に落ちる一時障害）だけがリトライに値する。
+  var refetchDelays = [1500, 3000, 6000, 12000];
+  function refetchWithRetry(attempt) {
+    var seen = authSignals;
+    window.__tempocRefetch().then(function (ok) {
+      if (ok || authSignals !== seen) return;
+      var next = attempt + 1;
+      if (next >= refetchDelays.length) {
+        post({ type: "debug", msg: "refetch: giving up after " + refetchDelays.length + " attempts" });
+        return;
+      }
+      post({ type: "debug", msg: "refetch: retrying in " + refetchDelays[next] + "ms" });
+      setTimeout(function () {
+        refetchWithRetry(next);
+      }, refetchDelays[next]);
+    });
+  }
 
   // claude.ai の使用量更新ボタンを探す。以前は id "_r_bb_" を直接参照して
   // いたが、これは React の自動生成 ID でデプロイやマウント順によって変わる
@@ -334,12 +373,14 @@
     window.__tempocRefetch();
   };
 
-  // 初回注入後、少し待ってから能動取得を1回試みる（SPA描画完了を待つ）。
+  // 初回注入後、少し待ってから能動取得を試みる（SPA描画完了を待つ）。
   // 初回はまだ更新ボタンが DOM に無い可能性が高いので、直叩きの
-  // __tempocRefetch で確実に1回取得する。未ログインでこのドキュメントが
-  // /login のときは失敗するが、上の watchAuthTransition がログイン完了を
-  // 検知して取り直す。
-  setTimeout(window.__tempocRefetch, 1500);
+  // __tempocRefetch で取得する。未ログインでこのドキュメントが /login のときは
+  // 1回で打ち切られ（未認証は確定なのでリトライしない）、上の
+  // watchAuthTransition がログイン完了を検知して取り直す。
+  setTimeout(function () {
+    refetchWithRetry(0);
+  }, refetchDelays[0]);
 
   // 1秒ティック: ログイン遷移監視 + アドレスバー描画/更新 + タイトル用の
   // location 通知。即時1回実行で document-start 時点の /login も従来どおり

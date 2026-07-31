@@ -565,6 +565,11 @@ func main() {
 		settingsWin.Show()
 	})
 
+	// Give the webview a place to keep cookies (Linux only — see
+	// cookies_linux.go; a no-op on Windows and macOS, whose webviews persist
+	// cookies themselves). Must happen before Run creates the native webviews.
+	enableCookiePersistence()
+
 	// Run the application. This blocks until the application has been exited.
 	if err := app.Run(); err != nil {
 		slog.Error("application exited with error", "err", err)

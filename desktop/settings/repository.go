@@ -18,11 +18,10 @@ type Repository struct {
 // os.UserConfigDir()/TEMPOC/settings.json. It does not touch the filesystem
 // until Load/Save is called.
 func NewRepository() (*Repository, error) {
-	dir, err := os.UserConfigDir()
+	configDir, err := ConfigDir()
 	if err != nil {
 		return nil, err
 	}
-	configDir := filepath.Join(dir, "TEMPOC")
 	return &Repository{path: filepath.Join(configDir, "settings.json")}, nil
 }
 

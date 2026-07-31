@@ -34,11 +34,11 @@ func DefaultWindowState() WindowState {
 // windowStatePath returns os.UserConfigDir()/TEMPOC/windowstate.json — the
 // same directory settings.json lives in.
 func windowStatePath() (string, error) {
-	dir, err := os.UserConfigDir()
+	dir, err := ConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "TEMPOC", "windowstate.json"), nil
+	return filepath.Join(dir, "windowstate.json"), nil
 }
 
 // LoadWindowState reads windowstate.json. Missing or unreadable files yield

@@ -45,9 +45,9 @@ The Linux build does **not** bundle its libraries; install them from your distro
 The authoritative dependency list lives in [`build/linux/nfpm/nfpm.yaml`](build/linux/nfpm/nfpm.yaml) (used for future `.deb`/`.rpm` packaging); `ldd ./tempoc` shows the exact shared objects. Two environment-specific gotchas:
 
 - **Ubuntu 24.04+ crashes on launch** (`bwrap: setting up uid map: Permission denied`) because it restricts unprivileged user namespaces, which WebKitGTK's sandbox needs. Enable them: `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (persist via `/etc/sysctl.d/`).
-- **Blank window on older GPUs** — two separate renderers can fail on legacy hardware, with different symptoms:
-  - *The app never draws anything, every time* — GTK's side. Set `GSK_RENDERER=gl`.
-  - *The window appears but stays empty, only on some launches* — WebKitGTK's DMABUF compositing. Set `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Confirmed on Intel Haswell integrated graphics, where Mesa has no Vulkan driver and the legacy `crocus` GL driver is what's left. The app's UI is a handful of progress bars, so losing that acceleration path costs nothing perceptible.
+- **Blank window on older GPUs** — try `WEBKIT_DISABLE_DMABUF_RENDERER=1` first. WebKitGTK's DMABUF compositing fails on some legacy drivers, and the giveaway is that it fails *intermittently* — the same binary draws fine on one launch and stays blank on the next. Confirmed on Intel Haswell integrated graphics, where Mesa has no Vulkan driver and the legacy `crocus` GL driver is what's left. The app's UI is a handful of progress bars, so losing that acceleration path costs nothing perceptible.
+
+  If that doesn't help, `GSK_RENDERER=gl` switches GTK's own renderer, which was needed on that same machine at one point (it no longer is, so try it second, not first).
 
   Both are set on the command line (`WEBKIT_DISABLE_DMABUF_RENDERER=1 ./tempoc`) or, for a desktop entry, via `Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 …`. See [`multios.md`](multios.md) for the full story.
 

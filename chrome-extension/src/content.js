@@ -1,7 +1,10 @@
 const Day7ProgressElementId = "day7Progress";
 const Hour5ProgressElementId = "hour5Progress";
 
-const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child > div:last-child';
+// セクション群のコンテナ = section を直接の子に持つ最上位の div。
+// claude.ai がスクロール用のラッパ div を増減させても追従できるよう、
+// 固定の階層数(`> div:last-child` の連鎖)ではなく :has で特定する
+const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child div:has(> section)';
 // 使用量行 = 2番目の子にメーター(div>div>div)を持つ行。告知バナー等が
 // セクション先頭に挿入されても位置がずれないよう nth-child ではなく :has で特定する
 const UsageRowFilter = ":has(> div:nth-child(2) > div > div > div)";

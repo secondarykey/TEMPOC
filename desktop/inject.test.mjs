@@ -37,7 +37,7 @@ function makePostSpy() {
 
 // Builds a minimal browser-ish sandbox and runs inject.js in it.
 // `bridges` decides which transports exist, mirroring each platform.
-function runInject({ webview2 = null, webkitExternal = null, href } = {}) {
+function runInject({ webview2 = null, webkitExternal = null, href, fetch, timers } = {}) {
   const url = href ?? "https://claude.ai/new#settings/usage";
   const window = {
     location: {
@@ -48,7 +48,7 @@ function runInject({ webview2 = null, webkitExternal = null, href } = {}) {
       replace() {},
     },
     // inject.js captures window.fetch as originalFetch, then replaces it.
-    fetch: () => new Promise(() => {}),
+    fetch: fetch ?? (() => new Promise(() => {})),
   };
   if (webview2) window.chrome = { webview: webview2 };
   if (webkitExternal) window.webkit = { messageHandlers: { external: webkitExternal } };
@@ -59,8 +59,10 @@ function runInject({ webview2 = null, webkitExternal = null, href } = {}) {
     document: { body: null, createElement: () => ({ style: {} }), querySelector: () => null, getElementById: () => null },
     console: { debug() {}, log() {}, warn() {}, error() {} },
     // Swallow the deferred __tempocRefetch and the 1s tick; we only assert on
-    // what inject.js posts synchronously while initialising.
-    setTimeout: () => 0,
+    // what inject.js posts synchronously while initialising. Pass `timers` to
+    // capture the scheduled callbacks instead and drive them by hand — that is
+    // the only way to observe the retry schedule without waiting in real time.
+    setTimeout: timers ? (fn, ms) => timers.push({ fn, ms }) : () => 0,
     setInterval: () => 0,
     URL,
   };
@@ -140,4 +142,84 @@ test("usage payloads are JSON objects carrying a type", () => {
   }
   // Go's RawMessageHandler reflects this one into the native window title.
   assert.ok(typed.some((m) => m.type === "location"), "expected a location report");
+});
+
+// Lets the promise chains inside __tempocRefetch settle between timer runs.
+async function flush() {
+  for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r));
+}
+
+function typesPosted(spy) {
+  return spy.calls.filter((c) => c !== "wails:runtime:ready").map((c) => JSON.parse(c));
+}
+
+// The startup fetch used to be a single shot. When it missed — page not ready
+// yet, a blip on the network — nothing else fetched until the 5-minute auto
+// refresh, which itself only works if the usage modal happens to be open, so
+// the UI could sit on "waiting for usage" indefinitely.
+test("initial refetch retries a transient failure, with backoff", async () => {
+  const spy = makePostSpy();
+  const timers = [];
+  let attempts = 0;
+  runInject({
+    webview2: spy,
+    timers,
+    fetch: () => {
+      attempts++;
+      return Promise.reject(new Error("network down"));
+    },
+  });
+
+  assert.deepEqual(timers.map((t) => t.ms), [1500], "the first attempt waits for the SPA to render");
+  timers.shift().fn();
+  await flush();
+
+  assert.equal(attempts, 1);
+  assert.deepEqual(timers.map((t) => t.ms), [3000], "a transient failure must be retried, and not immediately");
+});
+
+test("initial refetch stops once the session is known to be gone", async () => {
+  const spy = makePostSpy();
+  const timers = [];
+  runInject({ webview2: spy, timers, fetch: () => Promise.resolve({ status: 403 }) });
+
+  timers.shift().fn();
+  await flush();
+
+  assert.ok(
+    typesPosted(spy).some((m) => m.type === "auth-required"),
+    "a 401/403 means logged out: the frontend needs its login button",
+  );
+  // Retrying would only re-post auth-required. Recovery is watchAuthTransition's
+  // job — it notices the login completing and fetches again.
+  assert.equal(timers.length, 0, "no retry may be scheduled after a confirmed logout");
+});
+
+test("initial refetch gives up rather than retrying forever", async () => {
+  const spy = makePostSpy();
+  const timers = [];
+  let attempts = 0;
+  runInject({
+    webview2: spy,
+    timers,
+    fetch: () => {
+      attempts++;
+      return Promise.reject(new Error("network down"));
+    },
+  });
+
+  const delays = [];
+  while (timers.length) {
+    const t = timers.shift();
+    delays.push(t.ms);
+    t.fn();
+    await flush();
+  }
+
+  assert.deepEqual(delays, [1500, 3000, 6000, 12000], "backoff schedule");
+  assert.equal(attempts, 4);
+  assert.ok(
+    typesPosted(spy).some((m) => m.type === "debug" && m.msg.includes("giving up")),
+    "the log must say the app stopped trying, or a silent UI looks like a bug",
+  );
 });

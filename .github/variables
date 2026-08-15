@@ -5,7 +5,7 @@
 # Keep WAILS_VERSION equal to the wails/v3 requirement in desktop/go.mod: the
 # CLI generates the bindings and the .syso that the module's code is built
 # against, and alpha releases break across versions. Do not use @latest.
-WAILS_VERSION=v3.0.0-alpha2.114
+WAILS_VERSION=v3.0.0-beta.3
 
 # apt packages required to compile anything that imports wails/v3 on Linux --
 # including the wails3 CLI itself, whose internal/operatingsystem package

@@ -10,11 +10,13 @@
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
 | macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
-| Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン・使用量表示・傍受すべて動作 |
+| Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン（再起動後の保持も）・使用量表示・傍受すべて動作。ただし起動には下記「既知の制約」1・2・4 の env が要る環境がある |
 
 Linux の傍受ブリッジは `window.webkit.messageHandlers.external` 経由で正しく機能する。**実機 Ubuntu でログインから使用量表示まで動作を確認済み**（ただし起動には下記「既知の制約」の 2 つ — 非特権 user namespace の有効化と `GSK_RENDERER=gl` — が要る）。WSL2 では claude.ai の Cloudflare 検査を通過できず使用量表示まで到達しなかったが、実機では問題なかった。
 
-実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
+傍受そのものの実装は **`inject.js` の送信口の抽象化1点のみ**で、Go 側の変更は不要だった（理由は下記）。
+Go 側で足したのは cookie の永続化（[`cookies_linux.go`](cookies_linux.go)）だけで、これは傍受ではなく
+**ログインを再起動後も保持する**ための Linux 専用の穴埋め（下記「既知の制約」の 3）。
 
 ## Wails alpha2.114 の調査結果（実コードで確認済み）
 
@@ -308,7 +310,14 @@ Wails 側はサンドボックスに触れていない（`linux_cgo.go` に sand
 また**この制限は Ubuntu 24.04+ / 一部 Debian 特有**で、userns を許可している他ディストロや
 古い環境では最初から不要（＝全 Linux 一律の要件ではない）。
 
-### 2. 🟡 `GSK_RENDERER=gl` を指定する（無いと画面が真っ白）
+### 2. 🟡 `GSK_RENDERER=gl`（当時は必須。**2026-07-31 の再確認では不要になっている**）
+
+> ⚠️ **この項目は現状に合っていない可能性がある。** 同じ Haswell 機で 2026-07-31 に確認したところ、
+> **`GSK_RENDERER` の有無で差が出なかった**（付けても外しても描画される回とされない回がある）。
+> 当時の「無いと毎回真っ白」は再現していない。Mesa / GTK の更新で解消したと考えられる。
+> そして**当時この env で直ったと見えた症状の一部は、実は下記 4（WebKitGTK の DMABUF）だった
+> 可能性がある** — あちらは当たり外れなので、「gl を付けた回がたまたま当たり」でも成功に見える。
+> 以下は当時の記録として残す。**まず 4 を試すこと。**
 
 起動しても**ウィンドウが何も描画されない**ことがある。GTK4 の既定 GPU レンダラが古い/不完全な
 ドライバ（実機は Intel Haswell、`MESA-INTEL: Haswell Vulkan support is incomplete`）で描画に
@@ -341,15 +350,114 @@ GPU は既定のままで動くことが多い）。「白画面か」をスク�
 > ログイン・表示できる**ので、検証は GPU の使える実機で行うこと。ボット検査を迂回する小細工は
 > しないこと（環境不足のシグナルとして扱う）。
 
-### 3. cookie が永続化されない見込み（ログインが再起動で消える）
+### 3. cookie が永続化されない（ログインが再起動で消える）→ 対処済み
 
-Wails の Linux 実装は `webkit_network_session_get_default()` を使うだけで、
-**`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（`linux_cgo.go:1205` 付近）。
-WebKitGTK は明示指定が無いと cookie を SQLite に永続化しないため、**アプリを再起動すると
-claude.ai のログインが消える**と考えられる。
+**実機 Ubuntu で発生を確認**（再起動のたびに claude.ai のログインが必要）。原因は予想どおりで、
+Wails の Linux 実装は `webkit_network_session_get_default()` を使うだけで
+**`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（alpha2.114 の
+`linux_cgo.go:1214` 付近。モジュール全体を grep しても cookie 系の呼び出しはゼロ）。WebKitGTK は
+保存先ファイルを指定しない限り cookie をメモリにしか置かないため、プロセス終了でセッションが消える。
+`application.Options.Linux`（`LinuxOptions`）にもデータディレクトリ／cookie のレバーは無く
+（`DisableQuitOnLastWindowClosed` と `ProgramName` だけ）、**環境変数で有効化する手段も無い**
+— つまり端末側の設定では直せない。
 
-Windows は WebView2 のユーザーデータフォルダ（`%APPDATA%\tempoc\EBWebView`）に永続化されるので、
-これは実質的な機能差。Linux 対応を進めるなら対処が要る（1 が解決して初めて表面化する課題）。
+**対処**: [`cookies_linux.go`](cookies_linux.go) が自前の cgo で同じデフォルトセッションを取り、
+`~/.config/TEMPOC/cookies.sqlite` を保存先に指定する（`main.go` が `app.Run()` の直前に
+`enableCookiePersistence()` を呼ぶ）。Wails 本体の改修は不要 — デフォルトセッションは
+プロセス共通のシングルトンで、Wails は webview 生成時に `network-session` プロパティを渡さない
+（`create_webview_with_user_content_manager` は `user-content-manager` だけを指定する）ため、
+全ウィンドウが自動的にこのセッションを使う。
+
+要点は**呼ぶ順序**で、`app.Run()` より前でなければならない。Wails はネイティブ webview を GTK
+ループが回り始めてから作るので、`Run()` 前なら傍受ウィンドウの最初のリクエストより確実に早い。
+後から付けると、ディスクに有効な cookie があるのに初回ロードが空のまま飛んで `/login` に落ちる。
+gtk_init 前になるが、`WebKitNetworkSession` は GTK ウィジェットに触らないので問題ない
+（下記のとおり実測で確認）。Windows/macOS は webview 自身が永続化するので
+[`cookies_other.go`](cookies_other.go) の no-op。
+
+**ヘッドレスでの検証**（WSL2 Ubuntu 24.04 / WebKitGTK 2.52.3。ログインまで通らない環境でも
+ここまでは確かめられる）: `webkit_network_session_get_default()` →
+`webkit_network_session_get_cookie_manager()` → `webkit_cookie_manager_set_persistent_storage()`
+→ `webkit_cookie_manager_add_cookie()` を **gtk_init 無し・`DISPLAY`/`WAYLAND_DISPLAY` 無し**の
+素の C プログラムで実行したところ、クラッシュせず指定パスに SQLite ファイルが生成され、
+`moz_cookies` テーブルに claude.ai の cookie が入ることを確認した。
+
+**実機 Ubuntu で「ログイン → アプリ再起動 → ログイン保持」を確認済み**（2026-07-31）。
+
+### 4. 🟡 `WEBKIT_DISABLE_DMABUF_RENDERER=1` を指定する（起動のたびに当たり外れで中身が真っ白）
+
+2 と症状が似ているが**別物**なので、まず切り分けること:
+
+| | 2（`GSK_RENDERER`） | 4（DMABUF） |
+|---|---|---|
+| 頻度 | 毎回 | **起動のたびに当たり外れ**（何度か起動し直すと描画される） |
+| 効く env | `GSK_RENDERER=gl` | `WEBKIT_DISABLE_DMABUF_RENDERER=1` |
+
+原因は WebKitGTK の **DMABUF ベースの合成経路**で、実機（Intel Haswell 内蔵 GPU）で外れを引く。
+Haswell は Mesa に Vulkan ドライバが無く（ANV は Gen9 以降）、GL 側もレガシー枠の `crocus` 担当という
+薄いスタックで、初期化のタイミング次第で描画に失敗する。**実測で
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` 単独で安定**した（`WEBKIT_DISABLE_COMPOSITING_MODE` や
+`GSK_RENDERER=cairo` の追加は不要）。
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 ./bin/tempoc
+```
+
+⚠️ **切り分けの決め手はログ**。`-log debug` で `path=/` の行があれば、`wails://localhost/` の配信は
+成功している ＝ アプリはページを渡せており、**描画側の問題**と確定する（配信が失敗しているなら
+別の原因）。この一行を見ずに追うと、直前のコード変更を疑って時間を使うことになる — 実際、
+cookie 永続化（上記 3）を疑って A/B まで回した末に無関係と分かった経緯がある。
+
+既定で env を設定しない方針は 2 と同じ（ハードウェア依存で、正常な環境を壊しうるため）。
+ユーザー向けの案内は [`README.md`](README.md) の Linux 節にある。
+
+#### ⚠️ `wails3 dev` の空ウィンドウはこれとは別物（env では直らない）
+
+**実機で `WEBKIT_DISABLE_DMABUF_RENDERER=1` を付けても dev では空ウィンドウが出る**。dev だけ
+フロントの供給経路が違うためで、描画系の env をいくら足しても直らない。
+
+dev ではアセットサーバが**Vite へのリバースプロキシ**になる（`internal/assetserver/build_dev.go`。
+接続エラー時は 50ms × 50 回まで再試行し、駄目なら **502**）。さらにアプリ起動時に
+`preRun`（`pkg/application/application_dev.go`）が Vite の起動を **500ms × 10 回 = 最大5秒**待ち、
+それでも応答が無ければ `os.Exit(1)` する。つまり:
+
+| 症状 | 意味 |
+|---|---|
+| **ウィンドウが1つも出ない** | 5秒以内に Vite が上がらず、アプリが終了した（`unable to connect to frontend server`） |
+| **ウィンドウは出るが空** | Vite には繋がった（`Connected to frontend dev server!`）が、その後のページ配信に失敗した |
+
+後者は `npm install` 直後に起きやすい。Vite は初回リクエストで依存の事前バンドルを行い、その間は
+モジュール要求が失敗しうるが、**WebView は失敗したロードを再試行しない**ので空のまま固まる。
+
+切り分けはログの **Asset Request の status code**（`-log debug`）:
+
+```bash
+grep -E "Asset Request|Proxy error|Connected to frontend" 2026-*.log
+```
+
+`path=/` が **200** なら配信は成功＝描画側（上記 DMABUF の話）。**502** や `Proxy error` があれば
+Vite 側で、dev 固有の問題。
+
+実測した起動順（WSL、`package-lock.json` を touch して install を強制）:
+
+```
+msg="Waiting for frontend dev server to start..."   ← アプリはここで待ち始める
+task: [common:install:frontend:deps:npm] npm install ← その後に install が走り出す
+msg=Retrying...
+VITE ready in 895 ms
+msg="Connected to frontend dev server!"              ← 約2秒。依存が揃っていれば間に合う
+```
+
+**アプリの待機が始まってから install が走り出す**ので、install に5秒以上かかる回は詰む。
+`install:frontend:deps:npm`（`build/Taskfile.yml`）は `package-lock.json` と `node_modules` の
+mtime 比較で再実行されるため、**git 操作の後は走りがち**。予防は:
+
+```bash
+cd desktop/frontend && npm install && touch node_modules
+```
+
+これで install がスキップされ、Vite は1秒程度で上がる。空になった回は **dev を再起動**すれば
+（事前バンドル結果が `node_modules/.vite` に残るので）通ることが多い。
 
 ## Linux の配布・必要ライブラリ（現状 tar.gz / 将来 deb）
 

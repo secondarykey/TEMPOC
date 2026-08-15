@@ -5,7 +5,7 @@ TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extensio
 - Wails: `github.com/wailsapp/wails/v3` alpha2.114
 - Go module 名: `changeme`（テンプレート既定のまま。変更していない）
 - フロント: React + Vite + TypeScript、`@wailsio/runtime`
-- 対象プラットフォーム: Windows（WebView2 前提）
+- 対象プラットフォーム: Windows（WebView2）/ macOS（WKWebView）/ Linux（WebKitGTK）。OS 差の実装メモは [`multios.md`](multios.md)
 - Wails 全般の作法は `.claude/skills/wails3` を参照
 
 ## 全体像
@@ -42,8 +42,10 @@ Chrome 拡張は claude.ai のページ内に content script を注入して `wi
 |---|---|
 | `main.go` | エントリポイント。3 ウィンドウ生成（メイン・Claude 傍受・設定）、`RawMessageHandler`、イベント登録、傍受ウィンドウ表示制御 |
 | `inject.js` | claude.ai に注入される素の JS。`window.fetch` を monkeypatch し使用量を postMessage |
+| `cookies_linux.go` / `cookies_other.go` | **Linux のみ**: WebKitGTK の cookie 保存先を `~/.config/TEMPOC/cookies.sqlite` に指定する cgo（`enableCookiePersistence()`）。Wails がこれを呼ばないため、無いと再起動のたびに claude.ai のログインが消える。Windows/macOS 版は no-op（下記「cookie の永続化」） |
 | `settings/settings.go` | 設定モデル（`Settings` 構造体 + `Default()`）。Wails 非依存 |
-| `settings/repository.go` | 設定の永続化（`os.UserConfigDir()/TEMPOC/settings.json`） |
+| `settings/paths.go` | `ConfigDir()`（`os.UserConfigDir()/TEMPOC`）。永続化するファイルの置き場を一本化 |
+| `settings/repository.go` | 設定の永続化（`ConfigDir()/settings.json`） |
 | `settings/windowstate.go` | ウィンドウ位置の永続化（`windowstate.json`）。Wails 非依存 |
 | `settings_service.go` | `SettingsService`（`Get()` / `Set()`）。フロントにバインド |
 | `frontend/src/App.tsx` | URL クエリルーター（`?window=settings` で分岐）+ メインウィンドウ UI（タイトルバー・使用量バー） |
@@ -114,7 +116,20 @@ postMessage の `type` で分岐:
 
 `inject.js` 内で `setInterval(__tempocClickRefresh, ms)`。`ms` は Go が起動時に `settings.RefreshInterval*60000` を `__TEMPOC_REFRESH_MS__` プレースホルダへ文字列置換して埋め込む。**傍受スクリプトは傍受ウィンドウに再注入できない**（上記 ExecJS の制約）ため、`refreshInterval` の変更は**次回起動時**に反映される。
 
-繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタンをクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。ボタンは `findRefreshButton()` が **モーダル（`[role="dialog"]`）内の `aria-label="Refresh"`（または「更新」）** で構造的に探す — React の自動生成 ID（`_r_bb_` → `_r_h7_` と実際に変わった）には依存しない（旧 ID は最後の保険としてのみ参照）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。**API 直叩きは極力使わない**方針: ボタンが無い場合、まず「usage モーダルが開いていない（SPA 遷移でハッシュ喪失）」を疑い、claude.ai 上でハッシュが `#settings/usage` でなければ **usage URL を開き直してモーダルを復元**する（リロード後の初回取得がデータを届け、以後はボタンが押せる）。ハッシュが正しいのにボタンが無い（ID 変更等）ときだけ `__tempocRefetch` にフォールバック — この分岐が再リロードしないことでリロードループを防ぐ。ただし**初回1回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `setTimeout(__tempocRefetch, 1500)` の直叩きのまま。また **`/login` 上では `__tempocClickRefresh` は何もしない** — モーダル復元リロードが走るとログイン入力中のユーザーの画面が消えるため（ログイン完了後の復帰は watchAuthTransition が担う）。
+繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタンをクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。ボタンは `findRefreshButton()` が **モーダル（`[role="dialog"]`）内の `aria-label="Refresh"`（または「更新」）** で構造的に探す — React の自動生成 ID（`_r_bb_` → `_r_h7_` と実際に変わった）には依存しない（旧 ID は最後の保険としてのみ参照）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。**API 直叩きは極力使わない**方針: ボタンが無い場合、まず「usage モーダルが開いていない（SPA 遷移でハッシュ喪失）」を疑い、claude.ai 上でハッシュが `#settings/usage` でなければ **usage URL を開き直してモーダルを復元**する（リロード後の初回取得がデータを届け、以後はボタンが押せる）。ハッシュが正しいのにボタンが無い（ID 変更等）ときだけ `__tempocRefetch` にフォールバック — この分岐が再リロードしないことでリロードループを防ぐ。ただし**初回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `__tempocRefetch` の直叩き（下記「初回取得のリトライ」）。また **`/login` 上では `__tempocClickRefresh` は何もしない** — モーダル復元リロードが走るとログイン入力中のユーザーの画面が消えるため（ログイン完了後の復帰は watchAuthTransition が担う）。
+
+### 初回取得のリトライ（`refetchWithRetry`）
+
+初回の能動取得は `setTimeout` で 1.5 秒待ってから `__tempocRefetch` を叩くが、**1回では足りない**。ページがまだ出来ていない・一時的なネットワークエラーで取り逃すと、次に何かが動くのは自動更新（既定5分）で、しかもそれはモーダル内の更新ボタンを押す経路なので**モーダルが開いていなければ空振り**し、フロントは「使用量を待っています」のまま無反応になる。
+
+そこで `refetchWithRetry(attempt)` が **1.5s → 3s → 6s → 12s** の順に間隔を伸ばして再試行する。打ち切りは2つだけ:
+
+- **取得成功**
+- **未認証が確定**（何度叩いても同じ。ログイン完了の検知と再取得は `watchAuthTransition` の担当）
+
+一時障害（`__tempocRefetch` の `catch`）だけがリトライに値する、という区別が肝。`__tempocRefetch` は**成否の boolean しか返さない**契約（Go 側・ExecJS 経路もこれを前提にしている）ので理由を返り値には載せられない。代わりに **`postAuthRequired()` を通した回数（`authSignals`）を呼び出し前後で比べて**「未認証だったのか」を判定する。**`auth-required` の post は必ず `postAuthRequired()` 経由にすること** — 直接 `post({type:"auth-required"})` を書くとこのカウンタから漏れ、ログイン前なのにリトライし続ける。
+
+ログイン完了時（`watchAuthTransition` の `/login` から出た経路）も同じ `refetchWithRetry` を使う。挙動は `inject.test.mjs` が `setTimeout` を差し替えて固定している（バックオフの間隔・403 で止まること・打ち切ること）。
 
 ### 手動更新（タイトルバーの更新ボタン）
 
@@ -137,6 +152,16 @@ postMessage の `type` で分岐:
 - `claude.win.RegisterHook(events.Common.WindowClosing, ...)` で close を**フック**し、`e.Cancel()` + `claudeCtl.hideOnClose()`（ピン解除 + `Hide()`）に置換 → 破棄されず非表示になるだけ。フックはリスナーより先に走るので、Wails 既定の破棄リスナーを先取りしてキャンセルできる。
 - 例外はアプリ終了時。`main` は `appQuitting`（`atomic.Bool`）で判定し、真なら close を通す（`cleanup()` が全ウィンドウに `Close()` を呼ぶため）。
 - **メインウィンドウを閉じたらアプリ全体を終了**する（`mainWin.OnWindowEvent(events.Common.WindowClosing, ...)` → `appQuitting.Store(true)` + `app.Quit()`）。これが無いと、hide-on-close の傍受ウィンドウだけが登録済みウィンドウとして残り、UI 不在のままプロセスが終了しない（`PostQuitMessage` が呼ばれない）。
+
+## cookie の永続化（ログインの保持）
+
+claude.ai のログインは傍受ウィンドウの cookie に載っているので、これが消えると毎回ログインし直しになる。**Windows/macOS は WebView が勝手に永続化する**（WebView2 は `%APPDATA%\tempoc\EBWebView`）が、**Linux は自前で面倒を見る必要がある**:
+
+- Wails の Linux 実装は `webkit_network_session_get_default()` を取るだけで **`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（alpha2.114 の `linux_cgo.go:1214` 付近）。WebKitGTK は保存先ファイルの指定が無いと cookie をメモリにしか置かないため、**実機 Ubuntu で「再起動のたびにログインが必要」が発生していた**
+- `LinuxOptions` にレバーは無く、環境変数でも有効化できない。**端末側の設定では直せない**
+- そこで `cookies_linux.go` が同じデフォルトセッション（プロセス共通のシングルトン。Wails は webview 生成時に `network-session` を渡さないので全ウィンドウがこれを使う）を cgo で取り、`ConfigDir()/cookies.sqlite` を保存先に指定する
+
+⚠️ **`enableCookiePersistence()` は `app.Run()` より前に呼ぶこと**（`main.go` の末尾）。Wails はネイティブ webview を GTK ループ開始後に作るので、`Run()` 前なら傍受ウィンドウの最初のリクエストより確実に早い。後から指定すると、ディスクに有効な cookie があるのに初回ロードが空のまま飛んで `/login` に落ちる。gtk_init 前になるが `WebKitNetworkSession` は GTK ウィジェットに触らないので問題ない（ヘッドレスでの実測は [`multios.md`](multios.md) の「既知の制約」3）。
 
 ## メインウィンドウ UI
 
@@ -303,6 +328,13 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
 - Go の Service やバインド対象の型を変えたら bindings の再生成を忘れない。忘れると無言で壊れる
 - **ログは slog 1本**（`slog.SetDefault` と `application.Options.Logger` に同一ロガー。渡さないと Wails は制御外の出力先に流す）。レベルは `production` ビルドタグで切り替え（`dev.go` / `production.go`）: 開発 = Info、正規ビルド（`wails3 task windows:build`）= Warn
 - **`-log debug|info|warn` でファイル出力**: 指定時のみ、標準エラーの代わりに**実行位置（カレントディレクトリ）の `YYYY-MM-DD.log`** へ指定レベルで出力（同日は追記）。正規 exe（windowsgui でコンソール無し）からログを取る手段であり、`slog.Debug`（inject.js の debug 中継等）を見る手段でもある。フラグ無しの既定では Debug はどこにも出ない
+- **`wails3 dev` にアプリ引数を渡すには環境変数 `TEMPOC_ARGS`**:
+
+  ```bash
+  TEMPOC_ARGS="-log debug" wails3 dev     # wails3 task run でも同じ
+  ```
+
+  dev は `build/config.yml` の `dev_mode.executes`（`type: primary`）にある **`wails3 task run` 経由でアプリを起動**し、そのコマンドラインは固定で拡張できない。そこで各 OS の `run` タスク（`build/<os>/Taskfile.yml`）の起動行末尾に `$TEMPOC_ARGS` を付けてある — **タスク変数ではなく環境変数**なのは、dev から渡す唯一の経路がこれだから（`wails3 task` の CLI_ARGS 非対応は上記 macOS 署名の項も参照）。未設定なら空に展開されるだけ。ログの出力先は起動時のカレントなので、dev では `desktop/YYYY-MM-DD.log` に出る
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
 
 ## バージョン管理・アプリ情報

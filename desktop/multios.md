@@ -10,7 +10,7 @@
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
 | macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
-| Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン・使用量表示・傍受すべて動作 |
+| Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン（再起動後の保持も）・使用量表示・傍受すべて動作。ただし起動には下記「既知の制約」1・2・4 の env が要る環境がある |
 
 Linux の傍受ブリッジは `window.webkit.messageHandlers.external` 経由で正しく機能する。**実機 Ubuntu でログインから使用量表示まで動作を確認済み**（ただし起動には下記「既知の制約」の 2 つ — 非特権 user namespace の有効化と `GSK_RENDERER=gl` — が要る）。WSL2 では claude.ai の Cloudflare 検査を通過できず使用量表示まで到達しなかったが、実機では問題なかった。
 
@@ -310,7 +310,14 @@ Wails 側はサンドボックスに触れていない（`linux_cgo.go` に sand
 また**この制限は Ubuntu 24.04+ / 一部 Debian 特有**で、userns を許可している他ディストロや
 古い環境では最初から不要（＝全 Linux 一律の要件ではない）。
 
-### 2. 🟡 `GSK_RENDERER=gl` を指定する（無いと画面が真っ白）
+### 2. 🟡 `GSK_RENDERER=gl`（当時は必須。**2026-07-31 の再確認では不要になっている**）
+
+> ⚠️ **この項目は現状に合っていない可能性がある。** 同じ Haswell 機で 2026-07-31 に確認したところ、
+> **`GSK_RENDERER` の有無で差が出なかった**（付けても外しても描画される回とされない回がある）。
+> 当時の「無いと毎回真っ白」は再現していない。Mesa / GTK の更新で解消したと考えられる。
+> そして**当時この env で直ったと見えた症状の一部は、実は下記 4（WebKitGTK の DMABUF）だった
+> 可能性がある** — あちらは当たり外れなので、「gl を付けた回がたまたま当たり」でも成功に見える。
+> 以下は当時の記録として残す。**まず 4 を試すこと。**
 
 起動しても**ウィンドウが何も描画されない**ことがある。GTK4 の既定 GPU レンダラが古い/不完全な
 ドライバ（実機は Intel Haswell、`MESA-INTEL: Haswell Vulkan support is incomplete`）で描画に
@@ -375,7 +382,82 @@ gtk_init 前になるが、`WebKitNetworkSession` は GTK ウィジェットに�
 素の C プログラムで実行したところ、クラッシュせず指定パスに SQLite ファイルが生成され、
 `moz_cookies` テーブルに claude.ai の cookie が入ることを確認した。
 
-実機で残っている確認は「ログイン → アプリ再起動 → ログインが保持されている」の1点。
+**実機 Ubuntu で「ログイン → アプリ再起動 → ログイン保持」を確認済み**（2026-07-31）。
+
+### 4. 🟡 `WEBKIT_DISABLE_DMABUF_RENDERER=1` を指定する（起動のたびに当たり外れで中身が真っ白）
+
+2 と症状が似ているが**別物**なので、まず切り分けること:
+
+| | 2（`GSK_RENDERER`） | 4（DMABUF） |
+|---|---|---|
+| 頻度 | 毎回 | **起動のたびに当たり外れ**（何度か起動し直すと描画される） |
+| 効く env | `GSK_RENDERER=gl` | `WEBKIT_DISABLE_DMABUF_RENDERER=1` |
+
+原因は WebKitGTK の **DMABUF ベースの合成経路**で、実機（Intel Haswell 内蔵 GPU）で外れを引く。
+Haswell は Mesa に Vulkan ドライバが無く（ANV は Gen9 以降）、GL 側もレガシー枠の `crocus` 担当という
+薄いスタックで、初期化のタイミング次第で描画に失敗する。**実測で
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` 単独で安定**した（`WEBKIT_DISABLE_COMPOSITING_MODE` や
+`GSK_RENDERER=cairo` の追加は不要）。
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 ./bin/tempoc
+```
+
+⚠️ **切り分けの決め手はログ**。`-log debug` で `path=/` の行があれば、`wails://localhost/` の配信は
+成功している ＝ アプリはページを渡せており、**描画側の問題**と確定する（配信が失敗しているなら
+別の原因）。この一行を見ずに追うと、直前のコード変更を疑って時間を使うことになる — 実際、
+cookie 永続化（上記 3）を疑って A/B まで回した末に無関係と分かった経緯がある。
+
+既定で env を設定しない方針は 2 と同じ（ハードウェア依存で、正常な環境を壊しうるため）。
+ユーザー向けの案内は [`README.md`](README.md) の Linux 節にある。
+
+#### ⚠️ `wails3 dev` の空ウィンドウはこれとは別物（env では直らない）
+
+**実機で `WEBKIT_DISABLE_DMABUF_RENDERER=1` を付けても dev では空ウィンドウが出る**。dev だけ
+フロントの供給経路が違うためで、描画系の env をいくら足しても直らない。
+
+dev ではアセットサーバが**Vite へのリバースプロキシ**になる（`internal/assetserver/build_dev.go`。
+接続エラー時は 50ms × 50 回まで再試行し、駄目なら **502**）。さらにアプリ起動時に
+`preRun`（`pkg/application/application_dev.go`）が Vite の起動を **500ms × 10 回 = 最大5秒**待ち、
+それでも応答が無ければ `os.Exit(1)` する。つまり:
+
+| 症状 | 意味 |
+|---|---|
+| **ウィンドウが1つも出ない** | 5秒以内に Vite が上がらず、アプリが終了した（`unable to connect to frontend server`） |
+| **ウィンドウは出るが空** | Vite には繋がった（`Connected to frontend dev server!`）が、その後のページ配信に失敗した |
+
+後者は `npm install` 直後に起きやすい。Vite は初回リクエストで依存の事前バンドルを行い、その間は
+モジュール要求が失敗しうるが、**WebView は失敗したロードを再試行しない**ので空のまま固まる。
+
+切り分けはログの **Asset Request の status code**（`-log debug`）:
+
+```bash
+grep -E "Asset Request|Proxy error|Connected to frontend" 2026-*.log
+```
+
+`path=/` が **200** なら配信は成功＝描画側（上記 DMABUF の話）。**502** や `Proxy error` があれば
+Vite 側で、dev 固有の問題。
+
+実測した起動順（WSL、`package-lock.json` を touch して install を強制）:
+
+```
+msg="Waiting for frontend dev server to start..."   ← アプリはここで待ち始める
+task: [common:install:frontend:deps:npm] npm install ← その後に install が走り出す
+msg=Retrying...
+VITE ready in 895 ms
+msg="Connected to frontend dev server!"              ← 約2秒。依存が揃っていれば間に合う
+```
+
+**アプリの待機が始まってから install が走り出す**ので、install に5秒以上かかる回は詰む。
+`install:frontend:deps:npm`（`build/Taskfile.yml`）は `package-lock.json` と `node_modules` の
+mtime 比較で再実行されるため、**git 操作の後は走りがち**。予防は:
+
+```bash
+cd desktop/frontend && npm install && touch node_modules
+```
+
+これで install がスキップされ、Vite は1秒程度で上がる。空になった回は **dev を再起動**すれば
+（事前バンドル結果が `node_modules/.vite` に残るので）通ることが多い。
 
 ## Linux の配布・必要ライブラリ（現状 tar.gz / 将来 deb）
 

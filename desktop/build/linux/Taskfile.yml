@@ -178,9 +178,14 @@ tasks:
       CATEGORIES: 'Development;'
       OUTPUTFILE: '{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop'
 
+  # TEMPOC_ARGS is passed on to the app (e.g. TEMPOC_ARGS="-log debug"). It is
+  # read from the environment rather than taken as a task variable so that it
+  # also reaches `wails3 dev`, which launches the app through this task with a
+  # fixed command line it gives us no way to extend (build/config.yml,
+  # dev_mode.executes). Unset expands to nothing.
   run:
     cmds:
-      - '{{.BIN_DIR}}/{{.APP_NAME}}'
+      - '{{.BIN_DIR}}/{{.APP_NAME}} $TEMPOC_ARGS'
 
   sign:deb:
     summary: Signs the DEB package

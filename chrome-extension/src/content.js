@@ -87,7 +87,9 @@ function waitForElement(selector) {
       }
     });
 
-    observer.observe(document.body, {
+    // document_start で走るため body はまだ存在しない場合がある。
+    // documentElement を監視すれば body 生成後の挿入も拾える
+    observer.observe(document.documentElement, {
       childList: true,
       subtree: true
     });
@@ -405,8 +407,15 @@ window.addEventListener("tempoc:settings-changed", (e) => {
   applySettings(e.detail);
 });
 
-// リスナー登録完了を bridge.js に通知して設定を要求する
+// リスナー登録完了を bridge.js に通知して設定を要求する。
+// document_start では bridge.js の登録順に依存しないよう DOM 構築後にも再送する
+// (applySettings は冪等なので二重送信しても問題ない)
 window.dispatchEvent(new CustomEvent("tempoc:ready"));
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    window.dispatchEvent(new CustomEvent("tempoc:ready"));
+  });
+}
 
 // SPA ナビゲーション検知: DOM 参照をリセットして bridge.js に再初期化を促す
 function onNavigate() {

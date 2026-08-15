@@ -132,6 +132,14 @@ async function createElement(id, path) {
     bar.classList.remove("bg-fill-danger", "bg-fill-warning");
     bar.classList.add("bg-fill-accent");
 
+    // クローン元(使用量行)の値をそのまま出さない。usage API 応答前に挿入されると
+    // 使用量の日時・%・塗り量が経過時間バーの値として見えてしまうため、
+    // redraw() が最初のデータで上書きするまで空・塗り 0 にしておく
+    if (divs[0].children[0]) divs[0].children[0].textContent = "";
+    if (divs[1].children[1]) divs[1].children[1].textContent = "";
+    bar.style.width = "100%";
+    bar.style.transform = "translateX(-100%)";
+
     cp.id = id;
     target.after(cp);
     return cp;

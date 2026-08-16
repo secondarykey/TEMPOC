@@ -87,7 +87,9 @@ function waitForElement(selector) {
       }
     });
 
-    observer.observe(document.body, {
+    // document_start で走るため body はまだ存在しない場合がある。
+    // documentElement を監視すれば body 生成後の挿入も拾える
+    observer.observe(document.documentElement, {
       childList: true,
       subtree: true
     });
@@ -131,6 +133,14 @@ async function createElement(id, path) {
     }
     bar.classList.remove("bg-fill-danger", "bg-fill-warning");
     bar.classList.add("bg-fill-accent");
+
+    // クローン元(使用量行)の値をそのまま出さない。usage API 応答前に挿入されると
+    // 使用量の日時・%・塗り量が経過時間バーの値として見えてしまうため、
+    // redraw() が最初のデータで上書きするまで空・塗り 0 にしておく
+    if (divs[0].children[0]) divs[0].children[0].textContent = "";
+    if (divs[1].children[1]) divs[1].children[1].textContent = "";
+    bar.style.width = "100%";
+    bar.style.transform = "translateX(-100%)";
 
     cp.id = id;
     target.after(cp);
@@ -397,8 +407,15 @@ window.addEventListener("tempoc:settings-changed", (e) => {
   applySettings(e.detail);
 });
 
-// リスナー登録完了を bridge.js に通知して設定を要求する
+// リスナー登録完了を bridge.js に通知して設定を要求する。
+// document_start では bridge.js の登録順に依存しないよう DOM 構築後にも再送する
+// (applySettings は冪等なので二重送信しても問題ない)
 window.dispatchEvent(new CustomEvent("tempoc:ready"));
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    window.dispatchEvent(new CustomEvent("tempoc:ready"));
+  });
+}
 
 // SPA ナビゲーション検知: DOM 参照をリセットして bridge.js に再初期化を促す
 function onNavigate() {

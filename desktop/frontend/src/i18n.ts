@@ -75,6 +75,11 @@ type RawMessages = {
   loginRequired: string;
   loginToClaude: string;
   waitingForUsage: string;
+  // Shown when claude.ai can't be read (outage / HTTP error / network
+  // failure) — paired with `retry`, and never replacing the figures already
+  // on screen, which are still the last known values.
+  fetchError: string;
+  retry: string;
   currentSession: string;
   weeklyLimit: string;
   weeklyScopedFallback: string;

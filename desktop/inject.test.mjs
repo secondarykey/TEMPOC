@@ -195,6 +195,138 @@ test("initial refetch stops once the session is known to be gone", async () => {
   assert.equal(timers.length, 0, "no retry may be scheduled after a confirmed logout");
 });
 
+// Claude being down must never look like a fresh usage window. Posting a usage
+// message whose windows are all undefined makes the frontend render every bar
+// at 0% with no reset time — an outage displayed as a successful reset.
+test("an outage is reported as a fetch error, never as empty usage", async () => {
+  const spy = makePostSpy();
+  const timers = [];
+  runInject({
+    webview2: spy,
+    timers,
+    // Reachable but broken: the org list is fine, the usage endpoint 503s with
+    // an error body (as a gateway/error page would).
+    fetch: (url) =>
+      Promise.resolve(
+        url === "/api/organizations"
+          ? { status: 200, json: () => Promise.resolve([{ uuid: "org-1" }]) }
+          : {
+              status: 503,
+              json: () => Promise.resolve({ error: "service unavailable" }),
+              clone() {
+                return this;
+              },
+            },
+      ),
+  });
+
+  timers.shift().fn();
+  await flush();
+
+  const posted = typesPosted(spy);
+  assert.ok(
+    posted.some((m) => m.type === "fetch-error"),
+    "the frontend needs to be told the fetch failed so it can say so",
+  );
+  assert.ok(
+    !posted.some((m) => m.type === "usage"),
+    "no usage message may be posted for a failed fetch, or the bars reset to 0%",
+  );
+  assert.ok(
+    !posted.some((m) => m.type === "auth-required"),
+    "an outage is not a logout: logging in again wouldn't fix it",
+  );
+});
+
+// Some failures come back as HTTP 200 with an error body rather than a 5xx.
+test("a 200 response carrying no usage windows is a fetch error", async () => {
+  const spy = makePostSpy();
+  const timers = [];
+  runInject({
+    webview2: spy,
+    timers,
+    fetch: (url) =>
+      Promise.resolve(
+        url === "/api/organizations"
+          ? { status: 200, json: () => Promise.resolve([{ uuid: "org-1" }]) }
+          : {
+              status: 200,
+              json: () => Promise.resolve({ error: "something went wrong" }),
+              clone() {
+                return this;
+              },
+            },
+      ),
+  });
+
+  timers.shift().fn();
+  await flush();
+
+  const posted = typesPosted(spy);
+  assert.ok(posted.some((m) => m.type === "fetch-error"));
+  assert.ok(
+    !posted.some((m) => m.type === "usage"),
+    "a body with neither five_hour nor seven_day isn't usage data",
+  );
+});
+
+// The script also runs on the identity provider's pages during OAuth, where a
+// relative /api/organizations fetch is meaningless — failing there says nothing
+// about Claude and must not raise the banner.
+test("failures off claude.ai are not reported as Claude being down", async () => {
+  const spy = makePostSpy();
+  const timers = [];
+  runInject({
+    webview2: spy,
+    timers,
+    href: "https://accounts.google.com/o/oauth2/auth",
+    fetch: () => Promise.reject(new Error("404")),
+  });
+
+  timers.shift().fn();
+  await flush();
+
+  assert.ok(
+    !typesPosted(spy).some((m) => m.type === "fetch-error"),
+    "an OAuth detour is not a Claude outage",
+  );
+});
+
+test("a good response still posts usage", async () => {
+  const spy = makePostSpy();
+  const timers = [];
+  const usage = {
+    five_hour: { utilization: 42, resets_at: "2026-08-17T12:00:00Z" },
+    seven_day: { utilization: 7, resets_at: "2026-08-20T12:00:00Z" },
+  };
+  runInject({
+    webview2: spy,
+    timers,
+    fetch: (url) =>
+      Promise.resolve(
+        url === "/api/organizations"
+          ? { status: 200, json: () => Promise.resolve([{ uuid: "org-1" }]) }
+          : {
+              status: 200,
+              json: () => Promise.resolve(usage),
+              clone() {
+                return this;
+              },
+            },
+      ),
+  });
+
+  timers.shift().fn();
+  await flush();
+
+  const posted = typesPosted(spy);
+  const u = posted.find((m) => m.type === "usage");
+  assert.ok(u, "the happy path must be unaffected by the error handling");
+  assert.equal(u.five_hour.utilization, 42);
+  assert.ok(!posted.some((m) => m.type === "fetch-error"));
+  assert.equal(timers.length, 0, "success ends the retry schedule");
+});
+
 test("initial refetch gives up rather than retrying forever", async () => {
   const spy = makePostSpy();
   const timers = [];

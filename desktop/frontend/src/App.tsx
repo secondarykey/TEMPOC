@@ -437,6 +437,14 @@ function MainWindow() {
   // /login). Shows the "Log in to Claude" button; cleared as soon as usage
   // data flows again.
   const [authRequired, setAuthRequired] = useState(false);
+  // Set when the interceptor reports it couldn't read the usage API (Claude
+  // returning 5xx, an HTML error page, a network failure). Deliberately does
+  // NOT clear `usage` or `lastUpdated`: the last figures we received are still
+  // the last known truth, and blanking them would render every bar at 0% —
+  // an outage would look like a fresh window. The banner (and the timestamp
+  // going stale in the title bar) is what tells the user the numbers are old.
+  // Holds the technical reason for the tooltip; '' still counts as an error.
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
     SettingsService.Get()
@@ -459,11 +467,21 @@ function MainWindow() {
     const off = Events.On('tempoc:usage', (e: any) => {
       setUsage(e.data as UsagePayload);
       setLastUpdated(Date.now());
-      // Data is flowing, so the session is authenticated.
+      // Data is flowing, so the session is authenticated and Claude is up.
       setAuthRequired(false);
+      setFetchError(null);
     });
     const offAuth = Events.On('tempoc:auth-required', () => {
       setAuthRequired(true);
+      // A login prompt replaces the whole view, so a stale fetch error under
+      // it would only reappear (out of context) once the login succeeds.
+      setFetchError(null);
+    });
+    // Claude couldn't be read. Keep whatever we already show — only add the
+    // banner, so the user sees the numbers stopped updating instead of seeing
+    // them silently reset.
+    const offFetchError = Events.On('tempoc:fetch-error', (e: any) => {
+      setFetchError((e?.data?.msg as string) ?? '');
     });
     // The settings window emits this after Apply commits a new draft via
     // SettingsService.Set. Re-fetching (rather than receiving the value in
@@ -479,6 +497,7 @@ function MainWindow() {
       clearInterval(id);
       if (typeof off === 'function') off();
       if (typeof offAuth === 'function') offAuth();
+      if (typeof offFetchError === 'function') offFetchError();
       if (typeof offSettingsApplied === 'function') offSettingsApplied();
     };
   }, []);
@@ -698,6 +717,11 @@ function MainWindow() {
 
   const rootModeClass = sizeMode === 'small' ? ' mode-small' : sizeMode === 'compact' ? ' mode-compact' : '';
 
+  // Same path as the title bar's refresh button: ask the interceptor to fetch
+  // again. Success clears the banner (a usage event arrives); another failure
+  // re-reports the error and leaves the displayed figures untouched.
+  const retryFetch = () => Events.Emit('tempoc:refresh');
+
   return (
     <div className={`root${rootModeClass}`}>
       <TitleBar
@@ -720,12 +744,30 @@ function MainWindow() {
               {t.loginToClaude}
             </button>
           </div>
+        ) : !usage && fetchError != null ? (
+          // Nothing was ever received and Claude is unreachable — the waiting
+          // placeholder would imply data is on its way, so say what happened
+          // and offer the retry instead.
+          <div className="app-placeholder">
+            <span title={fetchError || undefined}>{t.fetchError}</span>
+            <br />
+            <button className="login-button" onClick={retryFetch}>{t.retry}</button>
+          </div>
         ) : !usage ? (
           <p className="app-placeholder">
             {t.waitingForUsage}<span className="loading-dots" aria-hidden="true" />
           </p>
         ) : (
           <div className="usage-bars" ref={measureRef}>
+            {/* Inside the measured container so the window grows to fit it.
+                The bars below keep showing the last figures we received —
+                the banner says they're no longer being updated. */}
+            {fetchError != null && (
+              <div className="usage-error" role="status" title={fetchError || undefined}>
+                <span className="usage-error-text">{t.fetchError}</span>
+                <button className="usage-error-retry" onClick={retryFetch}>{t.retry}</button>
+              </div>
+            )}
             {settings.showHour5 && (
               <UsageBar label={t.currentSession} kind="five_hour" data={usage.five_hour} now={now} settings={settings} sizeMode={sizeMode} locale={locale} t={t} />
             )}

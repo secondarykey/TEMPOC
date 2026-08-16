@@ -60,6 +60,17 @@ type UsagePayload struct {
 	ExtraUsage json.RawMessage `json:"extra_usage,omitempty"`
 }
 
+// FetchErrorPayload reports that claude.ai could not be read (an HTTP error
+// from the usage API, a non-JSON response, a network failure). Distinct from
+// tempoc:auth-required, which means the session is gone and logging in fixes
+// it: this one is Claude's problem, so the frontend keeps the last known
+// figures and their timestamp on screen and just says the refresh failed.
+// Msg is the technical reason (shown only as a tooltip; the visible text is
+// localized in the frontend).
+type FetchErrorPayload struct {
+	Msg string `json:"msg"`
+}
+
 // clampToWorkArea moves (x, y) so a w×h window stays inside a screen work
 // area. Right/bottom are clamped before left/top so that the top-left corner
 // wins (stays reachable) when the window is larger than the area.
@@ -168,6 +179,7 @@ func (c *claudeCtl) toggle() {
 func init() {
 	// Register the usage event so the frontend gets a typed JS/TS API for it.
 	application.RegisterEvent[UsagePayload]("tempoc:usage")
+	application.RegisterEvent[FetchErrorPayload]("tempoc:fetch-error")
 }
 
 func main() {
@@ -291,7 +303,15 @@ func main() {
 				return
 			}
 
-			if !strings.Contains(originInfo.Origin, "claude.ai") {
+			// An unreachable claude.ai is exactly what fetch-error exists to
+			// report, and a failed navigation leaves the WebView on its own
+			// error page, whose origin can be empty/opaque rather than
+			// claude.ai — so that case is let through as well (inject.js only
+			// posts it from claude.ai or such an error page; see
+			// postFetchError). It can't fabricate figures: the frontend shows
+			// a banner and keeps the last data it already had.
+			if !strings.Contains(originInfo.Origin, "claude.ai") &&
+				!(msg.Type == "fetch-error" && (originInfo.Origin == "" || originInfo.Origin == "null")) {
 				return
 			}
 			switch msg.Type {
@@ -304,6 +324,12 @@ func main() {
 				// below) to reveal the window.
 				slog.Info("login required, notifying frontend")
 				app.Event.Emit("tempoc:auth-required", nil)
+			case "fetch-error":
+				// Claude 側の障害。ログインし直しても直らないので傍受
+				// ウィンドウは出さず、フロントにだけ伝える（フロントは
+				// 直前の値と更新時刻を保ったままエラーと再実行ボタンを出す）。
+				slog.Warn("usage fetch failed", "reason", msg.Msg, "origin", originInfo.Origin)
+				app.Event.Emit("tempoc:fetch-error", FetchErrorPayload{Msg: msg.Msg})
 			case "usage":
 				slog.Info("received usage payload", "origin", originInfo.Origin)
 				app.Event.Emit("tempoc:usage", UsagePayload{

@@ -77,6 +77,7 @@ postMessage の `type` で分岐:
 - `usage` — `seven_day`/`five_hour`/`weekly_scoped` を `app.Event.Emit("tempoc:usage", ...)` でフロントへ。以後 `Events.On("tempoc:usage")` で受信
 - `location` — href 変化時に送信。Go が傍受ウィンドウのネイティブタイトルに URL を反映（`SetTitle`）。これだけは claude.ai 以外のオリジンからも受け付ける（OAuth 中は accounts.google.com 等にいるため）。ただし**報告 URL がメッセージの実オリジン（`originInfo.Origin`）で始まる場合のみ**反映 — ページは自分の URL しかタイトルに出せない
 - `auth-required` — 未認証を検知（`/login` にいる、または API が 401/403 を返した）→ `app.Event.Emit("tempoc:auth-required")` でフロントへ通知。フロントは usage データが残っていてもログイン前表示（「Log in to Claude」ボタン）に戻し、クリックで `Events.Emit('tempoc:login')` → Go が傍受ウィンドウを表示する（勝手には出さない）。このとき `/login` 以外の古い SPA 画面のままなら ExecJS で usage URL へ読み込み直し、claude.ai にログインページへ誘導させる
+- `fetch-error` — **claude.ai が落ちている/読めなかった**ことの通知（下記「取得失敗の扱い」）→ `app.Event.Emit("tempoc:fetch-error", {msg})`。`auth-required` とは別物（ログインし直しても直らない）なので傍受ウィンドウは出さない
 - `debug` — ログ出力用
 
 ### ログイン遷移の検知（pathname ウォッチャー）
@@ -117,6 +118,17 @@ postMessage の `type` で分岐:
 `inject.js` 内で `setInterval(__tempocClickRefresh, ms)`。`ms` は Go が起動時に `settings.RefreshInterval*60000` を `__TEMPOC_REFRESH_MS__` プレースホルダへ文字列置換して埋め込む。**傍受スクリプトは傍受ウィンドウに再注入できない**（上記 ExecJS の制約）ため、`refreshInterval` の変更は**次回起動時**に反映される。
 
 繰り返しの再取得は API 直叩き（`__tempocRefetch`）ではなく、**サイト自身の更新ボタンをクリック**する `__tempocClickRefresh` を使う（下記「手動更新」と同じ経路）。ボタンは `findRefreshButton()` が **モーダル（`[role="dialog"]`）内の `aria-label="Refresh"`（または「更新」）** で構造的に探す — React の自動生成 ID（`_r_bb_` → `_r_h7_` と実際に変わった）には依存しない（旧 ID は最後の保険としてのみ参照）。通常利用と同じリクエストになり、ヘッダ/CSRF/エンドポイントの正しさをサイトに委ねられるため。**API 直叩きは極力使わない**方針: ボタンが無い場合、まず「usage モーダルが開いていない（SPA 遷移でハッシュ喪失）」を疑い、claude.ai 上でハッシュが `#settings/usage` でなければ **usage URL を開き直してモーダルを復元**する（リロード後の初回取得がデータを届け、以後はボタンが押せる）。ハッシュが正しいのにボタンが無い（ID 変更等）ときだけ `__tempocRefetch` にフォールバック — この分岐が再リロードしないことでリロードループを防ぐ。ただし**初回だけ**は、まだ更新ボタンが DOM に無い可能性が高いので `__tempocRefetch` の直叩き（下記「初回取得のリトライ」）。また **`/login` 上では `__tempocClickRefresh` は何もしない** — モーダル復元リロードが走るとログイン入力中のユーザーの画面が消えるため（ログイン完了後の復帰は watchAuthTransition が担う）。
+
+### 取得失敗の扱い（`fetch-error`）
+
+Claude 側の障害（5xx・レート制限・HTML のエラーページ・ネットワーク断）は**未認証とは別の失敗**として扱う。原則は2つ:
+
+1. **失敗を成功として post しない**。以前は `handleUsageResponse` がステータスを見ずに本文を JSON として解釈していたため、障害時のエラー JSON（`{"error": ...}` や 200 のエラー応答）でも `usage` が飛び、全ウィンドウ `undefined` のペイロードがフロントに届いていた。フロントは `utilization ?? 0` / `resets_at` 無しで描くので、**全バーが 0% にリセットされたように見える**（障害がリセット直後の画面と区別できない）。よって inject.js は次をすべて `postFetchError()` に落とす: 使用量 API の非 2xx（401/403 を除く）/ JSON でない応答 / `five_hour` も `seven_day` も含まない応答 / `__tempocRefetch` の `catch`。**空の usage を post する経路を作らないこと。**
+2. **最後に取れた値は消さない**。フロントは `tempoc:fetch-error` を受けても `usage` / `lastUpdated` を触らず、バーの上にエラー帯（文言 + 再取得ボタン）を出すだけ。タイトルバーの「〜に更新」が古いままになることと合わせて「止まっている」ことが伝わる。エラー帯は次に `usage` が届いた時点で自動的に消える。まだ一度もデータが無い場合だけ、待機プレースホルダの代わりにエラー + 再取得ボタンを出す（`t.fetchError` / `t.retry`）。再取得ボタンは手動更新と同じ `tempoc:refresh`。
+
+`postFetchError()` は **claude.ai（と hostname 空のナビゲーション失敗ページ）以外では黙る** — OAuth 中の accounts.google.com 上でも相対 URL の取得は走り、そこでの失敗は Claude の障害ではないため。Go 側の origin ゲートも同じ理由で `fetch-error` に限り空/`null` オリジンを通す（到達できないときはエラーページのオリジンになり得るため）。
+
+エラー帯は `.usage-bars` の**内側**に置く。ウィンドウ高はこのコンテナの実測値（`measureRef`）で決まるので、外に出すと帯のぶんだけ見切れる。
 
 ### 初回取得のリトライ（`refetchWithRetry`）
 

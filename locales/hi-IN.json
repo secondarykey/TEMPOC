@@ -13,6 +13,8 @@
   "loginRequired": "लॉगिन आवश्यक",
   "loginToClaude": "Claude में लॉगिन करें",
   "waitingForUsage": "उपयोग डेटा की प्रतीक्षा है",
+  "fetchError": "Claude से उपयोग डेटा नहीं मिल सका",
+  "retry": "पुनः प्रयास करें",
   "currentSession": "वर्तमान सत्र",
   "weeklyLimit": "साप्ताहिक सीमा",
   "weeklyScopedFallback": "Weekly (scoped)",

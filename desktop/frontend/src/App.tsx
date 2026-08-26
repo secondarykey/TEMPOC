@@ -437,6 +437,22 @@ function MainWindow() {
   // /login). Shows the "Log in to Claude" button; cleared as soon as usage
   // data flows again.
   const [authRequired, setAuthRequired] = useState(false);
+  // Set when the interceptor reports it couldn't read the usage API (Claude
+  // returning 5xx, an HTML error page, a network failure). Deliberately does
+  // NOT clear `usage` or `lastUpdated`: the last figures we received are still
+  // the last known truth, and blanking them would render every bar at 0% —
+  // an outage would look like a fresh window. The modal over the bars (and the
+  // timestamp going stale in the title bar) is what tells the user the numbers
+  // are old.
+  // Holds the technical reason for the tooltip; '' still counts as an error.
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  // True from the moment the modal's retry is pressed until we hear back (a
+  // usage event, another fetch-error) or the fallback timeout below fires.
+  // Without it a retry that silently goes nowhere — the interceptor skips the
+  // refresh while sitting on the login page, say — would look like a dead
+  // button, since a repeated failure re-reports the same error and changes
+  // nothing on screen.
+  const [retrying, setRetrying] = useState(false);
 
   useEffect(() => {
     SettingsService.Get()
@@ -459,11 +475,24 @@ function MainWindow() {
     const off = Events.On('tempoc:usage', (e: any) => {
       setUsage(e.data as UsagePayload);
       setLastUpdated(Date.now());
-      // Data is flowing, so the session is authenticated.
+      // Data is flowing, so the session is authenticated and Claude is up.
       setAuthRequired(false);
+      setFetchError(null);
+      setRetrying(false);
     });
     const offAuth = Events.On('tempoc:auth-required', () => {
       setAuthRequired(true);
+      setRetrying(false);
+      // A login prompt replaces the whole view, so a stale fetch error under
+      // it would only reappear (out of context) once the login succeeds.
+      setFetchError(null);
+    });
+    // Claude couldn't be read. Keep whatever we already show — only raise the
+    // modal, so the user sees the numbers stopped updating instead of seeing
+    // them silently reset.
+    const offFetchError = Events.On('tempoc:fetch-error', (e: any) => {
+      setFetchError((e?.data?.msg as string) ?? '');
+      setRetrying(false);
     });
     // The settings window emits this after Apply commits a new draft via
     // SettingsService.Set. Re-fetching (rather than receiving the value in
@@ -479,9 +508,20 @@ function MainWindow() {
       clearInterval(id);
       if (typeof off === 'function') off();
       if (typeof offAuth === 'function') offAuth();
+      if (typeof offFetchError === 'function') offFetchError();
       if (typeof offSettingsApplied === 'function') offSettingsApplied();
     };
   }, []);
+
+  // Fallback for a retry that never reports back (the interceptor skips the
+  // refresh on the login page, or the click never reaches a live fetch). Puts
+  // the button back so the user can try again instead of staring at a stuck
+  // "retrying" state.
+  useEffect(() => {
+    if (!retrying) return;
+    const id = setTimeout(() => setRetrying(false), 15000);
+    return () => clearTimeout(id);
+  }, [retrying]);
 
   // Auto-refresh when a window's reset moment passes. Claude keeps reporting the
   // stale 100% until the usage endpoint is hit again, so the instant `now`
@@ -698,6 +738,14 @@ function MainWindow() {
 
   const rootModeClass = sizeMode === 'small' ? ' mode-small' : sizeMode === 'compact' ? ' mode-compact' : '';
 
+  // Same path as the title bar's refresh button: ask the interceptor to fetch
+  // again. Success clears the modal (a usage event arrives); another failure
+  // re-reports the error and leaves the displayed figures untouched.
+  const retryFetch = () => {
+    setRetrying(true);
+    Events.Emit('tempoc:refresh');
+  };
+
   return (
     <div className={`root${rootModeClass}`}>
       <TitleBar
@@ -766,6 +814,32 @@ function MainWindow() {
           </div>
         )}
       </main>
+      {/* Claude can't be read. Covers the content area (the title bar stays
+          usable, so the window can still be moved, pinned or closed) with a
+          single centred retry — the numbers underneath are the last known
+          truth, deliberately left intact but no longer being updated, and the
+          overlay is what stops them from being read as current. Not rendered
+          when the session is gone: the login prompt owns that case, and
+          auth-required clears fetchError anyway. */}
+      {fetchError != null && !authRequired && (
+        <div
+          className="error-modal-backdrop"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="fetch-error-title"
+        >
+          <div className="error-modal">
+            <span className="error-modal-icon" aria-hidden="true">!</span>
+            <p className="error-modal-text" id="fetch-error-title" title={fetchError || undefined}>
+              {t.fetchError}
+            </p>
+            <button className="error-modal-retry" onClick={retryFetch} disabled={retrying}>
+              {t.retry}
+              {retrying && <span className="loading-dots" aria-hidden="true" />}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

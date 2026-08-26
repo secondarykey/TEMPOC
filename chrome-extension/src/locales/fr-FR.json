@@ -13,6 +13,8 @@
   "loginRequired": "Connexion requise",
   "loginToClaude": "Se connecter à Claude",
   "waitingForUsage": "En attente des données d'utilisation",
+  "fetchError": "Impossible de récupérer l'utilisation depuis Claude",
+  "retry": "Réessayer",
   "currentSession": "Session actuelle",
   "weeklyLimit": "Limite hebdomadaire",
   "weeklyScopedFallback": "Weekly (scoped)",

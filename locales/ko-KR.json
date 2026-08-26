@@ -13,6 +13,8 @@
   "loginRequired": "로그인 필요",
   "loginToClaude": "Claude에 로그인",
   "waitingForUsage": "사용량 데이터 대기 중",
+  "fetchError": "Claude에서 사용량을 가져오지 못했습니다",
+  "retry": "다시 시도",
   "currentSession": "현재 세션",
   "weeklyLimit": "주간 한도",
   "weeklyScopedFallback": "Weekly (scoped)",

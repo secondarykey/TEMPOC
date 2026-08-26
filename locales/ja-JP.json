@@ -13,6 +13,8 @@
   "loginRequired": "ログインが必要です",
   "loginToClaude": "Claude にログイン",
   "waitingForUsage": "使用量データを待機中",
+  "fetchError": "Claude から使用量を取得できませんでした",
+  "retry": "再取得",
   "currentSession": "現在のセッション",
   "weeklyLimit": "週間上限",
   "weeklyScopedFallback": "Weekly (scoped)",

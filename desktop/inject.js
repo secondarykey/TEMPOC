@@ -42,6 +42,34 @@
     post({ type: "auth-required" });
   }
 
+  // Claude が落ちている / 使用量が取れなかったことをフロントへ知らせる。
+  // 「未認証」とは別物なので auth-required とは分ける — ログインし直しても
+  // 直らないし、直前まで表示していた値は依然として最後に判っている真値だから、
+  // フロントはこれを受けても値と更新時刻を消さずにエラー表示だけ足す。
+  //
+  // ⚠️ 取得に失敗したときは「空の usage を post する」ことだけは絶対にしない。
+  // 空ペイロードはフロントで utilization 0 / resets_at 無しとして描かれ、
+  // 全バーが 0% にリセットされたように見える（= 障害を成功として表示する）。
+  function postFetchError(msg) {
+    // claude.ai 以外のページ（Google OAuth 中の accounts.google.com など）でも
+    // このスクリプトは動いており、そこで走った相対 URL の取得は当然失敗する。
+    // それをユーザーに「Claude から取得できない」と見せるのは誤報なので黙る。
+    // hostname が空なのはナビゲーション失敗時のエラーページ側（= claude.ai に
+    // 到達できていない）で、これはまさに報告したいケースなので通す。
+    var host = window.location.hostname;
+    if (host !== "" && host !== "claude.ai" && !/\.claude\.ai$/.test(host)) {
+      post({ type: "debug", msg: "fetch error off-site, suppressed: " + msg });
+      return;
+    }
+    post({ type: "fetch-error", msg: msg });
+  }
+
+  // 2xx かどうか。Response.ok を直接見ないのは、fetch のスタブや
+  // 一部の経路で ok が無い応答オブジェクトが来ても status で判断できるようにするため。
+  function isOK(r) {
+    return r && r.status >= 200 && r.status < 300;
+  }
+
   if (window.__tempocPatched) {
     // 既にパッチ済み。再注入時は使用量の再取得を試みる（下の tryRefetch を呼ぶ）。
     post({ type: "debug", msg: "inject: already patched, re-run" });
@@ -201,16 +229,27 @@
         console.debug("[TEMPOC] usage intercepted", data);
         // weekly_scoped lives as an entry in the `limits` array (its `kind`),
         // not as a top-level key. Fall back to a top-level key just in case.
-        post({
+        var payload = {
           type: "usage",
           seven_day: normalizeWindow(data.seven_day || findLimit(data, "seven_day")),
           five_hour: normalizeWindow(data.five_hour || findLimit(data, "five_hour")),
           weekly_scoped: normalizeWindow(findLimit(data, "weekly_scoped") || data.weekly_scoped),
           extra_usage: normalizeCredits(data.extra_usage),
-        });
+        };
+        // 障害時にエラー JSON（{"error": ...} など）が 200 で返ることがある。
+        // そのまま post すると全ウィンドウが undefined の「成功」として届き、
+        // フロントは 0% のバーを描いてしまう。5時間・7日のどちらも無い応答は
+        // 使用量ではないと判断してエラー扱いにする。
+        if (!payload.seven_day && !payload.five_hour) {
+          post({ type: "debug", msg: "usage: payload has no usage windows" });
+          postFetchError("usage: unexpected response");
+          return;
+        }
+        post(payload);
       })
       .catch(function () {
-        // non-JSON response, ignore
+        // JSON ではない（障害時の HTML エラーページ・プロキシの応答など）。
+        postFetchError("usage: response was not JSON");
       });
   }
 
@@ -230,6 +269,11 @@
           // サイト自身の使用量リクエストが認証エラー = ログアウトされた。
           post({ type: "debug", msg: "usage: unauthorized (" + response.status + ")" });
           postAuthRequired();
+        } else if (!isOK(response)) {
+          // Claude 側の障害（5xx）やレート制限（429）。サイト自身のリクエスト
+          // なのでヘッダ等は正しく、失敗は claude.ai 側の問題と考えてよい。
+          post({ type: "debug", msg: "usage: http " + response.status });
+          postFetchError("usage: HTTP " + response.status);
         } else {
           handleUsageResponse(response);
         }
@@ -256,6 +300,13 @@
           postAuthRequired();
           return false;
         }
+        if (!isOK(r)) {
+          // Claude 側の障害。未認証ではないのでログイン画面には戻さず、
+          // 「取得できなかった」ことだけをフロントに伝える。
+          post({ type: "debug", msg: "refetch: organizations http " + r.status });
+          postFetchError("organizations: HTTP " + r.status);
+          return false;
+        }
         return r.json().then(function (orgs) {
           if (!Array.isArray(orgs) || orgs.length === 0) {
             // 実測ではログアウト状態でも 401 ではなく 200 + 空/非配列が
@@ -275,13 +326,24 @@
               postAuthRequired();
               return false;
             }
+            if (!isOK(r2)) {
+              // 障害応答の本文を使用量として解釈させない（空ペイロードを
+              // post すると全バーが 0% になる）。エラーだけ伝えて失敗を返す。
+              post({ type: "debug", msg: "refetch: usage http " + r2.status });
+              postFetchError("usage: HTTP " + r2.status);
+              return false;
+            }
             handleUsageResponse(r2);
-            return r2.ok;
+            return true;
           });
         });
       })
       .catch(function (e) {
+        // ネットワーク断・DNS 障害・JSON でない応答など。リトライ対象だが、
+        // 画面には「取れていない」ことを出す（黙って古い値を出し続けると
+        // 更新されているのか止まっているのか区別が付かない）。
         post({ type: "debug", msg: "refetch failed: " + e });
+        postFetchError("refetch failed: " + e);
         return false;
       });
   };

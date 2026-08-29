@@ -33,6 +33,19 @@ TARGETS = [
 ]
 REFERENCE = "en-US.json"
 
+# Where the extension's options page names a message key. The desktop gets this
+# guarantee from tsc (its RawMessages type is checked against the JSON); the
+# extension has no build step, so the same completeness check has to happen
+# here. Keys used only by the extension were once declared in the desktop's
+# RawMessages to borrow that check -- they are not any more, because
+# scripts/locale_impact.py reads that type as "what the desktop displays" when
+# deciding whether a locale change is worth a desktop release.
+EXTENSION_SRC = ROOT / "chrome-extension" / "src"
+EXTENSION_KEY_PATTERNS = [
+    ("*.html", r'data-i18n="([A-Za-z0-9_]+)"'),  # tempocApplyI18n's markup hook
+    ("*.js", r"\bt\.([A-Za-z0-9_]+)\b"),         # `t` is the loaded messages object
+]
+
 
 def flatten(obj, prefix=""):
     flat = {}
@@ -49,9 +62,20 @@ def placeholders(value):
     return set(re.findall(r"\{(\w+)\}", value)) if isinstance(value, str) else set()
 
 
+def extension_keys():
+    """Message keys the extension's options page asks for at runtime."""
+    keys = set()
+    for glob, pattern in EXTENSION_KEY_PATTERNS:
+        for file in sorted(EXTENSION_SRC.rglob(glob)):
+            keys |= set(re.findall(pattern, file.read_text(encoding="utf-8")))
+    return keys
+
+
 def validate(files):
     errors = []
     ref = flatten(json.loads((MASTER / REFERENCE).read_text(encoding="utf-8")))
+    for key in sorted(extension_keys() - ref.keys()):
+        errors.append(f"{REFERENCE}: missing key '{key}', referenced by the Chrome extension")
     for file in files:
         if file.name == REFERENCE:
             continue
@@ -115,15 +139,18 @@ def main():
         for p in rel:
             print(f"synced {p}")
         print(f"done: {len(files)} locales, {len(diffs)} file(s) updated")
-        # Said here because this is the moment the choice exists: the commit
-        # about to be made spans both modules, and only its author knows
-        # whether both should release for it. Gated on the write actually
-        # spanning both, so a one-sided drift fix does not claim otherwise.
+        # Said here because this is the moment the choice exists: the write
+        # about to be committed spans both modules. CI works out on its own
+        # which of them actually reads the changed keys, so this is a pointer
+        # to the command that shows the same answer now, not a warning.
         touched = {t for t in TARGETS if any(t in p.parents for p in diffs)}
         if len(touched) == len(TARGETS):
             print(
-                "\nthis commit touches both modules, so both will release.\n"
-                "to hold one back, add to the commit message:\n"
+                "\nthis write touches both modules' copies. whether that releases both\n"
+                "depends on which of them reads the changed keys — check with:\n"
+                "  python3 scripts/locale_impact.py\n"
+                "to override the answer, put a marker in the *merge commit* subject\n"
+                "(`gh pr merge --subject`; a marker on a branch commit is never read):\n"
                 "  [skip versionup:extension]   release desktop only\n"
                 "  [skip versionup:desktop]     release the extension only"
             )

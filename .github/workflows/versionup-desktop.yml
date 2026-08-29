@@ -10,21 +10,49 @@ on:
   workflow_dispatch:
 
 jobs:
-  versionup:
-    # `[skip versionup]` holds off both modules; `[skip versionup:desktop]` holds
-    # off this one only. See versionup-extension.yml for why the choice is a
-    # commit marker rather than a paths filter -- the mirror case (an extension-
-    # only wording change) is the more common one.
+  # Mirror of versionup-extension.yml's impact job -- see the note there. This
+  # side is protected by RawMessages in desktop/frontend/src/i18n.ts listing
+  # only the keys the desktop itself displays, so a string added for the
+  # extension's options page alone does not look like a desktop change.
+  impact:
+    # `[skip versionup]` holds off both modules; `[skip versionup:desktop]`
+    # holds off this one, as a manual override of the check below. Read from
+    # the push's head commit -- the merge commit in the usual PR flow.
     if: >-
       !contains(github.event.head_commit.message, '[skip versionup]') &&
       !contains(github.event.head_commit.message, '[skip versionup:desktop]')
+    runs-on: ubuntu-latest
+    outputs:
+      affected: ${{ steps.impact.outputs.affected }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # github.event.before must be in the clone
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Does this push reach the desktop app?
+        id: impact
+        run: |
+          python scripts/locale_impact.py \
+            --module desktop \
+            --base "${{ github.event.before }}" \
+            --head "${{ github.sha }}" \
+            --github-output
+
+  versionup:
+    needs: impact
+    if: needs.impact.outputs.affected == 'true'
     # Shared with versionup-extension.yml: a push touching both modules starts
     # both workflows, and each one branches from main, merges a PR and moves
     # main. They touch different files, but serialising them keeps the two
     # merges from racing. Job-level (not workflow-level) on purpose: the `if`
-    # above is evaluated first, so a run skipped by [skip versionup] never
-    # claims the group's single waiting slot — a workflow-level group let the
-    # bump-merge push's do-nothing run evict the other module's queued run.
+    # above is evaluated first, so a run held off by [skip versionup] or by the
+    # impact check never claims the group's single waiting slot — a
+    # workflow-level group let the bump-merge push's do-nothing run evict the
+    # other module's queued run.
     concurrency:
       group: versionup
       cancel-in-progress: false

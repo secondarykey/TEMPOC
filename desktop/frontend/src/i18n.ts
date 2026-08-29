@@ -124,12 +124,12 @@ type RawMessages = {
   durationLong: string;
   decimalPlaces: string;
   percentFormat: string;
-  // Used only by the Chrome extension's options page; listed here so the
-  // desktop build's key check keeps every locale file complete for both
-  // modules (the JSON files are synced copies of the repo-root locales/).
-  previewLabel: string;
-  refreshHelp: string;
-  savedToast: string;
+  // Keys the extension's options page uses but this app does not are
+  // deliberately absent: this type is the desktop's list of what it reads, and
+  // scripts/locale_impact.py derives from it whether a locale change is worth
+  // a desktop release. Listing a foreign key here would make every shared
+  // wording change look like one. The extension's own keys are checked for
+  // existence by scripts/sync_locales.py instead.
   sectionHour5: string;
   sectionDay7: string;
   sectionWeeklyScoped: string;

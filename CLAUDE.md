@@ -23,7 +23,7 @@ This repository holds **two independent modules**. They share no code and have s
 | `.github/variables` | Pinned tool versions shared by workflows (currently `WAILS_VERSION`). Loaded with `grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"` — plain `cat` would choke on the file's comments |
 | `.claude/skills/` | `wails3` (Wails v3 practices) and `tempoc-desktop-verify` (driving the built desktop exe over CDP) |
 | `locales/` | **Master** of the locale JSON files shared by both modules (one file per locale, flat keys with `{token}` templates). Edit translations here only |
-| `scripts/` | Repo-wide tooling. `sync_locales.py` validates `locales/` (key/placeholder parity across all files) and rewrites both modules' committed copies |
+| `scripts/` | Repo-wide tooling. `sync_locales.py` validates `locales/` (key/placeholder parity across all files) and rewrites both modules' committed copies; `locale_impact.py` reports which modules a diff actually reaches, and gates both versionup workflows |
 | `README.md` | User-facing entry point: what TEMPOC is, the shared bar/color concept, and the privacy & disclaimer terms that cover both modules. Per-module install and settings docs live in each module's own `README.md`, which this one links to |
 
 `README.md` and `LICENSE` stay at the root and cover both modules. Keep anything user-facing that is true of both — the concept, privacy, disclaimer, license — in the root `README.md` only, and anything install- or settings-specific in the module's `README.md` only, so the two never drift into contradicting each other.
@@ -34,16 +34,26 @@ The i18n message JSON is the one asset both modules consume. The master is `loca
 
 Consequences to keep in mind:
 
-- A translation change is one commit that touches both modules, so by default it triggers **both** versionup workflows and releases both modules. That is usually what you want for wording fixes. When it is not — a label that only exists in the desktop UI, say — hold one module back with a per-module marker in the commit message:
+- A translation change is one commit that touches both modules, so a `paths: <module>/**` filter alone starts **both** versionup workflows. Each one therefore runs `python3 scripts/locale_impact.py --module <module>` first and releases only if the diff reaches code that module actually runs:
 
-  | Marker in the commit message | Effect |
+  | What changed under the module | Released? |
+  |---|---|
+  | anything that is not a locale copy | yes |
+  | a locale key the module's own source references | yes |
+  | only locale keys it never reads | no |
+
+  Run the same command locally to see the answer before pushing (`python3 scripts/locale_impact.py` reports both modules, `HEAD` vs `origin/main`). Which keys a module "reads" is derived from its own source: `RawMessages` in `desktop/frontend/src/i18n.ts` for the desktop, `data-i18n="…"` / `t.…` for the extension. **Neither module may declare the other's keys** — that is what makes the two answers independent.
+
+  The check is a safe over-approximation (it matches key names as words, so a coincidence releases rather than skips), and it is not a judgement about whether a shared string is worth shipping. To override it, use a marker:
+
+  | Marker | Effect |
   |---|---|
   | `[skip versionup:extension]` | releases desktop only |
   | `[skip versionup:desktop]` | releases the extension only |
   | `[skip versionup]` | releases neither (what the automated bump merges use) |
 
-  The markers are read by each `versionup-<module>.yml`'s job-level `if`. This is a commit marker and not a `paths:` filter on the locale copies because the diff cannot tell a desktop-only label apart from a translation fix that both modules should ship — only the author knows. **Skipping defers, it does not drop**: the synced copy stays on `main` and goes out with that module's next release.
-- Key completeness is enforced twice: `sync_locales.py` compares every locale against `en-US.json` (keys and `{token}` placeholders), and the desktop build re-checks typed keys via `RawMessages` in `desktop/frontend/src/i18n.ts`. Keys used only by the extension (e.g. `previewLabel`, `refreshHelp`, `savedToast`) are still listed in `RawMessages` so the desktop type check covers them too.
+  **The markers are read from the head commit of the push**, which in the normal PR flow is the *merge commit* — put them in the merge subject (`gh pr merge --subject`). A marker on a branch commit is never seen. **Skipping defers, it does not drop**: the synced copy stays on `main` and goes out with that module's next release.
+- Key completeness is enforced per module: `sync_locales.py` compares every locale against `en-US.json` (keys and `{token}` placeholders) *and* checks that every key the extension's options page references exists there; the desktop build checks its own keys via `RawMessages`. The extension's keys are deliberately **not** listed in `RawMessages` — borrowing the type check that way would make every shared wording change look like a desktop change to `locale_impact.py`.
 - Adding a language or a key therefore spans both modules by design: edit `locales/`, run the sync script, and follow each module's guide for the code side (`SUPPORTED_LOCALES` in `desktop/frontend/src/i18n.ts`, `TEMPOC_LOCALES` in `chrome-extension/src/i18n.js`).
 
 ## Versioning

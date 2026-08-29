@@ -119,6 +119,11 @@ body { background: transparent; }
     justify-content: space-between;
     user-select: none;
     -webkit-user-select: none;
+    /* Hand every axis to the drag handler (src/touchdrag.ts): without this the
+       browser claims the gesture as a pan and revokes the pointer before a
+       touch drag can start. touchdrag.ts reads this back to decide which axis
+       it may move the window along. */
+    touch-action: none;
 }
 
 .titlebar-left { display: flex; align-items: center; height: 100%; }
@@ -130,6 +135,8 @@ body { background: transparent; }
     white-space: nowrap;
     -webkit-user-select: none;
     user-select: none;
+    /* Draggable island inside the no-drag left cluster; same reason as above. */
+    touch-action: none;
 }
 
 .titlebar-gear,

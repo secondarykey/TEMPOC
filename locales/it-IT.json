@@ -14,6 +14,7 @@
   "loginToClaude": "Accedi a Claude",
   "waitingForUsage": "In attesa dei dati di utilizzo",
   "fetchError": "Impossibile recuperare l'utilizzo da Claude",
+  "staleUsage": "I dati di utilizzo potrebbero non essere aggiornati",
   "retry": "Riprova",
   "currentSession": "Sessione corrente",
   "weeklyLimit": "Limite settimanale",

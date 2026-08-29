@@ -79,6 +79,10 @@ type RawMessages = {
   // failure) — paired with `retry`, and never replacing the figures already
   // on screen, which are still the last known values.
   fetchError: string;
+  // Shown in the same place when nothing reported a failure but the figures
+  // simply stopped being refreshed — a safety net for a failure path that
+  // never reaches us (see App.tsx's `stale`).
+  staleUsage: string;
   retry: string;
   currentSession: string;
   weeklyLimit: string;

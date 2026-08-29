@@ -736,6 +736,17 @@ function MainWindow() {
   const lastUpdatedLabel =
     lastUpdated != null ? formatLastUpdated(now - lastUpdated, locale, t) : null;
 
+  // Safety net for a failure that never reports itself. Every known failure
+  // path posts tempoc:fetch-error, but a path we haven't found (or a dropped
+  // event) would leave the last figures on screen with nothing marking them as
+  // old — only the title bar's "N min ago" creeping up, which is easy to miss.
+  // Auto refresh runs every `refreshInterval` minutes, so two intervals with no
+  // new data means refreshing has stopped working whatever the reason.
+  // Skipped when auto refresh is off (0): with only the manual button there is
+  // no expected update to be late for.
+  const staleAfterMs = settings.refreshInterval > 0 ? settings.refreshInterval * 60_000 * 2 : 0;
+  const stale = staleAfterMs > 0 && lastUpdated != null && now - lastUpdated > staleAfterMs;
+
   const rootModeClass = sizeMode === 'small' ? ' mode-small' : sizeMode === 'compact' ? ' mode-compact' : '';
 
   // Same path as the title bar's refresh button: ask the interceptor to fetch
@@ -820,8 +831,10 @@ function MainWindow() {
           truth, deliberately left intact but no longer being updated, and the
           overlay is what stops them from being read as current. Not rendered
           when the session is gone: the login prompt owns that case, and
-          auth-required clears fetchError anyway. */}
-      {fetchError != null && !authRequired && (
+          auth-required clears fetchError anyway. Also raised by `stale`, with
+          a softer wording: nothing reported a failure, we only know the
+          figures stopped being refreshed. */}
+      {(fetchError != null || stale) && !authRequired && (
         <div
           className="error-modal-backdrop"
           role="alertdialog"
@@ -831,7 +844,7 @@ function MainWindow() {
           <div className="error-modal">
             <span className="error-modal-icon" aria-hidden="true">!</span>
             <p className="error-modal-text" id="fetch-error-title" title={fetchError || undefined}>
-              {t.fetchError}
+              {fetchError != null ? t.fetchError : t.staleUsage}
             </p>
             <button className="error-modal-retry" onClick={retryFetch} disabled={retrying}>
               {t.retry}

@@ -14,6 +14,7 @@
   "loginToClaude": "Masuk ke Claude",
   "waitingForUsage": "Menunggu data penggunaan",
   "fetchError": "Tidak bisa mengambil data penggunaan dari Claude",
+  "staleUsage": "Data penggunaan mungkin sudah usang",
   "retry": "Coba lagi",
   "currentSession": "Sesi saat ini",
   "weeklyLimit": "Batas mingguan",

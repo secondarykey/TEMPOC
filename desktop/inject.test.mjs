@@ -355,3 +355,48 @@ test("initial refetch gives up rather than retrying forever", async () => {
     "the log must say the app stopped trying, or a silent UI looks like a bug",
   );
 });
+
+// The auto refresh drives claude.ai's own refresh button, so the request that
+// fails on a network outage is the site's — it goes through the patched
+// window.fetch, not __tempocRefetch. That wrapper used to `await originalFetch`
+// outside any try, so a rejection threw past the reporting code and the
+// frontend was told nothing: the bars kept showing the last values while only
+// the "N min ago" in the title bar crept up. A failure that returns no response
+// must be reported exactly like a 5xx.
+test("a usage request that never gets a response is reported", async () => {
+  const spy = makePostSpy();
+  const window = runInject({
+    webview2: spy,
+    fetch: () => Promise.reject(new Error("net::ERR_INTERNET_DISCONNECTED")),
+  });
+
+  await assert.rejects(
+    () => window.fetch("/api/organizations/org-1/usage"),
+    /ERR_INTERNET_DISCONNECTED/,
+    "the site's own error handling must still see the rejection",
+  );
+  await flush();
+
+  assert.ok(
+    typesPosted(spy).some((m) => m.type === "fetch-error"),
+    "a network outage must raise the error modal, not go unnoticed",
+  );
+});
+
+// Only the usage request tells us anything about our own data. claude.ai makes
+// plenty of other calls (telemetry, prefetches) that can fail harmlessly.
+test("an unrelated request failing is not a usage failure", async () => {
+  const spy = makePostSpy();
+  const window = runInject({
+    webview2: spy,
+    fetch: () => Promise.reject(new Error("net::ERR_INTERNET_DISCONNECTED")),
+  });
+
+  await assert.rejects(() => window.fetch("/api/bootstrap"));
+  await flush();
+
+  assert.ok(
+    !typesPosted(spy).some((m) => m.type === "fetch-error"),
+    "some other endpoint failing says nothing about the usage figures",
+  );
+});

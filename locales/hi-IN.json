@@ -14,6 +14,7 @@
   "loginToClaude": "Claude में लॉगिन करें",
   "waitingForUsage": "उपयोग डेटा की प्रतीक्षा है",
   "fetchError": "Claude से उपयोग डेटा नहीं मिल सका",
+  "staleUsage": "उपयोग डेटा पुराना हो सकता है",
   "retry": "पुनः प्रयास करें",
   "currentSession": "वर्तमान सत्र",
   "weeklyLimit": "साप्ताहिक सीमा",

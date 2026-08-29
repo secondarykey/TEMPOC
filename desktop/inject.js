@@ -256,7 +256,28 @@
   var originalFetch = window.fetch;
   window.fetch = async function (...args) {
     var resource = args[0];
-    var response = await originalFetch.apply(window, args);
+    var response;
+    try {
+      response = await originalFetch.apply(window, args);
+    } catch (e) {
+      // fetch が reject する = 応答が返ってこない障害（回線断・DNS 失敗・
+      // 接続タイムアウト）。HTTP 応答が返る障害（5xx / 429）は下の status
+      // 判定で拾えるが、こちらは await が throw して判定に到達しないため、
+      // ここで拾わないとフロントは何も知らないまま古い値を出し続ける
+      // （自動更新はサイトの更新ボタン経由なので、失敗するのは常にこの
+      // 経路の fetch。端末側のネットワーク障害はまさにこれに当たる）。
+      try {
+        if (usagePattern.test(resourceToPath(resource))) {
+          post({ type: "debug", msg: "usage: fetch rejected: " + e });
+          postFetchError("usage: fetch failed: " + e);
+        }
+      } catch (e2) {
+        // ignore
+      }
+      // サイト側の挙動は変えない。握り潰すと claude.ai 自身のエラー処理が
+      // 走らず、undefined を応答として扱わせてしまう。
+      throw e;
+    }
 
     try {
       var path = resourceToPath(resource);

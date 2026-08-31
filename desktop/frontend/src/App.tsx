@@ -130,14 +130,20 @@ function windowStart(kind: WindowKind, end: number): number {
 
 const clamp = (n: number) => Math.max(0, Math.min(100, n));
 
-function formatPercent(n: number, settings: Settings): string {
+// The computed Elapsed percentage. decimalPlaces is honoured for the long
+// windows, but forced to 0 for the five-hour one: 0.01% of five hours is under
+// two seconds, so a decimal there churns while you are looking at it, which
+// reads as noise rather than precision. At whole percent it steps every three
+// minutes, and the seven-day / credits windows are slower still.
+function formatElapsed(n: number, kind: WindowKind, settings: Settings): string {
   const fmt = settings.percentFormat || '{}%';
-  return fmt.replace('{}', n.toFixed(settings.decimalPlaces));
+  const decimals = kind === 'five_hour' ? 0 : settings.decimalPlaces;
+  return fmt.replace('{}', n.toFixed(decimals));
 }
 
 // Utilisation from the API is a whole percent (no decimals), so it's always
 // shown as an integer like "100%" — independent of the decimalPlaces setting
-// (which still applies to the computed Elapsed percentage).
+// (which reaches only the computed Elapsed percentage, via formatElapsed).
 function formatUtil(n: number): string {
   return `${Math.round(n)}%`;
 }
@@ -335,7 +341,7 @@ function UsageBar({
     const lines = [t.usage(formatUtil(u))];
     if (started && resets) {
       lines.push(t.resetsAt(formatResetDate(resets, locale)));
-      lines.push(t.elapsed(formatPercent(elapsed, settings)));
+      lines.push(t.elapsed(formatElapsed(elapsed, kind, settings)));
       lines.push(t.remaining(formatRemaining(remainMs, settings.durationStyle, locale, t)));
     } else {
       lines.push(t.notStarted);
@@ -364,7 +370,7 @@ function UsageBar({
     const row = (lbl: string, value: string, c: string, tip: string, sub?: boolean) => (
       <div className={`usage-bar-compact${sub ? ' usage-bar-compact--sub' : ''}`} title={tip}>
         <span className="usage-bar-label">{lbl}</span>
-        <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatPercent(elapsed, settings) : '—'}</span>
+        <span className="usage-bar-compact-elapsed">{sub ? '' : started ? formatElapsed(elapsed, kind, settings) : '—'}</span>
         <span className="usage-bar-util" style={{ color: c }}>{value}</span>
       </div>
     );
@@ -423,7 +429,7 @@ function UsageBar({
             <>
               {t.resetsAt(formatResetDate(resets, locale))}
               <span className="usage-bar-elapsed">
-                {t.elapsed(formatPercent(elapsed, settings))}
+                {t.elapsed(formatElapsed(elapsed, kind, settings))}
               </span>
             </>
           ) : ''}

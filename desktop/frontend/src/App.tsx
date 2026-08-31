@@ -408,12 +408,25 @@ function UsageBar({
         </>
       )}
 
-      {/* Foot is the "time" row: "<date> resets" (left) and remaining (right).
-          Elapsed% isn't shown here — it's in the card's hover tooltip
-          (`tooltip` above) along with usage and the reset date. */}
+      {/* Foot is the "time" row: "<date> resets · elapsed%" (left) and
+          remaining (right). Elapsed% sits here rather than beside the head's
+          utilization because it is a time quantity like the rest of this row,
+          because the head's coloured usage figure stays the only percentage
+          there, and because the foot renders once per card — the head does not,
+          so putting it there would print the same number twice whenever the
+          nested scoped bar (which shares this timeline) is shown. It stays in
+          the hover tooltip too, which is the only place compact mode's
+          non-elapsed figures live. */}
       <div className="usage-bar-foot">
         <span className="usage-bar-reset">
-          {started && resets ? t.resetsAt(formatResetDate(resets, locale)) : ''}
+          {started && resets ? (
+            <>
+              {t.resetsAt(formatResetDate(resets, locale))}
+              <span className="usage-bar-elapsed">
+                {t.elapsed(formatPercent(elapsed, settings))}
+              </span>
+            </>
+          ) : ''}
         </span>
         <span>
           {started

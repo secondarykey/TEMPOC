@@ -366,12 +366,24 @@ body { background: transparent; }
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-/* The reset date/time, shown in the foot's left cell. */
+/* The foot's left cell: the reset date, then the elapsed percentage after a
+   separator. A wrapping flex row, so that a long localized date and the
+   elapsed segment break onto two lines instead of overflowing the card in the
+   narrower size modes, while each segment itself stays on one line. */
 .usage-bar-reset {
     color: var(--muted);
     font-weight: 400;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.35rem;
+}
+.usage-bar-elapsed::before {
+    /* U+00B7 MIDDLE DOT, written as an ASCII escape so the separator does not
+       depend on how this stylesheet's charset gets resolved. */
+    content: '\0000B7';
+    margin-right: 0.35rem;
 }
 .usage-bar-util {
     text-align: right;

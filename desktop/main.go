@@ -365,6 +365,17 @@ func main() {
 		mainWidth = defaultMainWidth
 	}
 
+	// Restore the saved height too. Not a user preference — the frontend
+	// re-measures and re-sizes as soon as it mounts — but starting at roughly
+	// the settled height is what makes phase 2's off-screen check meaningful:
+	// judging a bottom-anchored window against the much taller placeholder
+	// height would push it up the work area on every launch.
+	const defaultMainHeight = 340
+	mainHeight := winState.MainH
+	if mainHeight < 90 || mainHeight > 4000 {
+		mainHeight = defaultMainHeight
+	}
+
 	// Main UI window: the TEMPOC usage bars (served from frontend/dist).
 	// Frameless — the title bar and window controls are drawn in React.
 	mainWin := app.Window.NewWithOptions(application.WebviewWindowOptions{
@@ -374,7 +385,7 @@ func main() {
 		Y:               winState.MainY,
 		InitialPosition: mainInitialPos,
 		Width:           mainWidth,
-		Height:          340,
+		Height:          mainHeight,
 		MinWidth:        360,
 		// Low enough that the window can shrink to fit a single compact-mode usage
 		// row; the frontend measures its content and sizes the window to match
@@ -471,6 +482,11 @@ func main() {
 			w = defaultMainWidth
 			mainWin.SetSize(w, h)
 		}
+		// Same policy for a restored height taller than the work area.
+		if h > screen.WorkArea.Height {
+			h = defaultMainHeight
+			mainWin.SetSize(w, h)
+		}
 		if winState.MainX == settings.UnsetPos && winState.MainY == settings.UnsetPos {
 			return
 		}
@@ -488,8 +504,8 @@ func main() {
 		if x <= -30000 || y <= -30000 {
 			return
 		}
-		w, _ := mainWin.Size()
-		if err := settings.SaveWindowState(settings.WindowState{MainX: x, MainY: y, MainW: w}); err != nil {
+		w, h := mainWin.Size()
+		if err := settings.SaveWindowState(settings.WindowState{MainX: x, MainY: y, MainW: w, MainH: h}); err != nil {
 			slog.Error("failed to save window state", "err", err)
 		}
 	}

@@ -21,9 +21,14 @@ type WindowState struct {
 	MainX int `json:"mainX"`
 	MainY int `json:"mainY"`
 	// MainW is the main window width. 0 means unset (a width can never
-	// legitimately be zero, so no sentinel is needed). Height is not saved:
-	// the frontend continuously sizes it to fit the bar content.
+	// legitimately be zero, so no sentinel is needed).
 	MainW int `json:"mainW"`
+	// MainH is the main window height. The frontend continuously sizes the
+	// height to fit the bar content, so this is not a user preference to
+	// restore — it is saved so that the next launch starts near the height it
+	// will settle at, which is what the off-screen check needs to judge
+	// whether the window really overflows the work area. 0 means unset.
+	MainH int `json:"mainH"`
 }
 
 // DefaultWindowState returns a state with no saved position.

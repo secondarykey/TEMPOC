@@ -11,20 +11,58 @@ on:
   workflow_dispatch:
 
 jobs:
-  versionup:
-    # `[skip versionup]` holds off both modules (the bump merges use it).
-    # `[skip versionup:extension]` holds off this one only, which is what a
-    # locales/ edit needs when the wording only matters to the desktop app:
-    # scripts/sync_locales.py rewrites both modules' committed copies, so the
-    # commit touches chrome-extension/** and would otherwise release it too.
-    # Whether a shared string is worth an extension release is the author's
-    # call, not something the diff can answer -- hence a marker rather than a
-    # paths filter. Skipping only defers: the change ships with the next real
-    # extension release. The two tokens do not overlap, since '[skip versionup]'
-    # requires the ']' immediately after the word.
+  # The `paths:` filter above can only ask "did any file under
+  # chrome-extension/ change", and for every shared translation edit the answer
+  # is yes: scripts/sync_locales.py rewrites both modules' committed copies of
+  # locales/, so a string only the desktop app displays still rewrites the
+  # extension's copy. That released the extension twice for keys it never reads
+  # (v1.3.6, v1.3.7). locale_impact.py asks the narrower question -- did this
+  # diff touch anything the extension's own source references -- and only that
+  # answer gates the release below.
+  #
+  # A separate job so the answer is known before `versionup` claims the shared
+  # concurrency slot; a skipped job never claims it.
+  impact:
+    # `[skip versionup]` holds off both modules (the bump merges use it) and
+    # `[skip versionup:extension]` holds off this one, as a manual override of
+    # the check below -- e.g. to sit on a wording fix the extension does use.
+    # NOTE: this reads the *head commit of the push*, which for the usual PR
+    # flow is the merge commit, not any commit on the branch. Put the marker in
+    # the merge subject (`gh pr merge --subject`), or it is never seen. The two
+    # tokens do not overlap, since '[skip versionup]' requires the ']'
+    # immediately after the word.
     if: >-
       !contains(github.event.head_commit.message, '[skip versionup]') &&
       !contains(github.event.head_commit.message, '[skip versionup:extension]')
+    runs-on: ubuntu-latest
+    outputs:
+      affected: ${{ steps.impact.outputs.affected }}
+    steps:
+      # Full history: the script diffs against github.event.before, which a
+      # shallow clone would not contain.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      # `before` is empty on workflow_dispatch and unreachable after a force
+      # push; the script reports every module affected in that case, so a
+      # manual retry still releases.
+      - name: Does this push reach the extension?
+        id: impact
+        run: |
+          python scripts/locale_impact.py \
+            --module chrome-extension \
+            --base "${{ github.event.before }}" \
+            --head "${{ github.sha }}" \
+            --github-output
+
+  versionup:
+    needs: impact
+    if: needs.impact.outputs.affected == 'true'
     # Shared with versionup-desktop.yml — see the note there for why this is
     # job-level rather than workflow-level.
     concurrency:

@@ -18,10 +18,10 @@ Linux の傍受ブリッジは `window.webkit.messageHandlers.external` 経由�
 Go 側で足したのは cookie の永続化（[`cookies_linux.go`](cookies_linux.go)）だけで、これは傍受ではなく
 **ログインを再起動後も保持する**ための Linux 専用の穴埋め（下記「既知の制約」の 3）。
 
-## Wails alpha2.114 の調査結果（実コードで確認済み）
+## Wails beta.16 の調査結果（実コードで確認済み）
 
-`WAILS_VERSION`（`.github/variables`）= `v3.0.0-alpha2.114` のソースを読んで確定した事実。
-**alpha 更新で変わりうるので、上げたら再確認すること。**
+`WAILS_VERSION`（`.github/variables`）= `v3.0.0-beta.16` のソースを読んで確定した事実。
+**バージョン更新で変わりうるので、上げたら再確認すること。**
 
 ### (1) ページ → Go の送信口：ハンドラ名は `external`
 
@@ -176,10 +176,10 @@ sudo apt update
 sudo apt install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
 ```
 
-Go は **1.25 以上**（`desktop/go.mod`）、Node は **22**（CI と揃える）。apt の Go は古いことがあるので公式 tarball 推奨。wails3 CLI は**必ずピン留め版**を入れる（`go.mod` の wails/v3 と一致させる。ズレると bindings 生成が壊れる）:
+Go は **1.27 以上**（`desktop/go.mod`）、Node は **22**（CI と揃える）。apt の Go は古いことがあるので公式 tarball 推奨。wails3 CLI は**必ずピン留め版**を入れる（`go.mod` の wails/v3 と一致させる。ズレると bindings 生成が壊れる）:
 
 ```bash
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.114
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.16
 export PATH="$PATH:$(go env GOPATH)/bin"
 ```
 
@@ -354,8 +354,8 @@ GPU は既定のままで動くことが多い）。「白画面か」をスク�
 
 **実機 Ubuntu で発生を確認**（再起動のたびに claude.ai のログインが必要）。原因は予想どおりで、
 Wails の Linux 実装は `webkit_network_session_get_default()` を使うだけで
-**`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（alpha2.114 の
-`linux_cgo.go:1214` 付近。モジュール全体を grep しても cookie 系の呼び出しはゼロ）。WebKitGTK は
+**`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（beta.16 の
+`linux_cgo.go:1241` 付近。モジュール全体を grep しても cookie 系の呼び出しはゼロ）。WebKitGTK は
 保存先ファイルを指定しない限り cookie をメモリにしか置かないため、プロセス終了でセッションが消える。
 `application.Options.Linux`（`LinuxOptions`）にもデータディレクトリ／cookie のレバーは無く
 （`DisableQuitOnLastWindowClosed` と `ProgramName` だけ）、**環境変数で有効化する手段も無い**

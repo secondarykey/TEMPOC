@@ -2,7 +2,7 @@
 
 TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extension/src/`。[`../chrome-extension/CLAUDE.md`](../chrome-extension/CLAUDE.md)）と同じ「claude.ai の使用量 API を傍受して 5時間 / 7日ウィンドウの進捗を表示する」機能を、スタンドアロンのデスクトップアプリとして提供する。
 
-- Wails: `github.com/wailsapp/wails/v3` alpha2.114
+- Wails: `github.com/wailsapp/wails/v3` beta.16（Go 1.27）
 - Go module 名: `changeme`（テンプレート既定のまま。変更していない）
 - フロント: React + Vite + TypeScript、`@wailsio/runtime`
 - 対象プラットフォーム: Windows（WebView2）/ macOS（WKWebView）/ Linux（WebKitGTK）。OS 差の実装メモは [`multios.md`](multios.md)
@@ -171,7 +171,7 @@ Claude 側の障害（5xx・レート制限・HTML のエラーページ・ネ�
 
 claude.ai のログインは傍受ウィンドウの cookie に載っているので、これが消えると毎回ログインし直しになる。**Windows/macOS は WebView が勝手に永続化する**（WebView2 は `%APPDATA%\tempoc\EBWebView`）が、**Linux は自前で面倒を見る必要がある**:
 
-- Wails の Linux 実装は `webkit_network_session_get_default()` を取るだけで **`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（alpha2.114 の `linux_cgo.go:1214` 付近）。WebKitGTK は保存先ファイルの指定が無いと cookie をメモリにしか置かないため、**実機 Ubuntu で「再起動のたびにログインが必要」が発生していた**
+- Wails の Linux 実装は `webkit_network_session_get_default()` を取るだけで **`webkit_cookie_manager_set_persistent_storage()` を呼んでいない**（beta.16 の `linux_cgo.go:1241` 付近）。WebKitGTK は保存先ファイルの指定が無いと cookie をメモリにしか置かないため、**実機 Ubuntu で「再起動のたびにログインが必要」が発生していた**
 - `LinuxOptions` にレバーは無く、環境変数でも有効化できない。**端末側の設定では直せない**
 - そこで `cookies_linux.go` が同じデフォルトセッション（プロセス共通のシングルトン。Wails は webview 生成時に `network-session` を渡さないので全ウィンドウがこれを使う）を cgo で取り、`ConfigDir()/cookies.sqlite` を保存先に指定する
 
@@ -255,7 +255,7 @@ diff = util - elapsed
 - メインウィンドウは `tempoc:settings-applied` を購読して `SettingsService.Get()` で再読込するだけ（値をイベントペイロードに乗せない）。これにより既存の transparent / alwaysOnTop / sizeMode 用 `useEffect` がそのまま適用処理として機能する
 - 閉じる（✕ / Close ボタン）は未適用の変更を確認なしで破棄する。`Window.Close()` は close フックで `Hide()` に置き換えられ実際には破棄されない（傍受ウィンドウの close フックと同型）ため、次に `tempoc:open-settings` で開いたときにドラフトが保存値へ再読込されることで「破棄」が成立する
 
-**前提**: Wails alpha2.114 ではフロントから発行した `Events.Emit` は Go 側リスナーと（発行元を含む）全ウィンドウの両方に配信される。設定ウィンドウ↔メインウィンドウの通知に Go 中継コードは不要。
+**前提**: Wails beta.16 ではフロントから発行した `Events.Emit` は Go 側リスナーと（発行元を含む）全ウィンドウの両方に配信される。設定ウィンドウ↔メインウィンドウの通知に Go 中継コードは不要。
 
 イベント: `tempoc:open-settings`（メインの歯車 → Go が設定ウィンドウを `Show()`、設定ウィンドウ front はドラフト再読込）/ `tempoc:settings-applied`（設定ウィンドウの Apply → メインが `Get()` で再読込）/ `tempoc:quit`（メインの ✕ → Go が位置保存してから終了）。
 
@@ -423,7 +423,7 @@ exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが�
 
 次バージョンの決め方は拡張と同じ規則: **`desktop/version` の値が未タグならその値をそのまま使い、タグ済みなら patch を上げる**。したがって **minor/major を上げたいときは `go run ./_cmd/version.go 0.2.0` して commit するだけでよい**（CI はその値を尊重してリリースする）。CI が bump する場合、生成アセットも一緒にコミットされる。
 
-CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定。**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、alpha 間のズレは壊れる）。
+CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定。**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、プレリリース間のズレは壊れる）。
 
 ⚠️ **Linux で wails/v3 を import する物をコンパイルするには GTK4/WebKitGTK の開発パッケージが要る**。`internal/operatingsystem` が `#cgo linux pkg-config: gtk4 webkitgtk-6.0` を宣言しているため、**GUI をビルドしない `versionup-desktop` でも `go install .../cmd/wails3` の時点で失敗する**（`Package gtk4 was not found`）。パッケージ名は `.github/variables` の `WAILS_LINUX_DEPS` に `WAILS_VERSION` と並べて置いてある — **この2つは常にセットで更新すること**。alpha.84 で既定が GTK3/WebKit2（`libgtk-3-dev` / `webkit2gtk-4.1-dev`）から GTK4/WebKitGTK 6.0 に変わった前例がある（`.claude/skills/wails3/references/pitfalls.md` の 6）。
 

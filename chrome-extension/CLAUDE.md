@@ -90,22 +90,45 @@ All settings are stored in `chrome.storage.sync`. Defaults are defined identical
 | `percentFormat` | `'{}%'` | Display format; `{}` is replaced with the number |
 | `refreshInterval` | `0` | Auto-refresh interval in minutes (0 = disabled) |
 
-### Key DOM selectors
+### Locating the usage rows
 
-These CSS path selectors target Claude's existing progress bar sections within the Settings dialog and are fragile — they will break if Claude changes its page structure:
+The injected bars are clones of Claude's own usage rows, so `content.js` has to find those rows in a DOM it does not control. It no longer uses a CSS path:
 
 ```js
-const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child div:has(> section)';
-const UsageRowFilter = ":has(> div:nth-child(2) > div > div > div)";
-const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div" + UsageRowFilter;
-const Day7ElementPATH  = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div" + UsageRowFilter;
+const MeterSelector = '[role="dialog"] [role="meter"]';
+findUsageRows();  // -> { hour5, day7 } | null
 ```
 
-The usage page is now rendered as a modal dialog at `https://claude.ai/new#settings/usage` (previously a full page at `/settings/usage`). Section 1 = "Plan usage limits" (5-hour "Current session" window), Section 2 = "Weekly limits" (7-day window).
+The usage page is a modal dialog at `https://claude.ai/new#settings/usage` (previously a full page at `/settings/usage`); that URL and the `/api/organizations/<id>/usage` endpoint have both stayed put through every redesign so far.
 
-`DialogSectionsPATH` locates the section container by `:has(> section)` rather than by a fixed chain of `> div:last-child`. That chain used to work but broke in August 2026, when claude.ai inserted one more wrapper div between the dialog body and the sections: every selector below it resolved to `null`, `waitForElement()` never settled, and no bar was injected at all. `:has(> section)` matches the first (outermost) div that has section children, so it survives wrappers being added or removed above the sections.
+**Why `role="meter"` and not a path.** Every earlier selector pinned some part of the dialog's shape and every one of them eventually broke:
 
-Within a section, a row is located by structure (`:has()` matching the meter markup), not by `nth-child` position, because claude.ai sometimes prepends banners to a section (e.g. the July 2026 "Your limits are temporarily boosted." notice plus a "Learn more" link, which shifted every row down by two and broke the 7-day selector). `querySelector` takes the first structural match, so the extra weekly rows per model family ("Fable" etc.) below the leading "All models" row are skipped naturally. That is intended, not a gap: the injected bar shows *elapsed time through the weekly window*, and every weekly row shares the same window, so one bar under "All models" covers them all.
+| When | What claude.ai changed | What broke |
+|---|---|---|
+| Jul 2026 | Prepended a "Your limits are temporarily boosted." banner to a section | `nth-child` row position — fixed by matching the row's meter markup with `:has()` |
+| Aug 2026 | Inserted another wrapper div above the sections | The `> div:last-child` chain — fixed with `div:has(> section)` |
+| Sep 2026 | Rebuilt the dialog on CDS components: both usage rows moved into **one** section (section 2 is now "Usage credits"), and the meter gained wrapper divs | Every remaining path selector at once |
+
+The only thing that has survived all of it is the meter's ARIA contract: the fill's container carries `role="meter"` with `aria-valuenow` / `aria-valuetext`. So that is the single anchor now, and the row is derived from it structurally:
+
+1. Collect the dialog's meters, skipping anything inside `[data-tempoc]` (TEMPOC's own clones also contain a meter).
+2. Take the first two in DOM order — 5-hour ("Current session"), then 7-day ("This week"). Extra weekly rows per model family sort after these two, so they are skipped naturally. That is intended: the injected bar shows *elapsed time through the window*, and every weekly row shares one window.
+3. Their nearest common ancestor is the row container; each row is that container's direct child on the path down to its meter.
+
+No class name, no `nth-child`, no fixed depth — wrappers can be added or removed above or between the rows without breaking anything. `MaxRowDepth` caps step 3 at 8 levels: if claude.ai ever splits the two rows back into separate sections, the common ancestor jumps up the tree and "the row" would become a whole section, so the lookup fails instead of cloning half the dialog.
+
+**Row shape assumed downstream.** `createElement()` clones a row and `redraw()` rewrites it, both relying on the row having two element children:
+
+| | Original row | In the clone |
+|---|---|---|
+| `divs[0]` | `[title, "Resets at 12:40 PM"]` | title removed; `children[0]` becomes the reset-time line |
+| `divs[1]` | `[meter block, "63% used"]` | `children[1]` becomes the elapsed percentage |
+
+The fill bar is reached with `fillBarOf()` (`[role="meter"]` → first element child), never by an index chain — that chain is exactly what the CDS rewrite lengthened. The clone's stale `aria-valuenow` / `aria-valuetext` / `aria-labelledby` are stripped on creation and the first two are re-set to the elapsed values by `redraw()`, so screen readers do not read the usage percentage twice.
+
+**Fill is a transform, not a width.** Claude renders the fill full-width and offsets it: `transform: translateX(calc(var(--_meter-dir, -1) * (100% - ...)))`. `redraw()` matches that with `width: 100%` plus its own `translateX(-N%)`; writing `width` instead would leave the cloned `translateX` in place and shift the bar left.
+
+**Colors.** The original bar's class is re-asserted by a `MutationObserver` because React re-renders overwrite it. The observer resolves the bar through `originalBar(id)` on every callback rather than holding a node, since the re-render may replace it.
 
 ### Options page i18n
 

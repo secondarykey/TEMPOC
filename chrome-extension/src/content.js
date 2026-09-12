@@ -1,17 +1,67 @@
 const Day7ProgressElementId = "day7Progress";
 const Hour5ProgressElementId = "hour5Progress";
 
-// セクション群のコンテナ = section を直接の子に持つ最上位の div。
-// claude.ai がスクロール用のラッパ div を増減させても追従できるよう、
-// 固定の階層数(`> div:last-child` の連鎖)ではなく :has で特定する
-const DialogSectionsPATH = '[role="dialog"] > div:nth-child(2) > div:last-child div:has(> section)';
-// 使用量行 = 2番目の子にメーター(div>div>div)を持つ行。告知バナー等が
-// セクション先頭に挿入されても位置がずれないよう nth-child ではなく :has で特定する
-const UsageRowFilter = ":has(> div:nth-child(2) > div > div > div)";
-const Hour5ElementPATH = DialogSectionsPATH + " > section:nth-child(1) > div:nth-child(2) > div > div" + UsageRowFilter;
-const Hour5ElementBarPATH = Hour5ElementPATH + " > div:nth-child(2) > div > div > div";
-const Day7ElementPATH = DialogSectionsPATH + " > section:nth-child(2) > div:nth-child(2) > div > div" + UsageRowFilter;
-const Day7ElementBarPATH = Day7ElementPATH + " > div:nth-child(2) > div > div > div";
+// claude.ai のダイアログは CDS コンポーネント化され、section の並びも
+// ラッパ div の階層も頻繁に変わる。唯一安定している足掛かりが
+// メーターの role="meter" なので、そこを起点に行を引き当てる。
+const MeterSelector = '[role="dialog"] [role="meter"]';
+// TEMPOC が挿入したクローン行の目印。行探索でクローンを除外するのに使う
+const TempocAttr = "data-tempoc";
+// メーターから行までの最大階層。現状は4段(メーター→w-full→flex-1→メーター欄→行)
+const MaxRowDepth = 8;
+
+// 使用量2行(5時間/7日)を返す。行そのものは
+// 「2つのメーターの最近共通祖先(=行コンテナ)の直下の子」として求めるので、
+// クラス名にも階層数にも依存しない。順序は DOM 順 = 5時間, 7日。
+function findUsageRows() {
+  const meters = Array.from(document.querySelectorAll(MeterSelector))
+    .filter((m) => !m.closest("[" + TempocAttr + "]"));
+  if (meters.length < 2) return null;
+
+  const first = meters[0];
+  const second = meters[1];
+
+  const ancestors = new Set();
+  for (let e = first; e; e = e.parentElement) ancestors.add(e);
+  let container = second;
+  while (container && !ancestors.has(container)) container = container.parentElement;
+  if (!container) return null;
+
+  const rowOf = (m) => {
+    let e = m;
+    let depth = 0;
+    while (e && e.parentElement !== container) {
+      e = e.parentElement;
+      // 2行が別コンテナに分かれた場合、共通祖先はずっと上になり
+      // 「行」としてセクション丸ごとを掴んでしまう。深すぎたら不成立扱いにして、
+      // 巨大な複製を挿し込むより何も出さない方を選ぶ
+      if (++depth > MaxRowDepth) return null;
+    }
+    return e;
+  };
+  const hour5 = rowOf(first);
+  const day7 = rowOf(second);
+  if (!hour5 || !day7 || hour5 === day7) return null;
+  return { hour5: hour5, day7: day7 };
+}
+
+// 行の中の塗りバー。メーターの唯一の子が塗り
+function fillBarOf(row) {
+  const meter = row ? row.querySelector('[role="meter"]') : null;
+  return meter ? meter.firstElementChild : null;
+}
+
+// Claude 本来の行(クローンではない側)を id から引く。React の再描画で
+// ノードが差し替わるため、キャッシュせず都度引き直す
+function originalRow(id) {
+  const rows = findUsageRows();
+  if (!rows) return null;
+  return id === Day7ProgressElementId ? rows.day7 : rows.hour5;
+}
+
+function originalBar(id) {
+  return fillBarOf(originalRow(id));
+}
 
 var day7Elm = undefined;
 var day7Obj = undefined;
@@ -44,13 +94,13 @@ var hour5BarObserver = null;
 var day7ElapsedObserver = null;
 var hour5ElapsedObserver = null;
 
-function makeBarObserver(barPath, getColor) {
-  const bar = document.querySelector(barPath);
+function makeBarObserver(getBar, getColor) {
+  const bar = getBar();
   if (!bar) return null;
   const obs = new MutationObserver(() => {
     const desired = getColor();
     if (!desired) return;
-    const b = document.querySelector(barPath);
+    const b = getBar();
     if (b && !b.classList.contains(desired)) {
       b.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
       b.classList.add(desired);
@@ -72,18 +122,18 @@ function makeElapsedBarObserver(bar) {
   return obs;
 }
 
-function waitForElement(selector) {
+function waitForRows() {
   return new Promise((resolve) => {
-    const element = document.querySelector(selector);
-    if (element) {
-      return resolve(element);
+    const rows = findUsageRows();
+    if (rows) {
+      return resolve(rows);
     }
 
     const observer = new MutationObserver((mutations, obs) => {
-      const element = document.querySelector(selector);
-      if (element) {
+      const r = findUsageRows();
+      if (r) {
         obs.disconnect();
-        resolve(element);
+        resolve(r);
       }
     });
 
@@ -98,7 +148,7 @@ function waitForElement(selector) {
 
 const _createElementInFlight = {};
 
-async function createElement(id, path) {
+async function createElement(id) {
   var prog = document.querySelector("#" + id);
   if (prog !== null) {
     return prog;
@@ -110,7 +160,8 @@ async function createElement(id, path) {
   }
 
   const promise = (async () => {
-    var target = await waitForElement(path);
+    const rows = await waitForRows();
+    const target = (id === Day7ProgressElementId) ? rows.day7 : rows.hour5;
 
     // await 後に再確認（別の呼び出しが先に挿入済みの場合）
     var existing = document.querySelector("#" + id);
@@ -120,11 +171,21 @@ async function createElement(id, path) {
 
     var cp = target.cloneNode(true);
 
+    // 行探索がクローンを本来の行と取り違えないよう、まず目印を付ける
+    cp.id = id;
+    cp.setAttribute(TempocAttr, "");
+
     var divs = cp.querySelectorAll(":scope > div");
     divs[0].removeChild(divs[0].children[0]);
 
-    const meter = divs[1].children[0].children[0];
-    let bar = meter.children[0];
+    const meter = cp.querySelector('[role="meter"]');
+    if (!meter) return null;
+    // クローン元の使用率がスクリーンリーダーに残らないよう、aria 値は捨てる
+    // (経過時間の値は redraw() が入れ直す)
+    meter.removeAttribute("aria-valuenow");
+    meter.removeAttribute("aria-valuetext");
+    meter.removeAttribute("aria-labelledby");
+    let bar = meter.firstElementChild;
     if (!bar) {
       bar = document.createElement("div");
       // Claude 現行メーターに合わせ w-full + transition-transform（塗りは translateX）
@@ -142,7 +203,6 @@ async function createElement(id, path) {
     bar.style.width = "100%";
     bar.style.transform = "translateX(-100%)";
 
-    cp.id = id;
     target.after(cp);
     return cp;
   })();
@@ -176,16 +236,15 @@ function createDuration(ms) {
   };
 }
 
-function applyBarColor(barPath, colorClass) {
-  const bar = document.querySelector(barPath);
+function applyBarColor(bar, colorClass) {
   if (!bar) return;
   bar.classList.remove("bg-fill-danger", "bg-fill-warning", "bg-fill-accent");
   bar.classList.add(colorClass);
 }
 
 function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
-  if (elm === undefined) return false;
-  if (obj === undefined) return false;
+  if (!elm) return false;
+  if (!obj) return false;
 
   const val = obj.utilization;
   const now = new Date();
@@ -229,7 +288,7 @@ function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
   // 表現する（fill は w-full のまま、左に translateX して見える部分を出す）。
   // width を書き替えるとクローン元の translateX が残って左にずれるため、
   // width は 100% 固定にし、Claude と同じ translateX 方式で塗り量を出す。
-  const bar = divs[1].children[0]?.children[0]?.children[0];
+  const bar = fillBarOf(elm);
   if (!bar) return false;
   const fill = notStarted ? 0 : Math.min(percent, 100);
   bar.style.width = "100%";
@@ -242,11 +301,19 @@ function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
     if (!hour5ElapsedObserver) hour5ElapsedObserver = makeElapsedBarObserver(bar);
   }
 
-  divs[1].children[1].textContent =
-    notStarted ? "" : percentFormat.replace('{}', percent.toFixed(decimalPlaces));
+  const percentText = notStarted
+    ? ""
+    : percentFormat.replace('{}', percent.toFixed(decimalPlaces));
+  divs[1].children[1].textContent = percentText;
+
+  const meter = elm.querySelector('[role="meter"]');
+  if (meter) {
+    meter.setAttribute("aria-valuenow", String(Math.round(fill)));
+    meter.setAttribute("aria-valuetext", percentText);
+  }
 
   // 使用率バー（Claude 本来のバー）: 閾値に応じて色付け
-  const barPath = (elm.id === Day7ProgressElementId) ? Day7ElementBarPATH : Hour5ElementBarPATH;
+  const getOriginalBar = () => originalBar(elm.id);
 
   let colorClass;
   if (colorEnabled) {
@@ -278,15 +345,15 @@ function redraw(elm, obj, dangerAt, warningAt, colorEnabled) {
   if (elm.id === Day7ProgressElementId) {
     day7BarColor = colorClass;
     if (!day7BarObserver) {
-      day7BarObserver = makeBarObserver(barPath, () => day7BarColor);
+      day7BarObserver = makeBarObserver(getOriginalBar, () => day7BarColor);
     }
   } else {
     hour5BarColor = colorClass;
     if (!hour5BarObserver) {
-      hour5BarObserver = makeBarObserver(barPath, () => hour5BarColor);
+      hour5BarObserver = makeBarObserver(getOriginalBar, () => hour5BarColor);
     }
   }
-  applyBarColor(barPath, colorClass);
+  applyBarColor(getOriginalBar(), colorClass);
 
   return true;
 }
@@ -349,14 +416,14 @@ function applySettings(settings) {
   day7ColorEnabled  = settings.day7ColorEnabled  ?? true;
   if (!day7ColorEnabled) {
     day7BarColor = "bg-fill-accent";
-    applyBarColor(Day7ElementBarPATH, "bg-fill-accent");
+    applyBarColor(originalBar(Day7ProgressElementId), "bg-fill-accent");
   }
   hour5Danger       = settings.hour5Danger       ?? 10;
   hour5Warning      = settings.hour5Warning      ?? 0;
   hour5ColorEnabled = settings.hour5ColorEnabled ?? true;
   if (!hour5ColorEnabled) {
     hour5BarColor = "bg-fill-accent";
-    applyBarColor(Hour5ElementBarPATH, "bg-fill-accent");
+    applyBarColor(originalBar(Hour5ProgressElementId), "bg-fill-accent");
   }
   showRemainDay7  = settings.showRemainDay7  ?? true;
   showRemainHour5 = settings.showRemainHour5 ?? false;
@@ -370,7 +437,7 @@ function applySettings(settings) {
 
   if (showDay7) {
     if (!day7Elm) {
-      createElement(Day7ProgressElementId, Day7ElementPATH).then((elm) => {
+      createElement(Day7ProgressElementId).then((elm) => {
         day7Elm = elm;
         redraw(day7Elm, day7Obj, day7Danger, day7Warning, day7ColorEnabled);
       });
@@ -384,7 +451,7 @@ function applySettings(settings) {
 
   if (showHour5) {
     if (!hour5Elm) {
-      createElement(Hour5ProgressElementId, Hour5ElementPATH).then((elm) => {
+      createElement(Hour5ProgressElementId).then((elm) => {
         hour5Elm = elm;
         redraw(hour5Elm, hour5Obj, hour5Danger, hour5Warning, hour5ColorEnabled);
       });

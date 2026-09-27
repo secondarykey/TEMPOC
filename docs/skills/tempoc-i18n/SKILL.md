@@ -1,6 +1,11 @@
-# docs/i18n.md
+---
+name: tempoc-i18n
+description: TEMPOCに言語（ロケール）や文言キーを追加する手順。デスクトップ版とChrome拡張の両方にまたがる。翻訳・UI文字列・対応言語を増やす／変えるときに使う。
+---
 
-言語・文言キーを追加する手順。両モジュールにまたがる。仕組みと制約（マスターとコピー、`locale_impact.py` によるリリース判定）はルートの [`../AGENTS.md`](../AGENTS.md) の「Shared locale resources」、各モジュールの i18n の構造はそれぞれの `AGENTS.md` を参照。
+# TEMPOC の言語・文言キーの追加
+
+仕組みと制約（マスターとコピー、`locale_impact.py` によるリリース判定）はルートの `AGENTS.md` の「Shared locale resources」、各モジュールの i18n の構造はそれぞれの `AGENTS.md` を参照。パスはリポジトリのルートからの相対。
 
 共通の前提:
 

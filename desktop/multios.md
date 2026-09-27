@@ -137,7 +137,7 @@ cd desktop && node --test
      ログは実行ディレクトリの `YYYY-MM-DD.log`（[`AGENTS.md`](AGENTS.md) のログ方針参照）。
    - `debug` は届くのに `usage` が来ない → 上記 (4) の注入タイミング差を疑う。
 3. 手動更新ボタン（タイトルバー）が効くか = ExecJS 解錠が成立しているか。
-4. ⚠️ 既存の検証レシピ [`_docs/verify.md`](_docs/verify.md) は **WebView2 の CDP 前提**で
+4. ⚠️ 既存の検証レシピ [`tempoc-desktop-verify`](../docs/skills/tempoc-desktop-verify/SKILL.md) は **WebView2 の CDP 前提**で
    mac/Linux には使えない。mac は Safari の Web Inspector、Linux は WebKitGTK inspector を使う。
 
 ## WSL2 で Linux 版を確認する手順（実施・検証済み）

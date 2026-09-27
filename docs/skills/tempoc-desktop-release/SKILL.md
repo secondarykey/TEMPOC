@@ -1,6 +1,11 @@
-# desktop/_docs/release.md
+---
+name: tempoc-desktop-release
+description: TEMPOCデスクトップ版のバージョン管理・ビルドアセット（build/config.yml, Taskfile, アイコン）・リリースワークフロー・macOS署名・exeのバージョン情報の詳細。desktop のバージョンを上げる、ビルド設定やアセットを変える、リリースや配布物の不具合を調べるときに使う。
+---
 
-デスクトップ版のバージョン管理・ビルドアセット・リリース・配布の詳細。常に守る制約だけを [`../AGENTS.md`](../AGENTS.md) の「バージョン管理・リリース」に要約してある。ここはそれを触るときに読む。
+# TEMPOC desktop のバージョン管理・リリース
+
+常に守る制約だけを `desktop/AGENTS.md` の「バージョン管理・リリース」に要約してある。ここはそれを触るときに読む詳細。パスは特に断りがなければ `desktop/` からの相対。
 
 `wails3` skill（`references/*.md`）への言及は、リポジトリ外にある Wails v3 全般の資料を指す。
 
@@ -17,13 +22,13 @@ go run ./_cmd/version.go -print  # 現在値を表示するだけ（CI 用）
 
 `frontend/package-lock.json` の `version` は**同期対象に含めていない**。ロック内の依存パッケージのバージョン行と同じインデント（6スペースの `"version": "..."`）で並んでおり、行パターンで置換すると全依存のバージョンを書き潰すため。ビルド時の `npm install`（`npm ci` ではない）が package.json に合わせて自動で書き直すので実害はなく、アプリの中身にも影響しない。
 
-`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`level=INFO msg=starting version=0.1.0`。開発ビルドのみ — [`../AGENTS.md`](../AGENTS.md) の「開発・ビルド」のログ方針参照）に出る。
+`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`level=INFO msg=starting version=0.1.0`。開発ビルドのみ — `desktop/AGENTS.md` の「開発・ビルド」のログ方針参照）に出る。
 
 ## exe 名（`APP_NAME`）
 
 exe 名は `Taskfile.yml` の `APP_NAME`（= `tempoc`）が決める。`config.yml` の `info:` には**バイナリ名を指定するキーが無い**ため（`name:` / `binary:` は存在しない）、`update build-assets` へは `-name` / `-binaryname` として渡される。よって `APP_NAME` を変えたら `wails3 task common:update:build-assets` → 再ビルドまでやらないと、生成済みアセット（NSIS の `INFO_PROJECTNAME`、Linux の `Exec`/`Icon`/`StartupWMClass`、darwin の `CFBundleExecutable`）が古い名前のまま残る。
 
-⚠️ **`APP_NAME` の変更は WebView2 のユーザーデータフォルダ（`%APPDATA%\<exe名>\EBWebView`）を変える**。旧フォルダのセッションは引き継がれないため、改名後の初回起動では claude.ai が未ログイン状態になり、一度ログインし直すことになる（`desktop` → `tempoc` の改名時も同様）。この挙動は [`verify.md`](verify.md) にも別名 exe のスモークテスト手段として記載がある。
+⚠️ **`APP_NAME` の変更は WebView2 のユーザーデータフォルダ（`%APPDATA%\<exe名>\EBWebView`）を変える**。旧フォルダのセッションは引き継がれないため、改名後の初回起動では claude.ai が未ログイン状態になり、一度ログインし直すことになる（`desktop` → `tempoc` の改名時も同様）。この挙動は `tempoc-desktop-verify` スキルにも別名 exe のスモークテスト手段として記載がある。
 
 ## exe のメタデータ（`info:` → 各アセット）
 
@@ -67,7 +72,7 @@ exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが�
 
 ## リリース（自動。タグは手で打たない）
 
-タグの規則・次バージョンの決め方・2本のワークフローの流れは拡張と共通なので、ルートの [`../../AGENTS.md`](../../AGENTS.md) の Versioning に一度だけ書いてある。ここはデスクトップ固有の部分:
+タグの規則・次バージョンの決め方・2本のワークフローの流れは拡張と共通なので、ルートの `AGENTS.md` の Versioning に一度だけ書いてある。ここはデスクトップ固有の部分:
 
 - **minor/major を上げるときは `go run ./_cmd/version.go 0.3.0` して commit する**（`desktop/version` を直接書き換えない。写しのファイルも揃える必要があるため）
 - `versionup-desktop.yml` は bump のときに `go run ./_cmd/version.go` と `wails3 task common:update:build-assets` を実行し、再生成されたアセットも一緒にコミットする

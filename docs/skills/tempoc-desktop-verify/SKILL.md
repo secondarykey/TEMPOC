@@ -1,6 +1,11 @@
-# desktop/_docs/verify.md
+---
+name: tempoc-desktop-verify
+description: TEMPOCデスクトップ版（Wails v3）の実機検証レシピ。ビルドしたexeをCDP（WebView2リモートデバッグ）で駆動し、画面操作なしにDOMクリック・状態観察・ネイティブウィンドウ可視性の確認を行う。デスクトップ版の変更を実際のアプリで確かめるときに使う。
+---
 
-TEMPOC デスクトップ版の実機検証レシピ。ビルドした exe を CDP（WebView2 リモートデバッグ）で駆動し、画面操作なしに DOM クリック・状態観察・ネイティブウィンドウ可視性の確認を行う。**Windows（WebView2）前提** — macOS/Linux での検証は [`../multios.md`](../multios.md) を参照。
+# TEMPOC desktop の実機検証（CDP 駆動）
+
+**Windows（WebView2）前提**。macOS/Linux での検証は `desktop/multios.md` を参照。パスはリポジトリのルートからの相対。
 
 GUI アプリだが、スクリーン操作なしで検証できる。WebView2 のリモートデバッグポートを開け、
 CDP の `Runtime.evaluate` で実 UI の DOM をクリック・観察する。

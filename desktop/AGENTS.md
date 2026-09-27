@@ -218,7 +218,7 @@ claude.ai のログインは傍受ウィンドウの cookie に載っている�
 
 ### 使用量バー（`UsageBar`）
 
-バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。レイアウト・ツールチップ・数値の表記・ウィンドウ高さの詳細は [`_docs/ui.md`](_docs/ui.md)。
+バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。レイアウト・ツールチップ・数値の表記・ウィンドウ高さの詳細はスキル [`tempoc-desktop-ui`](../docs/skills/tempoc-desktop-ui/SKILL.md)。
 
 色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）。**拡張と挙動を揃えること**:
 
@@ -251,7 +251,7 @@ diff = util - elapsed
 
 イベント: `tempoc:open-settings`（メインの歯車 → Go が設定ウィンドウを `Show()`、設定ウィンドウ front はドラフト再読込）/ `tempoc:settings-applied`（設定ウィンドウの Apply → メインが `Get()` で再読込）/ `tempoc:quit`（メインの ✕ → Go が位置保存してから終了）。
 
-キーの一覧と既定値は [`_docs/ui.md`](_docs/ui.md) の「設定キー一覧」（定義の正は `settings/settings.go`）。拡張と同名のキーは意味も揃えてある。
+キーの一覧と既定値はスキル [`tempoc-desktop-ui`](../docs/skills/tempoc-desktop-ui/SKILL.md) の「設定キー一覧」（定義の正は `settings/settings.go`）。拡張と同名のキーは意味も揃えてある。
 
 **API に無いウィンドウのセクションは「消さずに無効化」する**。weekly_scoped（出たり消えたりする）と extra_usage（クレジット未設定なら来ない）は欠けうるが、セクションは常に描画し、データが無いときだけ `settings-section--disabled`（淡色化）+ 全コントロール `disabled` + 見出し下に `sectionUnavailable` の一文を出す。消してしまうと設定一覧の並びが動き、保存済みの設定ごと無くなったように見えるため — 値は保存されたままで、データが戻れば即座に効く。判定は `hasWeeklyScoped` / `hasCredits` prop（設定ウィンドウ自身も `tempoc:usage` を購読して導出。`monthly_limit != null` かどうか等）で、**設定値ではなくデータの有無だけ**で決まる。なお**バー本体（メインウィンドウ）は従来どおりデータが無ければ描かない**（無効化ではなく非表示）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
 
@@ -260,7 +260,7 @@ diff = util - elapsed
 1. `settings/settings.go` の `Settings` にフィールド追加（+ 必要なら `Default()`）
 2. `desktop/` で `wails3 generate bindings -ts`（`frontend/bindings/changeme/settings/` が再生成される）
 3. `SettingsWindow.tsx` の `SettingsView` に UI を追加し、`App.tsx`（`UsageBar` などの描画側）へ反映
-4. [`_docs/ui.md`](_docs/ui.md) の「設定キー一覧」に行を足す
+4. スキル [`tempoc-desktop-ui`](../docs/skills/tempoc-desktop-ui/SKILL.md) の「設定キー一覧」に行を足す
 
 ## 国際化（i18n）
 
@@ -295,7 +295,7 @@ Frameless のタイトルバーは React 描画だが、**タスクバー・Alt-
 
 ### 言語・文言キーの追加
 
-手順は [`../docs/i18n.md`](../docs/i18n.md)。`RawMessages` には**デスクトップが使うキーだけ**を列挙する（拡張だけが使うキーは足さない）。
+手順は スキル [`tempoc-i18n`](../docs/skills/tempoc-i18n/SKILL.md)。`RawMessages` には**デスクトップが使うキーだけ**を列挙する（拡張だけが使うキーは足さない）。
 
 ## 開発・ビルド
 
@@ -318,13 +318,13 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
   TEMPOC_ARGS="-log debug" wails3 dev     # wails3 task run でも同じ
   ```
 
-  dev は `build/config.yml` の `dev_mode.executes`（`type: primary`）にある **`wails3 task run` 経由でアプリを起動**し、そのコマンドラインは固定で拡張できない。そこで各 OS の `run` タスク（`build/<os>/Taskfile.yml`）の起動行末尾に `$TEMPOC_ARGS` を付けてある — **タスク変数ではなく環境変数**なのは、dev から渡す唯一の経路がこれだから（`wails3 task` の CLI_ARGS 非対応は [`_docs/release.md`](_docs/release.md) の macOS 署名の項も参照）。未設定なら空に展開されるだけ。ログの出力先は起動時のカレントなので、dev では `desktop/YYYY-MM-DD.log` に出る
+  dev は `build/config.yml` の `dev_mode.executes`（`type: primary`）にある **`wails3 task run` 経由でアプリを起動**し、そのコマンドラインは固定で拡張できない。そこで各 OS の `run` タスク（`build/<os>/Taskfile.yml`）の起動行末尾に `$TEMPOC_ARGS` を付けてある — **タスク変数ではなく環境変数**なのは、dev から渡す唯一の経路がこれだから（`wails3 task` の CLI_ARGS 非対応は スキル [`tempoc-desktop-release`](../docs/skills/tempoc-desktop-release/SKILL.md) の macOS 署名の項も参照）。未設定なら空に展開されるだけ。ログの出力先は起動時のカレントなので、dev では `desktop/YYYY-MM-DD.log` に出る
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
-- **実機検証**（ビルドした exe を CDP で駆動し、画面操作なしで DOM・ウィンドウ状態を確かめる）の手順は [`_docs/verify.md`](_docs/verify.md)
+- **実機検証**（ビルドした exe を CDP で駆動し、画面操作なしで DOM・ウィンドウ状態を確かめる）の手順はスキル [`tempoc-desktop-verify`](../docs/skills/tempoc-desktop-verify/SKILL.md)
 
 ## バージョン管理・リリース
 
-詳細（各項目の理由・経緯・手順）は [`_docs/release.md`](_docs/release.md)。ビルド設定・アセット・リリースを触る前に読むこと。常に守る制約だけをここに置く:
+詳細（各項目の理由・経緯・手順）はスキル [`tempoc-desktop-release`](../docs/skills/tempoc-desktop-release/SKILL.md)。ビルド設定・アセット・リリースを触る前に読むこと。常に守る制約だけをここに置く:
 
 - バージョンの**唯一の正は `desktop/version`**。`build/config.yml` の `info.version` と `frontend/package.json` の `version` は写しなので手で編集しない — 同期は `go run ./_cmd/version.go`（`desktop/` から）
 - リリースの流れ（自動・タグは手で打たない）は拡張と共通で、ルートの [`../AGENTS.md`](../AGENTS.md) の Versioning にある。minor/major は `go run ./_cmd/version.go 0.3.0` して commit する

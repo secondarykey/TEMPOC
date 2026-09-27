@@ -21,7 +21,7 @@ This repository holds **two independent modules**. They share no code and have s
 |---|---|
 | `.github/workflows/` | CI for both modules. Each file is named `<job>-<module>.yml` and its tag pattern / `paths:` filter keeps it from firing for the other module |
 | `.github/variables` | Pinned tool versions shared by workflows (currently `WAILS_VERSION`). Loaded with `grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"` — plain `cat` would choke on the file's comments |
-| `_docs/` | Procedures that span both modules (`i18n.md`: adding a language or a message key). Module-specific procedures live in `<module>/_docs/` |
+| `docs/` | Procedures that span both modules (`i18n.md`: adding a language or a message key). Desktop-specific ones live in `desktop/_docs/` — the underscore there only keeps the Go tooling from treating the directory as a package |
 | `locales/` | **Master** of the locale JSON files shared by both modules (one file per locale, flat keys with `{token}` templates). Edit translations here only |
 | `scripts/` | Repo-wide tooling. `sync_locales.py` validates `locales/` (key/placeholder parity across all files) and rewrites both modules' committed copies; `locale_impact.py` reports which modules a diff actually reaches, and gates both versionup workflows |
 | `README.md` | User-facing entry point: what TEMPOC is, the shared bar/color concept, and the privacy & disclaimer terms that cover both modules. Per-module install and settings docs live in each module's own `README.md`, which this one links to |
@@ -54,7 +54,7 @@ Consequences to keep in mind:
 
   **The markers are read from the head commit of the push**, which in the normal PR flow is the *merge commit* — put them in the merge subject (`gh pr merge --subject`). A marker on a branch commit is never seen. **Skipping defers, it does not drop**: the synced copy stays on `main` and goes out with that module's next release.
 - Key completeness is enforced per module: `sync_locales.py` compares every locale against `en-US.json` (keys and `{token}` placeholders) *and* checks that every key the extension's options page references exists there; the desktop build checks its own keys via `RawMessages`. The extension's keys are deliberately **not** listed in `RawMessages` — borrowing the type check that way would make every shared wording change look like a desktop change to `locale_impact.py`.
-- Adding a language or a key therefore spans both modules by design. The step-by-step procedure for both is in [`_docs/i18n.md`](_docs/i18n.md).
+- Adding a language or a key therefore spans both modules by design. The step-by-step procedure for both is in [`docs/i18n.md`](docs/i18n.md).
 
 ## Versioning
 

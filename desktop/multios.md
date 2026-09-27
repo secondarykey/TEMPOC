@@ -2,7 +2,7 @@
 
 > TEMPOC デスクトップ版の claude.ai 使用量傍受を Windows 以外でも動かすための
 > 調査結果と実装メモ。前提は [`AGENTS.md`](AGENTS.md)（「使用量の傍受の仕組み」節）と
-> `.claude/skills/wails3/references/external-page-automation.md`（Windows/WebView2 前提と明記）。
+> `wails3` skill の `references/external-page-automation.md`（Windows/WebView2 前提と明記）。
 
 ## ステータス
 
@@ -137,7 +137,7 @@ cd desktop && node --test
      ログは実行ディレクトリの `YYYY-MM-DD.log`（[`AGENTS.md`](AGENTS.md) のログ方針参照）。
    - `debug` は届くのに `usage` が来ない → 上記 (4) の注入タイミング差を疑う。
 3. 手動更新ボタン（タイトルバー）が効くか = ExecJS 解錠が成立しているか。
-4. ⚠️ 既存の検証レシピ `.claude/skills/tempoc-desktop-verify` は **WebView2 の CDP 前提**で
+4. ⚠️ 既存の検証レシピ [`_docs/verify.md`](_docs/verify.md) は **WebView2 の CDP 前提**で
    mac/Linux には使えない。mac は Safari の Web Inspector、Linux は WebKitGTK inspector を使う。
 
 ## WSL2 で Linux 版を確認する手順（実施・検証済み）
@@ -513,4 +513,4 @@ GPU ドライバ/カーネル設定の話なので、deb でも AppImage でも�
 - [`AGENTS.md`](AGENTS.md) — 傍受設計の詳細
 - [`inject.js`](inject.js) / [`inject.test.mjs`](inject.test.mjs) — 実装とテスト
 - [`.github/workflows/release-desktop.yml`](../.github/workflows/release-desktop.yml) — 3 OS のビルド
-- `.claude/skills/wails3/references/external-page-automation.md` — Windows 版3点セットの原典
+- `wails3` skill の `references/external-page-automation.md` — Windows 版3点セットの原典

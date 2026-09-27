@@ -137,7 +137,7 @@ Only the options page has translatable strings — the injected bars render date
 - **Locale selection**: `content.js` intercepts `/api/account_profile` and dispatches the account `locale`; `bridge.js` stores it as `chrome.storage.local.detectedLocale` (this relay predates i18n — the options page already used it for `Intl` preview formatting). `options.js` resolves it with `tempocResolveLocale()` (exact match → primary-language match → `en-US`) and falls back to `navigator.language` when claude.ai has not been visited yet.
 - **Applying**: elements carry `data-i18n="key"` attributes; `tempocApplyI18n()` replaces their text once the locale JSON is fetched. The English text baked into `options.html` is the pre-load fallback and must be kept in sync with `locales/en-US.json`.
 - **Loading**: `i18n.js` fetches `locales/<code>.json` relative to the options page (extension pages may fetch their own packaged resources; no `web_accessible_resources` needed). Supported codes are listed in `TEMPOC_LOCALES`, which must match the desktop's `SUPPORTED_LOCALES`.
-- **Adding a language or key**: edit the repo-root `locales/` master and run `python3 scripts/sync_locales.py`; for a new language also add its code to `TEMPOC_LOCALES` (and the desktop's `SUPPORTED_LOCALES`). Key parity across locales is enforced by the sync script (there is no build step here to catch it).
+- **Adding a language or key**: follow [`../_docs/i18n.md`](../_docs/i18n.md). Key parity across locales is enforced by the sync script (there is no build step here to catch it).
 
 ### Colors
 

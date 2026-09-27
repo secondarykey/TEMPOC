@@ -67,13 +67,11 @@ exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが�
 
 ## リリース（自動。タグは手で打たない）
 
-2本のワークフローが直列に動く。**通常運用で必要なのは main に push することだけ**:
+タグの規則・次バージョンの決め方・2本のワークフローの流れは拡張と共通なので、ルートの [`../../AGENTS.md`](../../AGENTS.md) の Versioning に一度だけ書いてある。ここはデスクトップ固有の部分:
 
-1. `versionup-desktop.yml` — `desktop/**` を触る push で起動。次バージョンを決めて `go run ./_cmd/version.go` + `wails3 task common:update:build-assets` を実行し、bump を PR 経由で main にマージして `desktop-v<version>` タグを打つ
-2. `release-desktop.yml` — そのタグで起動。`verify`（タグ/version/info.json 一致チェック）→ `build`（`windows-latest` / `macos-15` / `ubuntu-latest` のマトリクスで各 OS ネイティブビルド）→ `release`（3成果物を1つの **draft** リリースへ添付）。成果物は Windows=`tempoc-desktop-<version>-windows-amd64.zip`（`windows:build` の `tempoc.exe`）、macOS=`…-darwin-arm64.zip`（`darwin:package` または署名 secrets がある場合は `darwin:sign:notarize` の `.app` を ditto 圧縮。下記「macOS の署名」参照。`macos-15`=Apple Silicon のネイティブ arm64。Intel は非対応 — universal 化するなら amd64 の CGO クロスが要る）、Linux=`…-linux-amd64.tar.gz`（`linux:build` の裸バイナリ）。**macOS ランナーは `macos-15` 固定**（リリースビルドの Xcode/macOS が勝手に変わらないように。元は `macos-latest`=macos-26 の `actool` クラッシュ回避＝skill pitfalls #11 だったが、下記のとおり actool は現在呼ばれない）。Linux ビルドは `WAILS_LINUX_DEPS`（GTK4/WebKitGTK）が必要
-
-
-次バージョンの決め方は拡張と同じ規則: **`desktop/version` の値が未タグならその値をそのまま使い、タグ済みなら patch を上げる**。したがって **minor/major を上げたいときは `go run ./_cmd/version.go 0.2.0` して commit するだけでよい**（CI はその値を尊重してリリースする）。CI が bump する場合、生成アセットも一緒にコミットされる。
+- **minor/major を上げるときは `go run ./_cmd/version.go 0.3.0` して commit する**（`desktop/version` を直接書き換えない。写しのファイルも揃える必要があるため）
+- `versionup-desktop.yml` は bump のときに `go run ./_cmd/version.go` と `wails3 task common:update:build-assets` を実行し、再生成されたアセットも一緒にコミットする
+- `release-desktop.yml` の中身: `verify`（タグ/version/info.json 一致チェック）→ `build`（`windows-latest` / `macos-15` / `ubuntu-latest` のマトリクスで各 OS ネイティブビルド）→ `release`（3成果物を1つの **draft** リリースへ添付）。成果物は Windows=`tempoc-desktop-<version>-windows-amd64.zip`（`windows:build` の `tempoc.exe`）、macOS=`…-darwin-arm64.zip`（`darwin:package` または署名 secrets がある場合は `darwin:sign:notarize` の `.app` を ditto 圧縮。下記「macOS の署名」参照。`macos-15`=Apple Silicon のネイティブ arm64。Intel は非対応 — universal 化するなら amd64 の CGO クロスが要る）、Linux=`…-linux-amd64.tar.gz`（`linux:build` の裸バイナリ）。**macOS ランナーは `macos-15` 固定**（リリースビルドの Xcode/macOS が勝手に変わらないように。元は `macos-latest`=macos-26 の `actool` クラッシュ回避＝skill pitfalls #11 だったが、上記「アイコン」のとおり actool は現在呼ばれない）。Linux ビルドは `WAILS_LINUX_DEPS`（GTK4/WebKitGTK）が必要
 
 CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定。**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、プレリリース間のズレは壊れる）。
 

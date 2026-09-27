@@ -218,13 +218,9 @@ claude.ai のログインは傍受ウィンドウの cookie に載っている�
 
 ### 使用量バー（`UsageBar`）
 
-上段（`usage-bar-head`）は **ラベル｜使用率** の 2 カラム。使用率のすぐ左に日時が並ぶと「日付 xx%」に見えて何の％か紛らわしいため、**リセット日時は下段（`usage-bar-foot`）へ移動**した。下段は「時間の行」で **`{日付}にリセット`（左）｜`あと{残り時間}`（右）** の 2 セル（flex space-between。`resetsAt` / `remaining` は i18n テンプレート。左右で「リセット」の語を分担するため right は `でリセット` を含まない）。バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。
+バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。レイアウト・ツールチップ・数値の表記・ウィンドウ高さの詳細は [`_docs/ui.md`](_docs/ui.md)。
 
-**バーごとのツールチップ（`title`）**: `使用量｜リセット日付｜経過%｜残り` を改行区切りでまとめた `title` を各バーに付ける（`buildTip(util)` で生成、全サイズモード共通）。経過%は独立表示を持たずこのツールチップに集約。**リセット日付/経過/残りはタイムライン共有なので主バーと副バーで違うのは使用量の行だけ**。主バーは `tooltip`（=`buildTip(util)`）、**weekly_scoped 副バーは `secTooltip`（=`buildTip(secUtil)`）で自分の使用量を表示**する。
-- ノーマル/スモール: `.usage-bar` カードに主 `tooltip`、副バーの `usage-bar-head--sub` と `usage-bar-track-wrap` に `secTooltip` を付けて内側で上書き（ホバーで副バーは Scoped 値、それ以外は主バー値）。マーカー・フッターセルに個別 `title` は付けない。
-- コンパクト: 各行（`usage-bar-compact`）に自分のツールチップ（主行=`tooltip`、副行=`secTooltip`）。**ラベルの省略時 `title` は付けない**ため、行のどこ（ラベル含む）をホバーしてもこの値が出る。
-
-色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）:
+色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）。**拡張と挙動を揃えること**:
 
 ```
 colorEnabled=false                                   → accent
@@ -236,18 +232,10 @@ diff = util - elapsed
 ```
 色: accent `#7dd3fc` / warning `#fbbf24` / danger `#ef4444`。
 
-- **残り時間の表記**: 残り1分未満は**秒でカウントダウン**する（`formatRemaining`）。`Intl.DurationFormat` は 0 の単位を省くため、日/時/分だけを渡すと最後の1分は空文字になり「あと」「left」だけが残ってしまう。この間だけ `{ seconds }` を渡し、`durationFallback` も日/時/分がすべて 0 なら秒だけを返す
-- **使用率の表記**: `utilization` は API 上つねに整数（`percent`）なので `formatUtil()` で `100%` のように整数表示する（`decimalPlaces` / `percentFormat` は適用しない）。一方 **Elapsed（経過%）は計算値**なので `decimalPlaces` / `percentFormat` を適用（`formatPercent()`）。
-- **weekly_scoped のネスト表示**: `seven_day` と `weekly_scoped` はリセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけ。そこで **Weekly limit カード（`seven_day`）の中に副バーとしてネスト**する（`UsageBar` の `secondary` prop）。タイムライン（リセット日時・経過マーカー・残り時間）は主バーと共有し、副バーはラベル・使用率・色のみ独立。表示は `showDay7 && showWeeklyScoped` かつデータ存在時のみ。5時間バーは独立カードのまま。
-- **ウィンドウ高さの動的調整**: 副バー（weekly_scoped）が表示されるとき `Window.SetSize(520, 396)`、それ以外は `340`（`MainWindow` の `useEffect` が `weeklyBarVisible` を監視）。
-- **Usage credits バー（`kind: 'credits'`）**: 他のバーと同じ `UsageBar` で描くが、データ源が金額なので前処理が違う（`MainWindow` 内で算出）。
-  - **金額は使用率セルに入れる**: 右側の値セルが `$13.63/50.00 | 27%` になる（ラベルは他のバーと同じ素のウィンドウ名）。`UsageBar` の `utilText` prop で `formatUtil()` の代わりに描画する。`formatCredits()` が最小単位の整数を `decimal_places` で実額に直し、`Intl.NumberFormat` で UI ロケール整形する。通貨記号は**左の消費額だけ**に付け、右の上限は素の数値（記号の重複を避ける）
-  - 値セルの列幅は既定 4rem（"100%" 用）では足りないので、`utilText` があるカードに `usage-bar--wide-util` が付き **`--util-col: 18rem`**（コンパクトは `--compact-util-col: 10rem`）に広げる。他のバーの列幅には影響しない
-  - **リセットは UTC 月初**（API に `resets_at` が無いため合成。上記「対象 API」参照）。バーの時間軸だけ月単位になるので、`WINDOW_MS` の定数引きではなく `windowStart()` が「終端から1か月戻す」を担当する（月の長さが可変なため。`Date.UTC` が month `-1` を前年12月に正規化するので1月も特別扱い不要）。**表示は他のバーと同じくユーザーのロケール/タイムゾーン**なので、JST では「8/1 9:00 にリセット」と出る
-  - 表示条件は `settings.showCredits && monthly_limit != null`。**既定は非表示**（`ShowCredits: false`。クレジット未使用のユーザーが大半で、内容も使用量ではなく金額のため）。設定セクションは weekly_scoped と同様、データが無いときは消さずに無効化する（下記「設定」参照）
-  - **「必要な時のみ表示」（`creditsOnlyWhenNeeded`）**: クレジットが実際に消費され始めるのはプラン上限を使い切った後なので、それまでバーを出さない選択肢。条件は `five_hour` か `seven_day` の `utilization >= 100`（`creditsNeeded`）。**weekly_scoped は数えない** — 週ウィンドウの内訳であって、それ単独でクレジット消費に落ちる上限ではないため。既定オフ（オンにすると Show を入れても何も出ない状況が起き、設定が効いていないように見えるため）。設定 UI 上は Show のサブ項目で、Show がオフの間は `disabled`
-  - 月替わり直後は消費額が次回取得まで古いまま（バーの時間軸だけ先に新しい月へ切り替わる）。5分の自動更新で追いつく
-
+- **weekly_scoped は `seven_day` カードの副バー**としてネストする。リセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけのため
+- **Usage credits のリセットは UTC 月初**としてフロントで合成する（API に `resets_at` が無い。上記「対象 API」）。使用率も `used_credits / monthly_limit` から自前計算
+- 表示条件は `settings.showCredits && monthly_limit != null`（**既定は非表示**）。`creditsOnlyWhenNeeded` は `five_hour` か `seven_day` が 100% のときだけ出す — **weekly_scoped は数えない**（週ウィンドウの内訳であって、単独でクレジット消費に落ちる上限ではないため）
+- ウィンドウの高さはコンテンツの実測で決まる。バーと一緒に出す要素は `.usage-bars` の内側に置く
 ## 設定（Chrome 拡張から移植 + 追加）
 
 `settings/settings.go` の `Settings`。永続化先は `%APPDATA%\TEMPOC\settings.json`（`os.UserConfigDir()`）。メインウィンドウは起動時に `SettingsService.Get()` で読み込み、`MainWindow` の state に保持して `UsageBar` に渡す。
@@ -263,26 +251,7 @@ diff = util - elapsed
 
 イベント: `tempoc:open-settings`（メインの歯車 → Go が設定ウィンドウを `Show()`、設定ウィンドウ front はドラフト再読込）/ `tempoc:settings-applied`（設定ウィンドウの Apply → メインが `Get()` で再読込）/ `tempoc:quit`（メインの ✕ → Go が位置保存してから終了）。
 
-拡張と同一のキー（`showDay7`/`showHour5`、`day7Danger`/`day7Warning`、`day7ColorEnabled`、`hour5*`、`showRemainDay7`/`showRemainHour5`、`decimalPlaces`、`durationStyle`、`percentFormat`、`refreshInterval`、`utilizationWarning`/`utilizationDanger`）に加え、デスクトップ独自:
-
-| キー | 既定 | 説明 |
-|---|---|---|
-| `locale` | `""`(Auto) | **UI 言語**と日時・残り時間の表記ロケール。値は Claude 公式のロケールコード（地域サブタグ付き: `en-US` / `ja-JP`。一覧は `frontend/src/i18n.ts` の `SUPPORTED_LOCALES`、将来は公式の全コードへ拡張予定）。空は `navigator.language` を最寄りのサポートコードへ解決（`ja` → `ja-JP`、非対応言語 → `en-US`）。**UI 文言と Intl 日時整形の両方に同じ解決済みコードを使う**ため言語と日付書式がズレない。設定ウィンドウの Language セレクタは選択した瞬間に設定ウィンドウ自身へプレビューされ、メインへの反映は Apply 時 |
-| `theme` | `"system"` | UI テーマ: `system` / `light` / `dark`。`system` は `prefers-color-scheme` で OS 設定に追従（OS 側の切り替えもライブ反映）。`theme.ts` の `applyTheme()` が `<html>` に `data-theme="light\|dark"` を付与し、`style.css` の CSS 変数（`:root` = ダーク既定、`[data-theme="light"]` で上書き）が切り替わる。バー色（`COLORS`）も `var(--color-*)` 参照でテーマ追従。メイン・設定ウィンドウは別 JS コンテキストのため各自 `applyTheme()` を呼ぶ（設定ウィンドウは保存値で描画し、Apply 時に反映） |
-| `transparent` | `false` | ウィンドウ透明の On/Off（設定ウィンドウ General のチェックボックス） |
-| `alwaysOnTop` | `false` | 最前面表示の On/Off（タイトルバーのピン。永続化・起動時復元） |
-| `showWeeklyScoped` | `true` | weekly_scoped バーの表示 |
-| `weeklyScopedWarning` / `weeklyScopedDanger` | `0` / `10` | weekly_scoped の色閾値 |
-| `weeklyScopedColorEnabled` | `true` | weekly_scoped の色分け有効 |
-| `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
-| `weeklyScopedLabel` | `""` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可）。空は UI 言語の既定ラベル（`i18n.ts` の `weeklyScopedFallback`）に従う |
-| `showCredits` | `false` | Usage credits バーの表示（**既定オフ**） |
-| `creditsOnlyWhenNeeded` | `false` | Usage credits を「必要な時のみ表示」。5時間 or 7日が 100% のときだけバーを出す |
-| `creditsWarning` / `creditsDanger` | `0` / `10` | Usage credits の色閾値 |
-| `creditsColorEnabled` | `true` | Usage credits の色分け有効 |
-| `showRemainCredits` | `true` | Usage credits の残り時間表示 |
-
-設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / Formatting / 5-Hour / 7-Day / Weekly (scoped) / Usage credits / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped は 5h/7d と同じ設定に加え Label（名称）入力を持ち、Usage credits は同じ4項目（ラベルは金額入りの自動生成なので Label 入力なし）。
+キーの一覧と既定値は [`_docs/ui.md`](_docs/ui.md) の「設定キー一覧」（定義の正は `settings/settings.go`）。拡張と同名のキーは意味も揃えてある。
 
 **API に無いウィンドウのセクションは「消さずに無効化」する**。weekly_scoped（出たり消えたりする）と extra_usage（クレジット未設定なら来ない）は欠けうるが、セクションは常に描画し、データが無いときだけ `settings-section--disabled`（淡色化）+ 全コントロール `disabled` + 見出し下に `sectionUnavailable` の一文を出す。消してしまうと設定一覧の並びが動き、保存済みの設定ごと無くなったように見えるため — 値は保存されたままで、データが戻れば即座に効く。判定は `hasWeeklyScoped` / `hasCredits` prop（設定ウィンドウ自身も `tempoc:usage` を購読して導出。`monthly_limit != null` かどうか等）で、**設定値ではなくデータの有無だけ**で決まる。なお**バー本体（メインウィンドウ）は従来どおりデータが無ければ描かない**（無効化ではなく非表示）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
 
@@ -291,6 +260,7 @@ diff = util - elapsed
 1. `settings/settings.go` の `Settings` にフィールド追加（+ 必要なら `Default()`）
 2. `desktop/` で `wails3 generate bindings -ts`（`frontend/bindings/changeme/settings/` が再生成される）
 3. `SettingsWindow.tsx` の `SettingsView` に UI を追加し、`App.tsx`（`UsageBar` などの描画側）へ反映
+4. [`_docs/ui.md`](_docs/ui.md) の「設定キー一覧」に行を足す
 
 ## 国際化（i18n）
 
@@ -357,7 +327,7 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
 詳細（各項目の理由・経緯・手順）は [`_docs/release.md`](_docs/release.md)。ビルド設定・アセット・リリースを触る前に読むこと。常に守る制約だけをここに置く:
 
 - バージョンの**唯一の正は `desktop/version`**。`build/config.yml` の `info.version` と `frontend/package.json` の `version` は写しなので手で編集しない — 同期は `go run ./_cmd/version.go`（`desktop/` から）
-- リリースは自動（`versionup-desktop.yml` → `release-desktop.yml`）。**タグは手で打たない**。minor/major は `go run ./_cmd/version.go 0.3.0` して commit するだけ
+- リリースの流れ（自動・タグは手で打たない）は拡張と共通で、ルートの [`../AGENTS.md`](../AGENTS.md) の Versioning にある。minor/major は `go run ./_cmd/version.go 0.3.0` して commit する
 - ビルドアセットの再生成は**必ず `wails3 task common:update:build-assets`**。素の `wails3 update build-assets` はテンプレート既定値で全項目を上書きする
 - `config.yml` を直しただけでは exe に反映されない（update build-assets → 再ビルドが要る）。`APP_NAME` の変更は WebView2 のユーザーデータフォルダも変える（ログインが引き継がれない）
 - `build/Taskfile.yml` の `generate:icons` に `-iconcomposerinput` / `-macassetdir` を戻さない（macOS で Wails ロゴが出る）

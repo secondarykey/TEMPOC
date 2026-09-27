@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to coding agents when working with code in this repository.
 
 TEMPOC shows how far you are through Claude's usage windows. claude.ai reports how much of each window you have consumed, but not how much of the window's *time* has elapsed, nor exactly when it resets. Both modules below intercept the same claude.ai usage API and answer those two questions; they differ only in how they present the answer.
 
@@ -10,8 +10,8 @@ This repository holds **two independent modules**. They share no code and have s
 
 | Module | What it is | Guide |
 |---|---|---|
-| `chrome-extension/` | Manifest V3 Chrome extension that injects progress bars into the claude.ai usage page | [`chrome-extension/CLAUDE.md`](chrome-extension/CLAUDE.md) |
-| `desktop/` | Standalone Wails v3 desktop app (Windows) that renders the same data in its own frameless React window, loading claude.ai in a hidden WebView | [`desktop/CLAUDE.md`](desktop/CLAUDE.md) |
+| `chrome-extension/` | Manifest V3 Chrome extension that injects progress bars into the claude.ai usage page | [`chrome-extension/AGENTS.md`](chrome-extension/AGENTS.md) |
+| `desktop/` | Standalone Wails v3 desktop app (Windows) that renders the same data in its own frameless React window, loading claude.ai in a hidden WebView | [`desktop/AGENTS.md`](desktop/AGENTS.md) |
 
 **Read the module's own guide before working in it.** Each covers that module's architecture, settings, build commands, and constraints. This file covers only what spans both.
 

@@ -1,6 +1,6 @@
-# desktop/CLAUDE.md
+# desktop/AGENTS.md
 
-TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extension/src/`。[`../chrome-extension/CLAUDE.md`](../chrome-extension/CLAUDE.md)）と同じ「claude.ai の使用量 API を傍受して 5時間 / 7日ウィンドウの進捗を表示する」機能を、スタンドアロンのデスクトップアプリとして提供する。
+TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extension/src/`。[`../chrome-extension/AGENTS.md`](../chrome-extension/AGENTS.md)）と同じ「claude.ai の使用量 API を傍受して 5時間 / 7日ウィンドウの進捗を表示する」機能を、スタンドアロンのデスクトップアプリとして提供する。
 
 - Wails: `github.com/wailsapp/wails/v3` beta.16（Go 1.27）
 - Go module 名: `changeme`（テンプレート既定のまま。変更していない）
@@ -296,7 +296,7 @@ UI 文言と日時・残り時間の表記をロケール対応にする仕組�
 
 | 要素 | 役割 |
 |---|---|
-| `frontend/src/locales/<code>.json` | **翻訳文字列の実体**。ロケールごとに1ファイル（`en-US.json` / `ja-JP.json`）。UI ロジックからは分離されている。**ルート `locales/`（マスター）の同期コピーなので直接編集しない** — ルートを編集して `python3 scripts/sync_locales.py` を実行する（[`../CLAUDE.md`](../CLAUDE.md) の Shared locale resources 参照） |
+| `frontend/src/locales/<code>.json` | **翻訳文字列の実体**。ロケールごとに1ファイル（`en-US.json` / `ja-JP.json`）。UI ロジックからは分離されている。**ルート `locales/`（マスター）の同期コピーなので直接編集しない** — ルートを編集して `python3 scripts/sync_locales.py` を実行する（[`../AGENTS.md`](../AGENTS.md) の Shared locale resources 参照） |
 | `frontend/src/i18n.ts` | ロジック。JSON を import し、`resolveLocale()`・`getMessages()`・型定義（`Messages` / `RawMessages`）を提供 |
 
 ### ロケールコード
@@ -322,7 +322,7 @@ Frameless のタイトルバーは React 描画だが、**タスクバー・Alt-
 ### 言語を追加する手順
 
 1. ルート `locales/<code>.json` を新規作成（既存 JSON をコピーして全キーを翻訳。キーが揃っていないと `sync_locales.py` と `tsc` の両方で落ちるのでコピーが安全）し、`python3 scripts/sync_locales.py` で両モジュールへ同期
-2. `i18n.ts` の `SUPPORTED_LOCALES` に `<code>` を追加し、`import` と `build(...)` を1行ずつ足す（拡張側は `chrome-extension/src/i18n.js` の `TEMPOC_LOCALES` — [`../chrome-extension/CLAUDE.md`](../chrome-extension/CLAUDE.md) 参照）
+2. `i18n.ts` の `SUPPORTED_LOCALES` に `<code>` を追加し、`import` と `build(...)` を1行ずつ足す（拡張側は `chrome-extension/src/i18n.js` の `TEMPOC_LOCALES` — [`../chrome-extension/AGENTS.md`](../chrome-extension/AGENTS.md) 参照）
 3. `SettingsWindow.tsx` の Language セレクタに `<option>` を追加（表示名は各言語の自称表記のまま。例: `English` / `日本語`）
 
 **文言キーの追加時**（新しい UI 文字列を足すとき）は、`RawMessages`（`i18n.ts`）にフィールドを足し、**ルート `locales/` の全 JSON に同じキーを足して同期**する（欠けると `sync_locales.py` と `tsc` の両方が指摘する）。パラメータ付きなら `Messages` 側の関数シグネチャと `build()` の組み立ても足す。拡張のオプションページだけが使うキー（`previewLabel` / `refreshHelp` / `savedToast`）も `RawMessages` に列挙してあり、デスクトップの型チェックが全キーの充足を保証する。

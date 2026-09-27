@@ -77,4 +77,4 @@ wails3 build             # production build (see build/)
 wails3 generate bindings # required after changing Go services/types
 ```
 
-For architecture details (the two-window design, the usage-interception mechanism, settings, known constraints), see [`CLAUDE.md`](CLAUDE.md).
+For architecture details (the two-window design, the usage-interception mechanism, settings, known constraints), see [`AGENTS.md`](AGENTS.md).

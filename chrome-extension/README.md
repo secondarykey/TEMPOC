@@ -39,4 +39,4 @@ The options screen is in English only, but dates and durations are displayed in 
 
 There is no build step — `src/` is the extension. After changing it, click the refresh icon on the extension card in `chrome://extensions/`.
 
-For architecture details (the two-world content script design, the fetch interception, the release pipeline), see [`CLAUDE.md`](CLAUDE.md).
+For architecture details (the two-world content script design, the fetch interception, the release pipeline), see [`AGENTS.md`](AGENTS.md).

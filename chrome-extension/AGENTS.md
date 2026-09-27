@@ -1,6 +1,6 @@
-# chrome-extension/CLAUDE.md
+# chrome-extension/AGENTS.md
 
-This file documents the **Chrome extension** — one of the two modules in this repository. For the desktop app see [`../desktop/CLAUDE.md`](../desktop/CLAUDE.md); for the repo-wide layout see [`../CLAUDE.md`](../CLAUDE.md).
+This file documents the **Chrome extension** — one of the two modules in this repository. For the desktop app see [`../desktop/AGENTS.md`](../desktop/AGENTS.md); for the repo-wide layout see [`../AGENTS.md`](../AGENTS.md).
 
 ## Project Overview
 
@@ -41,7 +41,7 @@ Release tags for this module are `extension-v*` (e.g. `extension-v1.3.0`), and `
 | `src/content.js` | MAIN | Injects UI and intercepts `window.fetch` |
 | `src/options.html` / `src/options.js` | Options page | Settings UI |
 | `src/i18n.js` | Options page | Locale resolution and message loading/applying for the options page |
-| `src/locales/*.json` | Options page | UI strings, one file per locale. **Synced copies of the repo-root `locales/` master — never edit here** (see the root `CLAUDE.md`, "Shared locale resources") |
+| `src/locales/*.json` | Options page | UI strings, one file per locale. **Synced copies of the repo-root `locales/` master — never edit here** (see the root `AGENTS.md`, "Shared locale resources") |
 | `src/tempoc.png` | — | Extension icon |
 
 `content.js` must run in `world: "MAIN"` to monkey-patch `window.fetch`. Since MAIN world cannot access `chrome.storage` or `chrome.runtime`, `bridge.js` runs in ISOLATED world as a relay.

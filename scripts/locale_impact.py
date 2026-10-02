@@ -44,7 +44,7 @@ REFERENCE = "en-US.json"
 # dir:     everything the module owns, as a repo-relative posix prefix
 # locales: its committed copy of the master, written by sync_locales.py
 # source:  extensions worth searching for key references. Docs are excluded on
-#          purpose -- CLAUDE.md naming a key is not the module using it.
+#          purpose -- AGENTS.md naming a key is not the module using it.
 MODULES = {
     "chrome-extension": {
         "dir": "chrome-extension/",

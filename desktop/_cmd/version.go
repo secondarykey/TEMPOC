@@ -8,7 +8,7 @@
 //
 // `version` is the single source of truth; build/config.yml and
 // frontend/package.json are mirrors. The exe metadata is generated from
-// config.yml by `wails3 update build-assets` — see desktop/CLAUDE.md.
+// config.yml by `wails3 update build-assets` — see desktop/AGENTS.md.
 //
 // This lives under _cmd/ so the go tool ignores it: directories starting with
 // an underscore are excluded from ./... patterns, keeping this tool out of

@@ -4,7 +4,7 @@ import "changeme/settings"
 
 // SettingsService exposes settings.Repository to the frontend via Wails
 // bindings. Kept in package main (alongside main.go) since this project has
-// no _cmd/ subpackage split — see CLAUDE.md.
+// no _cmd/ subpackage split — see AGENTS.md.
 type SettingsService struct {
 	repo *settings.Repository
 }

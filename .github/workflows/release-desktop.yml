@@ -134,7 +134,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       # Each task pulls in the frontend deps, regenerates the bindings
-      # (gitignored) and its platform assets, then builds. See desktop/CLAUDE.md.
+      # (gitignored) and its platform assets, then builds. See desktop/AGENTS.md.
       - name: Build (Windows)
         if: matrix.target == 'windows'
         shell: bash

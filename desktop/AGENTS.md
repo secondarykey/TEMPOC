@@ -1,12 +1,12 @@
-# desktop/CLAUDE.md
+# desktop/AGENTS.md
 
-TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extension/src/`。[`../chrome-extension/CLAUDE.md`](../chrome-extension/CLAUDE.md)）と同じ「claude.ai の使用量 API を傍受して 5時間 / 7日ウィンドウの進捗を表示する」機能を、スタンドアロンのデスクトップアプリとして提供する。
+TEMPOC のデスクトップ版（Wails v3）。Chrome 拡張（`chrome-extension/src/`。[`../chrome-extension/AGENTS.md`](../chrome-extension/AGENTS.md)）と同じ「claude.ai の使用量 API を傍受して 5時間 / 7日ウィンドウの進捗を表示する」機能を、スタンドアロンのデスクトップアプリとして提供する。
 
 - Wails: `github.com/wailsapp/wails/v3` beta.16（Go 1.27）
 - Go module 名: `changeme`（テンプレート既定のまま。変更していない）
 - フロント: React + Vite + TypeScript、`@wailsio/runtime`
 - 対象プラットフォーム: Windows（WebView2）/ macOS（WKWebView）/ Linux（WebKitGTK）。OS 差の実装メモは [`multios.md`](multios.md)
-- Wails 全般の作法は `.claude/skills/wails3` を参照
+- Wails 全般の作法は `wails3` skill（リポジトリ外の資料）を参照
 
 ## 全体像
 
@@ -71,7 +71,7 @@ claude.ai のような**第三者ページに JS を注入する**には、Wails
 
 ### ページ → Go の通信
 
-`inject.js` から `window.chrome.webview.postMessage(JSON.stringify(...))`（`window.chrome.webview` は WebView2 が全ページに提供）。Go 側は `application.Options.RawMessageHandler(window, message, originInfo)` で受信（`wails:` で始まらない全メッセージが届く）。`originInfo.Origin` に `claude.ai` が含まれるか検証してから処理する。
+`inject.js` から `sendToHost()` 経由で `postMessage(JSON.stringify(...))`（口は OS で違う。下記「マルチ OS」）。Go 側は `application.Options.RawMessageHandler(window, message, originInfo)` で受信（`wails:` で始まらない全メッセージが届く）。`originInfo.Origin` に `claude.ai` が含まれるか検証してから処理する。
 
 postMessage の `type` で分岐:
 - `usage` — `seven_day`/`five_hour`/`weekly_scoped` を `app.Event.Emit("tempoc:usage", ...)` でフロントへ。以後 `Events.On("tempoc:usage")` で受信
@@ -79,6 +79,10 @@ postMessage の `type` で分岐:
 - `auth-required` — 未認証を検知（`/login` にいる、または API が 401/403 を返した）→ `app.Event.Emit("tempoc:auth-required")` でフロントへ通知。フロントは usage データが残っていてもログイン前表示（「Log in to Claude」ボタン）に戻し、クリックで `Events.Emit('tempoc:login')` → Go が傍受ウィンドウを表示する（勝手には出さない）。このとき `/login` 以外の古い SPA 画面のままなら ExecJS で usage URL へ読み込み直し、claude.ai にログインページへ誘導させる
 - `fetch-error` — **claude.ai が落ちている/読めなかった**ことの通知（下記「取得失敗の扱い」）→ `app.Event.Emit("tempoc:fetch-error", {msg})`。`auth-required` とは別物（ログインし直しても直らない）なので傍受ウィンドウは出さない
 - `debug` — ログ出力用
+
+### マルチ OS
+
+`inject.js` の page→Go 送信は WebView ごとに口が違う（Windows=`window.chrome.webview` / macOS・Linux=`window.webkit.messageHandlers.external`）。`sendToHost()` が実行時に検出して切り替える（**WebView2 を先に判定するので Windows は無変更**）。受信・`wails:` ルーティング・`ExecJS` の `runtimeLoaded` ゲートは Wails の共通コードなので **Go 側は無改修**。⚠️ ただし **macOS は注入が document-END**（`options.JS` が `WebViewDidFinishNavigation` で `execJS` される）で Windows の document-START と異なり、初回の usage リクエストを取り逃しうる（能動取得 `__tempocRefetch` で埋める想定）。詳細・調査根拠・実機確認の観点は **[`multios.md`](multios.md)**。mac/Linux の実機確認は未了。
 
 ### ログイン遷移の検知（pathname ウォッチャー）
 
@@ -214,13 +218,9 @@ claude.ai のログインは傍受ウィンドウの cookie に載っている�
 
 ### 使用量バー（`UsageBar`）
 
-上段（`usage-bar-head`）は **ラベル｜使用率** の 2 カラム。使用率のすぐ左に日時が並ぶと「日付 xx%」に見えて何の％か紛らわしいため、**リセット日時は下段（`usage-bar-foot`）へ移動**した。下段は「時間の行」で **`{日付}にリセット`（左）｜`あと{残り時間}`（右）** の 2 セル（flex space-between。`resetsAt` / `remaining` は i18n テンプレート。左右で「リセット」の語を分担するため right は `でリセット` を含まない）。バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。
+バー本体は「塗り＝使用率」「白い縦マーカー＝時間経過率」。レイアウト・ツールチップ・数値の表記・ウィンドウ高さの詳細はスキル [`tempoc-desktop-ui`](../docs/skills/tempoc-desktop-ui/SKILL.md)。
 
-**バーごとのツールチップ（`title`）**: `使用量｜リセット日付｜経過%｜残り` を改行区切りでまとめた `title` を各バーに付ける（`buildTip(util)` で生成、全サイズモード共通）。経過%は独立表示を持たずこのツールチップに集約。**リセット日付/経過/残りはタイムライン共有なので主バーと副バーで違うのは使用量の行だけ**。主バーは `tooltip`（=`buildTip(util)`）、**weekly_scoped 副バーは `secTooltip`（=`buildTip(secUtil)`）で自分の使用量を表示**する。
-- ノーマル/スモール: `.usage-bar` カードに主 `tooltip`、副バーの `usage-bar-head--sub` と `usage-bar-track-wrap` に `secTooltip` を付けて内側で上書き（ホバーで副バーは Scoped 値、それ以外は主バー値）。マーカー・フッターセルに個別 `title` は付けない。
-- コンパクト: 各行（`usage-bar-compact`）に自分のツールチップ（主行=`tooltip`、副行=`secTooltip`）。**ラベルの省略時 `title` は付けない**ため、行のどこ（ラベル含む）をホバーしてもこの値が出る。
-
-色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）:
+色分けロジックは Chrome 拡張の `content.js` `redraw()` を厳密移植（`computeColor()` / `pickCfg()` に切り出し）。**拡張と挙動を揃えること**:
 
 ```
 colorEnabled=false                                   → accent
@@ -232,18 +232,10 @@ diff = util - elapsed
 ```
 色: accent `#7dd3fc` / warning `#fbbf24` / danger `#ef4444`。
 
-- **残り時間の表記**: 残り1分未満は**秒でカウントダウン**する（`formatRemaining`）。`Intl.DurationFormat` は 0 の単位を省くため、日/時/分だけを渡すと最後の1分は空文字になり「あと」「left」だけが残ってしまう。この間だけ `{ seconds }` を渡し、`durationFallback` も日/時/分がすべて 0 なら秒だけを返す
-- **使用率の表記**: `utilization` は API 上つねに整数（`percent`）なので `formatUtil()` で `100%` のように整数表示する（`decimalPlaces` / `percentFormat` は適用しない）。一方 **Elapsed（経過%）は計算値**なので `decimalPlaces` / `percentFormat` を適用（`formatPercent()`）。
-- **weekly_scoped のネスト表示**: `seven_day` と `weekly_scoped` はリセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけ。そこで **Weekly limit カード（`seven_day`）の中に副バーとしてネスト**する（`UsageBar` の `secondary` prop）。タイムライン（リセット日時・経過マーカー・残り時間）は主バーと共有し、副バーはラベル・使用率・色のみ独立。表示は `showDay7 && showWeeklyScoped` かつデータ存在時のみ。5時間バーは独立カードのまま。
-- **ウィンドウ高さの動的調整**: 副バー（weekly_scoped）が表示されるとき `Window.SetSize(520, 396)`、それ以外は `340`（`MainWindow` の `useEffect` が `weeklyBarVisible` を監視）。
-- **Usage credits バー（`kind: 'credits'`）**: 他のバーと同じ `UsageBar` で描くが、データ源が金額なので前処理が違う（`MainWindow` 内で算出）。
-  - **金額は使用率セルに入れる**: 右側の値セルが `$13.63/50.00 | 27%` になる（ラベルは他のバーと同じ素のウィンドウ名）。`UsageBar` の `utilText` prop で `formatUtil()` の代わりに描画する。`formatCredits()` が最小単位の整数を `decimal_places` で実額に直し、`Intl.NumberFormat` で UI ロケール整形する。通貨記号は**左の消費額だけ**に付け、右の上限は素の数値（記号の重複を避ける）
-  - 値セルの列幅は既定 4rem（"100%" 用）では足りないので、`utilText` があるカードに `usage-bar--wide-util` が付き **`--util-col: 18rem`**（コンパクトは `--compact-util-col: 10rem`）に広げる。他のバーの列幅には影響しない
-  - **リセットは UTC 月初**（API に `resets_at` が無いため合成。上記「対象 API」参照）。バーの時間軸だけ月単位になるので、`WINDOW_MS` の定数引きではなく `windowStart()` が「終端から1か月戻す」を担当する（月の長さが可変なため。`Date.UTC` が month `-1` を前年12月に正規化するので1月も特別扱い不要）。**表示は他のバーと同じくユーザーのロケール/タイムゾーン**なので、JST では「8/1 9:00 にリセット」と出る
-  - 表示条件は `settings.showCredits && monthly_limit != null`。**既定は非表示**（`ShowCredits: false`。クレジット未使用のユーザーが大半で、内容も使用量ではなく金額のため）。設定セクションは weekly_scoped と同様、データが無いときは消さずに無効化する（下記「設定」参照）
-  - **「必要な時のみ表示」（`creditsOnlyWhenNeeded`）**: クレジットが実際に消費され始めるのはプラン上限を使い切った後なので、それまでバーを出さない選択肢。条件は `five_hour` か `seven_day` の `utilization >= 100`（`creditsNeeded`）。**weekly_scoped は数えない** — 週ウィンドウの内訳であって、それ単独でクレジット消費に落ちる上限ではないため。既定オフ（オンにすると Show を入れても何も出ない状況が起き、設定が効いていないように見えるため）。設定 UI 上は Show のサブ項目で、Show がオフの間は `disabled`
-  - 月替わり直後は消費額が次回取得まで古いまま（バーの時間軸だけ先に新しい月へ切り替わる）。5分の自動更新で追いつく
-
+- **weekly_scoped は `seven_day` カードの副バー**としてネストする。リセット時刻・経過・残り時間が同じで、違うのはラベルと使用率だけのため
+- **Usage credits のリセットは UTC 月初**としてフロントで合成する（API に `resets_at` が無い。上記「対象 API」）。使用率も `used_credits / monthly_limit` から自前計算
+- 表示条件は `settings.showCredits && monthly_limit != null`（**既定は非表示**）。`creditsOnlyWhenNeeded` は `five_hour` か `seven_day` が 100% のときだけ出す — **weekly_scoped は数えない**（週ウィンドウの内訳であって、単独でクレジット消費に落ちる上限ではないため）
+- ウィンドウの高さはコンテンツの実測で決まる。バーと一緒に出す要素は `.usage-bars` の内側に置く
 ## 設定（Chrome 拡張から移植 + 追加）
 
 `settings/settings.go` の `Settings`。永続化先は `%APPDATA%\TEMPOC\settings.json`（`os.UserConfigDir()`）。メインウィンドウは起動時に `SettingsService.Get()` で読み込み、`MainWindow` の state に保持して `UsageBar` に渡す。
@@ -259,26 +251,7 @@ diff = util - elapsed
 
 イベント: `tempoc:open-settings`（メインの歯車 → Go が設定ウィンドウを `Show()`、設定ウィンドウ front はドラフト再読込）/ `tempoc:settings-applied`（設定ウィンドウの Apply → メインが `Get()` で再読込）/ `tempoc:quit`（メインの ✕ → Go が位置保存してから終了）。
 
-拡張と同一のキー（`showDay7`/`showHour5`、`day7Danger`/`day7Warning`、`day7ColorEnabled`、`hour5*`、`showRemainDay7`/`showRemainHour5`、`decimalPlaces`、`durationStyle`、`percentFormat`、`refreshInterval`、`utilizationWarning`/`utilizationDanger`）に加え、デスクトップ独自:
-
-| キー | 既定 | 説明 |
-|---|---|---|
-| `locale` | `""`(Auto) | **UI 言語**と日時・残り時間の表記ロケール。値は Claude 公式のロケールコード（地域サブタグ付き: `en-US` / `ja-JP`。一覧は `frontend/src/i18n.ts` の `SUPPORTED_LOCALES`、将来は公式の全コードへ拡張予定）。空は `navigator.language` を最寄りのサポートコードへ解決（`ja` → `ja-JP`、非対応言語 → `en-US`）。**UI 文言と Intl 日時整形の両方に同じ解決済みコードを使う**ため言語と日付書式がズレない。設定ウィンドウの Language セレクタは選択した瞬間に設定ウィンドウ自身へプレビューされ、メインへの反映は Apply 時 |
-| `theme` | `"system"` | UI テーマ: `system` / `light` / `dark`。`system` は `prefers-color-scheme` で OS 設定に追従（OS 側の切り替えもライブ反映）。`theme.ts` の `applyTheme()` が `<html>` に `data-theme="light\|dark"` を付与し、`style.css` の CSS 変数（`:root` = ダーク既定、`[data-theme="light"]` で上書き）が切り替わる。バー色（`COLORS`）も `var(--color-*)` 参照でテーマ追従。メイン・設定ウィンドウは別 JS コンテキストのため各自 `applyTheme()` を呼ぶ（設定ウィンドウは保存値で描画し、Apply 時に反映） |
-| `transparent` | `false` | ウィンドウ透明の On/Off（設定ウィンドウ General のチェックボックス） |
-| `alwaysOnTop` | `false` | 最前面表示の On/Off（タイトルバーのピン。永続化・起動時復元） |
-| `showWeeklyScoped` | `true` | weekly_scoped バーの表示 |
-| `weeklyScopedWarning` / `weeklyScopedDanger` | `0` / `10` | weekly_scoped の色閾値 |
-| `weeklyScopedColorEnabled` | `true` | weekly_scoped の色分け有効 |
-| `showRemainWeeklyScoped` | `true` | weekly_scoped の残り時間表示 |
-| `weeklyScopedLabel` | `""` | weekly_scoped 副バーのラベル（設定ウィンドウで変更可）。空は UI 言語の既定ラベル（`i18n.ts` の `weeklyScopedFallback`）に従う |
-| `showCredits` | `false` | Usage credits バーの表示（**既定オフ**） |
-| `creditsOnlyWhenNeeded` | `false` | Usage credits を「必要な時のみ表示」。5時間 or 7日が 100% のときだけバーを出す |
-| `creditsWarning` / `creditsDanger` | `0` / `10` | Usage credits の色閾値 |
-| `creditsColorEnabled` | `true` | Usage credits の色分け有効 |
-| `showRemainCredits` | `true` | Usage credits の残り時間表示 |
-
-設定ウィンドウ（`SettingsWindow.tsx` の `SettingsView` コンポーネント）は General / Formatting / 5-Hour / 7-Day / Weekly (scoped) / Usage credits / Utilization Threshold の各セクション + dual-range スライダー + Claude interceptor toggle、フッターに Apply/Close ボタンを持つ。weekly_scoped は 5h/7d と同じ設定に加え Label（名称）入力を持ち、Usage credits は同じ4項目（ラベルは金額入りの自動生成なので Label 入力なし）。
+キーの一覧と既定値はスキル [`tempoc-desktop-ui`](../docs/skills/tempoc-desktop-ui/SKILL.md) の「設定キー一覧」（定義の正は `settings/settings.go`）。拡張と同名のキーは意味も揃えてある。
 
 **API に無いウィンドウのセクションは「消さずに無効化」する**。weekly_scoped（出たり消えたりする）と extra_usage（クレジット未設定なら来ない）は欠けうるが、セクションは常に描画し、データが無いときだけ `settings-section--disabled`（淡色化）+ 全コントロール `disabled` + 見出し下に `sectionUnavailable` の一文を出す。消してしまうと設定一覧の並びが動き、保存済みの設定ごと無くなったように見えるため — 値は保存されたままで、データが戻れば即座に効く。判定は `hasWeeklyScoped` / `hasCredits` prop（設定ウィンドウ自身も `tempoc:usage` を購読して導出。`monthly_limit != null` かどうか等）で、**設定値ではなくデータの有無だけ**で決まる。なお**バー本体（メインウィンドウ）は従来どおりデータが無ければ描かない**（無効化ではなく非表示）。設定ウィンドウは常に不透明（`BackgroundColour` を不透明固定・`is-transparent` クラスを付けない）— `transparent` 設定はメインウィンドウの表示にのみ適用される。
 
@@ -287,6 +260,7 @@ diff = util - elapsed
 1. `settings/settings.go` の `Settings` にフィールド追加（+ 必要なら `Default()`）
 2. `desktop/` で `wails3 generate bindings -ts`（`frontend/bindings/changeme/settings/` が再生成される）
 3. `SettingsWindow.tsx` の `SettingsView` に UI を追加し、`App.tsx`（`UsageBar` などの描画側）へ反映
+4. スキル [`tempoc-desktop-ui`](../docs/skills/tempoc-desktop-ui/SKILL.md) の「設定キー一覧」に行を足す
 
 ## 国際化（i18n）
 
@@ -296,7 +270,7 @@ UI 文言と日時・残り時間の表記をロケール対応にする仕組�
 
 | 要素 | 役割 |
 |---|---|
-| `frontend/src/locales/<code>.json` | **翻訳文字列の実体**。ロケールごとに1ファイル（`en-US.json` / `ja-JP.json`）。UI ロジックからは分離されている。**ルート `locales/`（マスター）の同期コピーなので直接編集しない** — ルートを編集して `python3 scripts/sync_locales.py` を実行する（[`../CLAUDE.md`](../CLAUDE.md) の Shared locale resources 参照） |
+| `frontend/src/locales/<code>.json` | **翻訳文字列の実体**。ロケールごとに1ファイル（`en-US.json` / `ja-JP.json` など）。UI ロジックからは分離されている。**ルート `locales/`（マスター）の同期コピーなので直接編集しない** — ルートを編集して `python3 scripts/sync_locales.py` を実行する（[`../AGENTS.md`](../AGENTS.md) の Shared locale resources 参照） |
 | `frontend/src/i18n.ts` | ロジック。JSON を import し、`resolveLocale()`・`getMessages()`・型定義（`Messages` / `RawMessages`）を提供 |
 
 ### ロケールコード
@@ -319,13 +293,9 @@ UI 文言と日時・残り時間の表記をロケール対応にする仕組�
 
 Frameless のタイトルバーは React 描画だが、**タスクバー・Alt-Tab に出るネイティブタイトルは Wails が持つ**。これを **Go にロケール解決を持たせず**ローカライズするため、設定ウィンドウ自身の JS コンテキストが `Window.SetTitle(\`TEMPOC ${t.settingsTitle}\`)` を `useEffect` で呼び、**ドラフト言語（プレビュー中の UI 言語）に追従**させる。`main.go` 側の `Title: "TEMPOC Settings"` は **React マウント前のフォールバックだけ**（マウント後に上書きされる）。`Locale` が空（Auto）でもフロントは `navigator.language` を解決済みなので、Go 側の言語判定は不要。メインウィンドウのタイトルは `TEMPOC`（ブランド名）でローカライズ対象外。**傍受ウィンドウのタイトル（`… — TEMPOC interceptor`）は Go が動的に組み立てる**（claude.ai を読むため React 不在で `SetTitle` できない）ので現状は英語のまま — 必要ならローカライズ語をフロントから Go へ渡す方式にする。
 
-### 言語を追加する手順
+### 言語・文言キーの追加
 
-1. ルート `locales/<code>.json` を新規作成（既存 JSON をコピーして全キーを翻訳。キーが揃っていないと `sync_locales.py` と `tsc` の両方で落ちるのでコピーが安全）し、`python3 scripts/sync_locales.py` で両モジュールへ同期
-2. `i18n.ts` の `SUPPORTED_LOCALES` に `<code>` を追加し、`import` と `build(...)` を1行ずつ足す（拡張側は `chrome-extension/src/i18n.js` の `TEMPOC_LOCALES` — [`../chrome-extension/CLAUDE.md`](../chrome-extension/CLAUDE.md) 参照）
-3. `SettingsWindow.tsx` の Language セレクタに `<option>` を追加（表示名は各言語の自称表記のまま。例: `English` / `日本語`）
-
-**文言キーの追加時**（新しい UI 文字列を足すとき）は、`RawMessages`（`i18n.ts`）にフィールドを足し、**ルート `locales/` の全 JSON に同じキーを足して同期**する（欠けると `sync_locales.py` と `tsc` の両方が指摘する）。パラメータ付きなら `Messages` 側の関数シグネチャと `build()` の組み立ても足す。拡張のオプションページだけが使うキー（`previewLabel` / `refreshHelp` / `savedToast`）も `RawMessages` に列挙してあり、デスクトップの型チェックが全キーの充足を保証する。
+手順は スキル [`tempoc-i18n`](../docs/skills/tempoc-i18n/SKILL.md)。`RawMessages` には**デスクトップが使うキーだけ**を列挙する（拡張だけが使うキーは足さない）。
 
 ## 開発・ビルド
 
@@ -348,121 +318,23 @@ cd frontend && npx tsc --noEmit   # フロントの型チェック
   TEMPOC_ARGS="-log debug" wails3 dev     # wails3 task run でも同じ
   ```
 
-  dev は `build/config.yml` の `dev_mode.executes`（`type: primary`）にある **`wails3 task run` 経由でアプリを起動**し、そのコマンドラインは固定で拡張できない。そこで各 OS の `run` タスク（`build/<os>/Taskfile.yml`）の起動行末尾に `$TEMPOC_ARGS` を付けてある — **タスク変数ではなく環境変数**なのは、dev から渡す唯一の経路がこれだから（`wails3 task` の CLI_ARGS 非対応は上記 macOS 署名の項も参照）。未設定なら空に展開されるだけ。ログの出力先は起動時のカレントなので、dev では `desktop/YYYY-MM-DD.log` に出る
+  dev は `build/config.yml` の `dev_mode.executes`（`type: primary`）にある **`wails3 task run` 経由でアプリを起動**し、そのコマンドラインは固定で拡張できない。そこで各 OS の `run` タスク（`build/<os>/Taskfile.yml`）の起動行末尾に `$TEMPOC_ARGS` を付けてある — **タスク変数ではなく環境変数**なのは、dev から渡す唯一の経路がこれだから（`wails3 task` の CLI_ARGS 非対応は スキル [`tempoc-desktop-release`](../docs/skills/tempoc-desktop-release/SKILL.md) の macOS 署名の項も参照）。未設定なら空に展開されるだけ。ログの出力先は起動時のカレントなので、dev では `desktop/YYYY-MM-DD.log` に出る
 - バインディングの import パスはパッケージパス基準: `import { SettingsService } from '../bindings/changeme'`、`Settings` 型は `../bindings/changeme/settings`
+- **実機検証**（ビルドした exe を CDP で駆動し、画面操作なしで DOM・ウィンドウ状態を確かめる）の手順はスキル [`tempoc-desktop-verify`](../docs/skills/tempoc-desktop-verify/SKILL.md)
 
-## バージョン管理・アプリ情報
+## バージョン管理・リリース
 
-バージョンの**唯一の正は `desktop/version`**（テキスト1行）。`build/config.yml` の `info.version` と `frontend/package.json` の `version` はその写しで、**手で編集しない**。同期は `_cmd/version.go` が行う（`desktop/` から実行）:
+詳細（各項目の理由・経緯・手順）はスキル [`tempoc-desktop-release`](../docs/skills/tempoc-desktop-release/SKILL.md)。ビルド設定・アセット・リリースを触る前に読むこと。常に守る制約だけをここに置く:
 
-```bash
-go run ./_cmd/version.go 1.2.3   # 指定バージョンを全ファイルへ
-go run ./_cmd/version.go -bump   # patch/minor/major を対話選択（Enter=patch）
-go run ./_cmd/version.go         # version の現在値で他ファイルを再同期
-go run ./_cmd/version.go -print  # 現在値を表示するだけ（CI 用）
-```
-
-`frontend/package-lock.json` の `version` は**同期対象に含めていない**。ロック内の依存パッケージのバージョン行と同じインデント（6スペースの `"version": "..."`）で並んでおり、行パターンで置換すると全依存のバージョンを書き潰すため。ビルド時の `npm install`（`npm ci` ではない）が package.json に合わせて自動で書き直すので実害はなく、アプリの中身にも影響しない。
-
-`_cmd/` はアンダースコア始まりなので go ツールが `./...` から除外する。よってこのツールは `go build ./...` の対象外だが `go run ./_cmd/version.go` では動く。`main.go` の `//go:embed version` は **version ファイルが main.go と同じディレクトリにある必要がある**（ルートの `chrome-extension/version` は参照できない）。埋め込んだ値は起動ログ（`level=INFO msg=starting version=0.1.0`。開発ビルドのみ — 下記ログ方針参照）に出る。
-
-### exe 名（`APP_NAME`）
-
-exe 名は `Taskfile.yml` の `APP_NAME`（= `tempoc`）が決める。`config.yml` の `info:` には**バイナリ名を指定するキーが無い**ため（`name:` / `binary:` は存在しない）、`update build-assets` へは `-name` / `-binaryname` として渡される。よって `APP_NAME` を変えたら `wails3 task common:update:build-assets` → 再ビルドまでやらないと、生成済みアセット（NSIS の `INFO_PROJECTNAME`、Linux の `Exec`/`Icon`/`StartupWMClass`、darwin の `CFBundleExecutable`）が古い名前のまま残る。
-
-⚠️ **`APP_NAME` の変更は WebView2 のユーザーデータフォルダ（`%APPDATA%\<exe名>\EBWebView`）を変える**。旧フォルダのセッションは引き継がれないため、改名後の初回起動では claude.ai が未ログイン状態になり、一度ログインし直すことになる（`desktop` → `tempoc` の改名時も同様）。この挙動は `.claude/skills/tempoc-desktop-verify` にも別名 exe のスモークテスト手段として記載がある。
-
-### exe のメタデータ（`info:` → 各アセット）
-
-`build/config.yml` の `info:` が一元ソース。値の対応と「ユーザーに何として見えるか」は `.claude/skills/wails3/references/build-assets.md` を参照。**Windows のタスクバー／タスクマネージャの表示名は `description`（FileDescription）であって ProductName ではない**ため、`description` にはアプリの表示名を入れてある。
-
-再生成は**必ず Taskfile 経由**で行う:
-
-```bash
-wails3 task common:update:build-assets   # -name/-binaryname/-config/-dir を APP_NAME 込みで渡してくれる
-```
-
-**素の `wails3 update build-assets` を叩いてはいけない** — フラグが無いと全項目がテンプレート既定値で上書きされ、`windows/wails.exe.manifest` の `com.github.secondarykey.tempoc.desktop`（`productIdentifier` 由来）も失われる。
-
-### アイコン（`appicon.png` 一本。Assets.car は使わない）
-
-アイコンの正は **`build/appicon.png`（TEMPOC 独自アイコン）だけ**。`common:generate:icons` がここから `darwin/icons.icns` と `windows/icon.ico` を作る。
-
-⚠️ **`-iconcomposerinput` / `-macassetdir` を復活させてはいけない**（`build/Taskfile.yml` の `generate:icons`）。このフラグは Icon Composer 形式の `.icon` から `Assets.car`（アセットカタログ）を生成するが、**`Assets.car` が存在すると `update build-assets` が Info.plist に `CFBundleIconName` を書き込み**（`internal/commands/build-assets.go`）、macOS は**それを `CFBundleIconFile`（= `icons.icns`）より優先する**。テンプレート既定の `appicon.icon` は中身が **Wails のロゴ（`wails_icon_vector.svg`）のまま**だったため、macOS だけ TEMPOC ではなく Wails ロゴが表示されていた（2026-07 に `appicon.icon` と `Assets.car` を削除して解消）。
-
-- Info.plist の `CFBundleIconName` は**テンプレート側で条件付き**（`{{- if .CFBundleIconName}}`）で、`Assets.car` が無ければ書かれない。よって `update build-assets` を再実行しても**この修正は巻き戻らない**
-- Taskfile は `update build-assets` の再生成対象外（`updatable_build_assets` に含まれない）なので、`generate:icons` の編集も残る
-- 副次効果として **`actool` は一切呼ばれなくなった**（`-iconcomposerinput` 指定時のみ実行されるため）。skill pitfalls #11 の macOS CI クラッシュ要因も消えている
-- トレードオフ: **macOS 26 の Liquid Glass 階層アイコンには非対応**（従来形式）。対応したくなったら、Wails 既定ではなく **TEMPOC 用に作った `.icon` バンドル**を用意してからフラグを戻すこと
-
-### ⚠️ macOS の .app バンドルは毎回作り直す（codesign の detritus エラー）
-
-`build/darwin/Taskfile.yml` の `run`（= `wails3 dev` の起動段）と `create:app:bundle`（= `package`）は、テンプレート既定では**既存バンドルに上書きコピーするだけ**だった。そのため2回目以降は**すでに署名済みのバンドルを再署名**することになり、`codesign` が
-
-```
-replacing existing signature
-<bundle>: resource fork, Finder information, or similar detritus not allowed
-```
-
-で **exit 1** し、`run` の最終行（アプリの起動）に到達せず**起動しなくなる**（`wails3 dev` はその後 Vite を起動するので、一見動いているように見えるのが厄介）。
-
-対策として両タスクの先頭に **`rm -rf` でバンドルを消してから組み立て直す**のと、署名直前の **`xattr -cr`** を入れてある（`cp` は macOS で拡張属性を引き継ぐため）。**この2行を消さないこと。** 副次的に、生成されなくなったファイル（旧 `Assets.car` 等）がバンドル内に残り続ける問題も同時に防いでいる。`rm -rf` の対象は `bin/<name>.app` / `bin/<name>.dev.app` であって**ビルド成果物の `bin/<name>` 本体ではない**。
-
-**`build/windows/msix/` だけは例外で、`wails3 init` 時にしか生成されず update でも再生成されない**（＝手で直すと恒久的に残る一方、`config.yml` や `APP_NAME` を変えても自動追従しない）。`app_manifest.xml` / `template.xml` の表示名・exe 名・`Version="0.1.0.0"` は手で同期させてある。**バージョン番号は `_cmd/version.go` の同期対象外なので、MSIX で配布するなら bump のたびに手で直すこと**。現状の既定パッケージ形式は NSIS（`wails3 task windows:package`）で MSIX は使っていない。
-
-exe への焼き込みは `wails3 generate syso`（`windows:build` タスクが毎回実行）→ `.syso` を go build がリンク、という順で起こる。したがって `config.yml` を直しただけでは何も変わらず、`update build-assets` → 再ビルドまでやって初めて反映される。
-
-### リリース（自動。タグは手で打たない）
-
-2本のワークフローが直列に動く。**通常運用で必要なのは main に push することだけ**:
-
-1. `versionup-desktop.yml` — `desktop/**` を触る push で起動。次バージョンを決めて `go run ./_cmd/version.go` + `wails3 task common:update:build-assets` を実行し、bump を PR 経由で main にマージして `desktop-v<version>` タグを打つ
-2. `release-desktop.yml` — そのタグで起動。`verify`（タグ/version/info.json 一致チェック）→ `build`（`windows-latest` / `macos-15` / `ubuntu-latest` のマトリクスで各 OS ネイティブビルド）→ `release`（3成果物を1つの **draft** リリースへ添付）。成果物は Windows=`tempoc-desktop-<version>-windows-amd64.zip`（`windows:build` の `tempoc.exe`）、macOS=`…-darwin-arm64.zip`（`darwin:package` または署名 secrets がある場合は `darwin:sign:notarize` の `.app` を ditto 圧縮。下記「macOS の署名」参照。`macos-15`=Apple Silicon のネイティブ arm64。Intel は非対応 — universal 化するなら amd64 の CGO クロスが要る）、Linux=`…-linux-amd64.tar.gz`（`linux:build` の裸バイナリ）。**macOS ランナーは `macos-15` 固定**（リリースビルドの Xcode/macOS が勝手に変わらないように。元は `macos-latest`=macos-26 の `actool` クラッシュ回避＝skill pitfalls #11 だったが、下記のとおり actool は現在呼ばれない）。Linux ビルドは `WAILS_LINUX_DEPS`（GTK4/WebKitGTK）が必要
-
-**傍受ブリッジのマルチ OS 対応**: `inject.js` の page→Go 送信は WebView ごとに口が違う（Windows=`window.chrome.webview` / macOS・Linux=`window.webkit.messageHandlers.external`）。`sendToHost()` が実行時に検出して切り替える（**WebView2 を先に判定するので Windows は無変更**）。受信・`wails:` ルーティング・`ExecJS` の `runtimeLoaded` ゲートは Wails の共通コードなので **Go 側は無改修**。⚠️ ただし **macOS は注入が document-END**（`options.JS` が `WebViewDidFinishNavigation` で `execJS` される）で Windows の document-START と異なり、初回の usage リクエストを取り逃しうる（能動取得 `__tempocRefetch` で埋める想定）。詳細・調査根拠・実機確認の観点は **[`multios.md`](multios.md)**。mac/Linux の実機確認は未了。
-
-次バージョンの決め方は拡張と同じ規則: **`desktop/version` の値が未タグならその値をそのまま使い、タグ済みなら patch を上げる**。したがって **minor/major を上げたいときは `go run ./_cmd/version.go 0.2.0` して commit するだけでよい**（CI はその値を尊重してリリースする）。CI が bump する場合、生成アセットも一緒にコミットされる。
-
-CLI のバージョンは `.github/variables` の `WAILS_VERSION` に固定。**`go.mod` の `wails/v3` と一致させること**（CLI が bindings と .syso を生成するため、プレリリース間のズレは壊れる）。
-
-⚠️ **Linux で wails/v3 を import する物をコンパイルするには GTK4/WebKitGTK の開発パッケージが要る**。`internal/operatingsystem` が `#cgo linux pkg-config: gtk4 webkitgtk-6.0` を宣言しているため、**GUI をビルドしない `versionup-desktop` でも `go install .../cmd/wails3` の時点で失敗する**（`Package gtk4 was not found`）。パッケージ名は `.github/variables` の `WAILS_LINUX_DEPS` に `WAILS_VERSION` と並べて置いてある — **この2つは常にセットで更新すること**。alpha.84 で既定が GTK3/WebKit2（`libgtk-3-dev` / `webkit2gtk-4.1-dev`）から GTK4/WebKitGTK 6.0 に変わった前例がある（`.claude/skills/wails3/references/pitfalls.md` の 6）。
-
-### ⚠️ macOS の署名（未設定なら「壊れているため開けません」になる）
-
-`darwin:package` が最後に打つのは **ad-hoc 署名**（`codesign --sign -`）で、**ビルドしたマシンでしか通らない**。GitHub Releases からダウンロードすると macOS が `com.apple.quarantine` を付け、Gatekeeper が ad-hoc かつ未 notarize の `.app` を拒否して
-
-> 「"tempoc"は壊れているため開けません。ゴミ箱に入れる必要があります。」
-
-と出す。**バイナリは壊れていない**（`.claude/skills/wails3/references/macos-distribution.md` §1）。このメッセージが出たら真っ先に署名を疑うこと。
-
-`release-desktop.yml` は **secrets が揃っているときだけ Developer ID 署名 + notarize + staple** を行い、無ければ ad-hoc にフォールバックする（証明書が無い間もリリースを止めないため）。判定は `verify` ジョブの `macos_signing` output に一本化してあり、これは **macOS レグと `release` ジョブの両方が同じ答えを要る**ため（署名されていない回だけリリースノートに `xattr` の回避手順を出す）。必要な secrets:
-
-| Secret | 内容 |
-|---|---|
-| `MACOS_CERT_P12` | Developer ID Application 証明書（`.p12`）の base64 |
-| `MACOS_CERT_PASSWORD` | `.p12` 書き出し時のパスワード |
-| `MACOS_SIGN_IDENTITY` | `Developer ID Application: name (TEAMID)` |
-| `MACOS_NOTARY_APPLE_ID` / `MACOS_NOTARY_TEAM_ID` / `MACOS_NOTARY_PASSWORD` | notarytool の資格情報（password は **app-specific password**） |
-
-⚠️ **`build/darwin/Taskfile.yml` の `sign` / `sign:notarize` は `SIGN_IDENTITY` / `KEYCHAIN_PROFILE` を task 変数で受け取る**ように変更してある（テンプレート既定は `-- --identity ...` だった）。**`wails3 task` は CLI_ARGS を実装しておらず**、`--` で解析を打ち切って `KEY=VALUE` だけを変数にするため（`internal/commands/task.go`）、既定のままでは `{{.CLI_ARGS}}` が常に空に展開されて `wails3 tool sign` が `--identity is required` で落ちる。値は**呼び出しごとに渡す**こと（Taskfile に直書きしない）。Taskfile は `updatable_build_assets` に含まれないのでこの変更は `update build-assets` で巻き戻らない。
-
-CI は署名後に `codesign -dv` / `stapler validate` / `spctl -a -t exec` まで検証してからアーカイブする。**`codesign` が通っても `spctl` が reject することがある**（notarize 漏れ）ので、確認は必ず `spctl` まで。
-
-release 側の先頭には **タグ / `desktop/version` / `build/windows/info.json` の3者一致チェック**がある。exe のバージョンはタグではなく `info.json`（`config.yml` 由来）から焼かれるため、手で bump して `update build-assets` を忘れると中身が旧版のまま配布されうる。ズレていれば直し方を示してツールチェイン導入前に落ちる。
-
-### ⚠️ exe のバージョン情報の確認方法
-
-wails3 の syso はバージョンリソースを**言語ニュートラル（`0000`）**で埋め込む。このため .NET 経由（`(Get-Item x.exe).VersionInfo` / `[System.Diagnostics.FileVersionInfo]`）では**文字列が全て空に見えるが、壊れているわけではない**（FixedFileInfo の `FileMajorPart` 等だけは読める）。エクスプローラ・タスクバーが使うシェルプロパティでは正しく読めるので、検証はシェル経由で行う:
-
-```powershell
-$shell = New-Object -ComObject Shell.Application
-$folder = $shell.Namespace("<絶対パス>\desktop\bin")
-$item = $folder.ParseName("tempoc.exe")
-$folder.GetDetailsOf($item, 34)   # File description
-$folder.GetDetailsOf($item, 306)  # Product version
-```
-
-さらに Windows は FileDescription を exe のフルパス単位でキャッシュする（MuiCache / PCA）ため、更新しても古い表示名が残る。詳細と対処は `.claude/skills/wails3/references/pitfalls.md` の 14 を参照。
+- バージョンの**唯一の正は `desktop/version`**。`build/config.yml` の `info.version` と `frontend/package.json` の `version` は写しなので手で編集しない — 同期は `go run ./_cmd/version.go`（`desktop/` から）
+- リリースの流れ（自動・タグは手で打たない）は拡張と共通で、ルートの [`../AGENTS.md`](../AGENTS.md) の Versioning にある。minor/major は `go run ./_cmd/version.go 0.3.0` して commit する
+- ビルドアセットの再生成は**必ず `wails3 task common:update:build-assets`**。素の `wails3 update build-assets` はテンプレート既定値で全項目を上書きする
+- `config.yml` を直しただけでは exe に反映されない（update build-assets → 再ビルドが要る）。`APP_NAME` の変更は WebView2 のユーザーデータフォルダも変える（ログインが引き継がれない）
+- `build/Taskfile.yml` の `generate:icons` に `-iconcomposerinput` / `-macassetdir` を戻さない（macOS で Wails ロゴが出る）
+- `build/darwin/Taskfile.yml` の `rm -rf`（バンドル作り直し）と `xattr -cr` を消さない（2回目以降の codesign が落ちて起動しなくなる）
+- `.github/variables` の `WAILS_VERSION` は `go.mod` の `wails/v3` と一致させ、`WAILS_LINUX_DEPS` とは常にセットで更新する
+- macOS で「壊れているため開けません」が出たら、バイナリではなく署名（ad-hoc / notarize 漏れ）を疑う
+- exe のバージョン情報は .NET の `VersionInfo` では空に見える（言語ニュートラル埋め込み）。確認はシェルプロパティ経由
 
 ## 既知の制約・注意
 

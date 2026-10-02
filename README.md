@@ -12,6 +12,7 @@ Pick whichever fits how you work. Both read the same data from claude.ai and sho
 |---|---|---|
 | **Chrome extension** | Adds the bars directly to the claude.ai usage page you already open | [`chrome-extension/`](chrome-extension/README.md) |
 | **Desktop app** | A standalone, compact window (Windows) that stays visible while you work, without keeping a claude.ai tab open | [`desktop/`](desktop/README.md) |
+| **Claude Code plugin** | Bars above the prompt in Claude Code (terminal or the desktop app's Code tab), from the figures Claude Code already receives | [`claude-mods/`](claude-mods/README.md) |
 
 They are independent: install either, or both. Each has its own versions and releases — see the [Releases page](https://github.com/secondarykey/TEMPOC/releases), where extension builds are tagged `extension-v*` and desktop builds `desktop-v*`.
 

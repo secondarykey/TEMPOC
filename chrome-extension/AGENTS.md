@@ -1,6 +1,6 @@
-# chrome-extension/CLAUDE.md
+# chrome-extension/AGENTS.md
 
-This file documents the **Chrome extension** — one of the two modules in this repository. For the desktop app see [`../desktop/CLAUDE.md`](../desktop/CLAUDE.md); for the repo-wide layout see [`../CLAUDE.md`](../CLAUDE.md).
+This file documents the **Chrome extension** — one of the two modules in this repository. For the desktop app see [`../desktop/AGENTS.md`](../desktop/AGENTS.md); for the repo-wide layout see [`../AGENTS.md`](../AGENTS.md).
 
 ## Project Overview
 
@@ -30,9 +30,11 @@ Everything in this section is relative to `chrome-extension/`. The loadable exte
 | `scripts/versionup.py` | Run by `.github/workflows/versionup-extension.yml` on pushes to `main` that touch `chrome-extension/**`. Resolves its paths from its own location, so it works from any cwd |
 | `store-assets/` | Chrome Web Store listing images. Not part of the zip |
 
-Release tags for this module are `extension-v*` (e.g. `extension-v1.3.0`), and `.github/workflows/release-extension.yml` zips `src/` on those tags. Releases from before the repo split into modules were tagged `v*` (up to `v1.2.6`); those tags stay as they are and no longer trigger anything, but `versionup.py` still recognises them (`is_released()`) so that an already-released version is never re-released.
+Tags, the "`version` holds the *next* version" rule and the release pipeline are shared with the desktop and described once in the root [`AGENTS.md`](../AGENTS.md#versioning). What is specific to this module:
 
-**`version` holds the version to release next, not the last one released.** `versionup.py` bumps the patch only if that value is already tagged; otherwise it keeps it. So a minor or major release is started by editing `version` (and `src/manifest.json`) by hand — CI then releases exactly that value and has nothing to commit. Note that this path produces **no file diff**, which is why `versionup-extension.yml`'s tag step must not be gated on the change check; gating it there would silently skip the release. `1.3.0` was cut this way, for the split into modules.
+- A hand-edited minor/major bump must change **both** `version` and `src/manifest.json`.
+- `versionup.py` still recognises the pre-split `v*` tags (`is_released()`), so an already-released version is never re-released.
+- A hand-edited bump produces **no file diff** in CI (the value is used as-is), so `versionup-extension.yml`'s tag step must not be gated on the change check — gating it would silently skip the release.
 
 | File | World | Role |
 |---|---|---|
@@ -41,7 +43,7 @@ Release tags for this module are `extension-v*` (e.g. `extension-v1.3.0`), and `
 | `src/content.js` | MAIN | Injects UI and intercepts `window.fetch` |
 | `src/options.html` / `src/options.js` | Options page | Settings UI |
 | `src/i18n.js` | Options page | Locale resolution and message loading/applying for the options page |
-| `src/locales/*.json` | Options page | UI strings, one file per locale. **Synced copies of the repo-root `locales/` master — never edit here** (see the root `CLAUDE.md`, "Shared locale resources") |
+| `src/locales/*.json` | Options page | UI strings, one file per locale. **Synced copies of the repo-root `locales/` master — never edit here** (see the root `AGENTS.md`, "Shared locale resources") |
 | `src/tempoc.png` | — | Extension icon |
 
 `content.js` must run in `world: "MAIN"` to monkey-patch `window.fetch`. Since MAIN world cannot access `chrome.storage` or `chrome.runtime`, `bridge.js` runs in ISOLATED world as a relay.
@@ -137,7 +139,7 @@ Only the options page has translatable strings — the injected bars render date
 - **Locale selection**: `content.js` intercepts `/api/account_profile` and dispatches the account `locale`; `bridge.js` stores it as `chrome.storage.local.detectedLocale` (this relay predates i18n — the options page already used it for `Intl` preview formatting). `options.js` resolves it with `tempocResolveLocale()` (exact match → primary-language match → `en-US`) and falls back to `navigator.language` when claude.ai has not been visited yet.
 - **Applying**: elements carry `data-i18n="key"` attributes; `tempocApplyI18n()` replaces their text once the locale JSON is fetched. The English text baked into `options.html` is the pre-load fallback and must be kept in sync with `locales/en-US.json`.
 - **Loading**: `i18n.js` fetches `locales/<code>.json` relative to the options page (extension pages may fetch their own packaged resources; no `web_accessible_resources` needed). Supported codes are listed in `TEMPOC_LOCALES`, which must match the desktop's `SUPPORTED_LOCALES`.
-- **Adding a language or key**: edit the repo-root `locales/` master and run `python3 scripts/sync_locales.py`; for a new language also add its code to `TEMPOC_LOCALES` (and the desktop's `SUPPORTED_LOCALES`). Key parity across locales is enforced by the sync script (there is no build step here to catch it).
+- **Adding a language or key**: follow the [`tempoc-i18n`](../docs/skills/tempoc-i18n/SKILL.md) skill. Key parity across locales is enforced by the sync script (there is no build step here to catch it).
 
 ### Colors
 

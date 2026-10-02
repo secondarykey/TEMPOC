@@ -11,6 +11,8 @@ const isHidden = atom({ plugin: 'tempoc', key: 'isHidden' } as const, false)
 const HIDDEN_KEY = 'isHidden'
 // An hourglass, the status bar's button that brings the bars back.
 const SHOW_ICON = String.fromCharCode(0x29d7)
+// A circled i, the band's button that shows every window's figures in a toast.
+const INFO_ICON = String.fromCharCode(0x24d8)
 
 async function setHidden($: EngineInterface, value: boolean) {
   await update($, isHidden, () => value)
@@ -65,6 +67,14 @@ const remaining = (w: TempocWindow, at: number): string => {
   return d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`
 }
 
+/** The reset moment as a local clock time, with the date when it is not today. */
+const resetClock = (w: TempocWindow, at: number): string => {
+  if (w.resetsAt === null) return ''
+  const t = new Date(w.resetsAt)
+  const hm = `${t.getHours()}:${String(t.getMinutes()).padStart(2, '0')}`
+  return t.toDateString() === new Date(at).toDateString() ? hm : `${t.getMonth() + 1}/${t.getDate()} ${hm}`
+}
+
 async function publish($: EngineInterface, limits: SessionRateLimit[]) {
   if (limits.length === 0) return
   const list = limits.map(toWindow)
@@ -97,7 +107,9 @@ const readings = (list: TempocWindow[], at: number): Reading[] =>
       tone: level(w.percentUsed, elapsed) ?? 'accent',
       detail:
         `${label}: ${w.percentUsed.toFixed(0)}% used` +
-        (elapsed === null ? '' : `, ${elapsed.toFixed(0)}% elapsed, resets in ${remaining(w, at)}`),
+        (elapsed === null
+          ? ''
+          : `, ${elapsed.toFixed(0)}% elapsed, resets ${resetClock(w, at)} (in ${remaining(w, at)})`),
     }
   })
 
@@ -129,20 +141,28 @@ function svgBars(rows: Reading[]): string {
           ? ''
           : `<rect class="t" x="${(x + Math.min(span - TICK_W, (r.elapsed / 100) * span - TICK_W / 2)).toFixed(1)}" y="${(HEIGHT_PX - TICK_H) / 2}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb"/>`
       return (
+        `<g><title>${esc(r.detail)}</title>` +
+        `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
         `<rect class="k" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${span.toFixed(1)}" height="${TRACK_H}" fill="#4b5563"/>` +
         `<rect class="f${r.tone[0]}" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" fill="${PALETTE[r.tone][0]}"/>` +
-        tick
+        tick +
+        `</g>`
       )
     })
     .join('')
   const light =
     `.k{fill:#d1d5db}.t{fill:#374151}` +
     `.fa{fill:${PALETTE.accent[1]}}.fw{fill:${PALETTE.warning[1]}}.fe{fill:${PALETTE.error[1]}}`
+  // The Svg is drawn interactive so each bar's <title> shows as a tooltip. That
+  // puts it in a frame of its own; declaring both color schemes keeps the frame
+  // from painting an opaque page behind the bars.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="${HEIGHT_PX}" viewBox="0 0 ${VIEW_W} ${HEIGHT_PX}" preserveAspectRatio="none">` +
-    `<style>@media (prefers-color-scheme: light){${light}}</style>${body}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="${HEIGHT_PX}" viewBox="0 0 ${VIEW_W} ${HEIGHT_PX}" preserveAspectRatio="none" style="color-scheme: light dark; background: transparent">` +
+    `<style>:root{color-scheme: light dark; background: transparent}@media (prefers-color-scheme: light){${light}}</style>${body}</svg>`
   )
 }
+
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -185,8 +205,15 @@ export const register: Register = on => {
     return (
       <Box flexDirection="row" alignItems="center">
         <Box flexGrow={1} alignSelf="center">
-          <els.Svg source={svgBars(rows)} alt={rows.map(r => r.detail).join(' / ')} height={HEIGHT_PX} />
+          <els.Svg source={svgBars(rows)} alt={rows.map(r => r.detail).join(' / ')} height={HEIGHT_PX} isInteractive />
         </Box>
+        <Button
+          key="tempoc-detail"
+          plain
+          dimColor
+          label={INFO_ICON}
+          onPress={() => $.ui.toast(rows.map(r => r.detail).join('  /  '), { timeoutMs: 10_000 })}
+        />
         <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />
       </Box>
     )

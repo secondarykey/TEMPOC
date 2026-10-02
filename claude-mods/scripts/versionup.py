@@ -23,7 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 TAG_PREFIX = "mods-v"
-PLUGIN_MANIFEST = ROOT / "tempoc" / ".claude-plugin" / "plugin.json"
+PLUGIN_MANIFEST = ROOT / "usage-bar" / ".claude-plugin" / "plugin.json"
 
 
 def get_tags() -> set[str]:

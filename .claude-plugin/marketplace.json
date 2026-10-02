@@ -8,11 +8,11 @@
   },
   "plugins": [
     {
-      "name": "tempoc",
+      "name": "usage-bar",
       "source": {
         "source": "git-subdir",
         "url": "https://github.com/secondarykey/TEMPOC.git",
-        "path": "claude-mods/tempoc"
+        "path": "claude-mods/usage-bar"
       },
       "description": "Shows how far you are through Claude's usage windows: amount used vs. time elapsed, above the prompt"
     }

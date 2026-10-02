@@ -45,7 +45,7 @@ export type TempocDraft = {
 
 declare module 'claude-code' {
   interface PluginState {
-    tempoc: {
+    'usage-bar': {
       windows: TempocWindow[]
       view: TempocView
       settings: TempocSettings

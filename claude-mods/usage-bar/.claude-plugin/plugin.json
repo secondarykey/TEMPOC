@@ -1,5 +1,5 @@
 {
-  "name": "tempoc",
+  "name": "usage-bar",
   "version": "0.1.0",
   "description": "Shows how far you are through Claude's usage windows: amount used vs. time elapsed, above the prompt",
   "author": { "name": "secondarykey" },

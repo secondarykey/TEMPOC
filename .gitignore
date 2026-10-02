@@ -1,5 +1,6 @@
 .*
 !.gitignore
 !.github
+!.claude-plugin
 *.zip
 __pycache__/

@@ -9,7 +9,7 @@
 | プラットフォーム | ビルド | 傍受ブリッジ | 実機確認 |
 |---|---|---|---|
 | Windows (WebView2) | ✅ CI | ✅ 従来どおり（無変更） | ✅ 従来どおり |
-| macOS (WKWebView) | ✅ CI (`macos-15`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
+| macOS (WKWebView) | ✅ CI (`macos-latest`, arm64) | ✅ 実装済み | ✅ **確認済み**（`wails3 dev` で傍受・表示とも動作） |
 | Linux (WebKitGTK) | ✅ CI + 実機ビルド | ✅ 実装済み（mac と同一経路） | ✅ **全機能確認済み**（実機 Ubuntu）。ビルド・描画・claude.ai ログイン（再起動後の保持も）・使用量表示・傍受すべて動作。ただし起動には下記「既知の制約」1・2・4 の env が要る環境がある |
 
 Linux の傍受ブリッジは `window.webkit.messageHandlers.external` 経由で正しく機能する。**実機 Ubuntu でログインから使用量表示まで動作を確認済み**（ただし起動には下記「既知の制約」の 2 つ — 非特権 user namespace の有効化と `GSK_RENDERER=gl` — が要る）。WSL2 では claude.ai の Cloudflare 検査を通過できず使用量表示まで到達しなかったが、実機では問題なかった。

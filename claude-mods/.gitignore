@@ -1,8 +1,4 @@
-# The root .gitignore drops every dot-path. Claude Code reads a plugin's and a
-# marketplace's manifest only from `.claude-plugin/`, so keep those here.
-!.claude-plugin
-
 # Written by Claude Code when it loads a plugin from a local folder
-.claude-plugin/types/
-.claude/types/
+**/.claude-plugin/types/
+**/.claude/types/
 tsconfig.json

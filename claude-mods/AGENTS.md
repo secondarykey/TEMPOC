@@ -2,14 +2,14 @@
 
 Claude Code mods: plugins of **function hooks**. No build step: Claude Code compiles and runs each plugin's hooks module (`.tsx`) itself, in a sandbox of its own (no DOM, no Node; everything outside goes through the engine interface `$`). The API is early access: its authority is the `claude-code.d.ts` that Claude Code writes for the running build (`/plugin-types`, or the `plugin-authoring` skill). These notes were written against Claude Code 2.1.286.
 
-This directory is both the module and its distribution: a Claude Code **marketplace** whose plugins live in subdirectories. Everything the module needs stays under `claude-mods/`.
+This directory holds the module's plugins, one per subdirectory. They are distributed through a Claude Code **marketplace** whose catalog is the one file outside this directory: `.claude-plugin/marketplace.json` at the repository root (see below for why).
 
 ## Layout
 
 | Path | Role |
 |---|---|
-| `.claude-plugin/marketplace.json` | The marketplace, `tempoc`. Each entry's `source` is `git-subdir` (this repo, `claude-mods/<plugin>`), so the catalog works when added by its raw URL, where a relative source would not |
-| `.gitignore` | Re-includes `.claude-plugin/` (the root `.gitignore` drops every dot-path) and drops what Claude Code writes when it loads a plugin from a local folder |
+| `../.claude-plugin/marketplace.json` | The marketplace, `tempoc`, at the repository root. Each entry's `source` is `git-subdir` (this repo, `claude-mods/<plugin>`), so the catalog also works when added by the raw URL of the file, where a relative source would not |
+| `.gitignore` | Drops what Claude Code writes when it loads a plugin from a local folder. The root `.gitignore` re-includes every `.claude-plugin/` (it drops every other dot-path) |
 | `tempoc/.claude-plugin/plugin.json` | Plugin manifest: `name` (must match the marketplace entry's), `version`, `types` |
 | `tempoc/hooks/hooks.json` | Names the one hooks module |
 | `tempoc/hooks/register.tsx` | The module |
@@ -17,15 +17,15 @@ This directory is both the module and its distribution: a Claude Code **marketpl
 | `scripts/versionup.py` | Computes the version and writes it to `version` and `tempoc/.claude-plugin/plugin.json` |
 | `tempoc/types/index.d.ts` | Contract for the `$.state` values the module keeps; `claude plugin validate` holds every state key the module names to it |
 
-Why two `.claude-plugin/` directories: a plugin's folder is copied whole to each user's machine on install, so `tempoc/` holds only what ships, while `claude-mods/` holds the catalog and the repository's own documents, which never ship. A flat layout (both manifests in one `.claude-plugin/`) also works, but would ship `README.md` and `AGENTS.md` with the plugin.
+Why the catalog sits at the repository root: Claude Code reads manifests only from directories named exactly `.claude-plugin/`, and adding a marketplace by repository (`/plugin marketplace add secondarykey/TEMPOC`, or the same from a plugin browser) reads only the repo-root `.claude-plugin/marketplace.json`. No add command takes a path inside the repository; only `extraKnownMarketplaces` in settings does. With the catalog under `claude-mods/`, users had to add it by the file's raw URL, and a plugin browser that adds by repository could not reach it.
 
-Claude Code reads manifests only from directories named exactly `.claude-plugin/`. `/plugin marketplace add owner/repo` reads only a repo-root `.claude-plugin/`, which is why users add this marketplace by the raw URL of its `marketplace.json` (see `README.md`).
+Why two `.claude-plugin/` directories: a plugin's folder is copied whole to each user's machine on install, so `tempoc/` holds only what ships, while the catalog and the module's own documents never ship.
 
 ## Versioning
 
 `version` is the source of truth; `tempoc/.claude-plugin/plugin.json` carries a copy, because that is where Claude Code reads the plugin's version, and users receive a change only when that value changes (Claude Code keeps an installed copy per version and ignores new commits under the same one).
 
-`.github/workflows/versionup-mods.yml` runs on a push to `main` that touches `tempoc/**` or `version`: `scripts/versionup.py` keeps an untagged `version` or bumps the patch of a tagged one, writes both files, merges the bump through a PR, and tags `mods-v<version>`. There is no release workflow: the bump reaching `main` is the release. Edit `version` by hand to start a minor or major one. A change to the catalog or the docs alone is no release.
+`.github/workflows/versionup-mods.yml` runs on a push to `main` that touches `tempoc/**` or `version`: `scripts/versionup.py` keeps an untagged `version` or bumps the patch of a tagged one, writes both files, merges the bump through a PR, and tags `mods-v<version>`. There is no release workflow: the bump reaching `main` is the release. Edit `version` by hand to start a minor or major one. A change to the catalog (`../.claude-plugin/`) or the docs alone is no release.
 
 ## tempoc: data
 

@@ -20,6 +20,7 @@ This repository holds **independent modules**. They share no code and have separ
 
 | Path | Role |
 |---|---|
+| `.claude-plugin/` | The Claude Code marketplace catalog of `claude-mods/` (`marketplace.json`). It belongs to that module but has to sit at the root: adding a marketplace by repository reads only the root. See [`claude-mods/AGENTS.md`](claude-mods/AGENTS.md) |
 | `.github/workflows/` | CI for both modules. Each file is named `<job>-<module>.yml` and its tag pattern / `paths:` filter keeps it from firing for the other module |
 | `.github/variables` | Pinned tool versions shared by workflows (currently `WAILS_VERSION`). Loaded with `grep -E '^[A-Z_]+=' .github/variables >> "$GITHUB_ENV"` — plain `cat` would choke on the file's comments |
 | `docs/skills/` | Task procedures and references, one directory per skill (`<name>/SKILL.md` with `name` / `description` frontmatter). Read the matching skill before doing that task: `tempoc-i18n` (languages and message keys, both modules), `tempoc-desktop-release` (desktop versioning, build assets, release, signing), `tempoc-desktop-ui` (desktop bar display and settings keys), `tempoc-desktop-verify` (driving the built desktop exe over CDP). Agents that load skills from their own directory (e.g. `.claude/skills/`) can link it here locally; that link is not committed |

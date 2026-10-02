@@ -14,26 +14,21 @@ It runs inside Claude Code only: the terminal, and the Code tab of the Claude de
 
 ## Install
 
-Installing takes two steps: register this repository's catalog of plugins (the *marketplace*, named `tempoc`), then install the one plugin it lists (`tempoc@tempoc`). The bars appear in the next session.
+Installing takes two steps: register this repository as a marketplace (a catalog of plugins, named `tempoc`), then install the one plugin it lists (`tempoc@tempoc`). The bars appear in the next session.
 
 **In the terminal**, in a Claude Code session:
 
 ```
-/plugin marketplace add https://raw.githubusercontent.com/secondarykey/TEMPOC/main/claude-mods/.claude-plugin/marketplace.json
+/plugin marketplace add secondarykey/TEMPOC
 /plugin install tempoc@tempoc
 ```
 
 The second line opens the plugin's details in the `/plugin` panel; choose a scope there (*Install for you* puts it in every project).
 
-**In the desktop app's Code tab**, typing `/plugin` opens the plugin browser instead of taking arguments, and the browser has no place to add a marketplace by URL. Register the marketplace from a shell, where the `claude` command is available:
+**In the desktop app's Code tab**, add the marketplace `secondarykey/TEMPOC` from the plugin browser (**+** next to the prompt box, then **Plugins**), and install `tempoc` from it. From a shell, the same two steps are:
 
 ```
-claude plugin marketplace add https://raw.githubusercontent.com/secondarykey/TEMPOC/main/claude-mods/.claude-plugin/marketplace.json
-```
-
-Then click **+** next to the prompt box, choose **Plugins → Add plugin**, and select `tempoc`. Or skip the browser and install from the shell as well:
-
-```
+claude plugin marketplace add secondarykey/TEMPOC
 claude plugin install tempoc@tempoc
 ```
 

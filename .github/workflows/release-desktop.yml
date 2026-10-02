@@ -83,12 +83,13 @@ jobs:
         include:
           - os: windows-latest
             target: windows
-          # Pinned, not macos-latest, so the macOS/Xcode version can't change
-          # under us without a commit. (The original reason was the actool crash
-          # on macos-26 -- wails3 skill pitfalls #11 -- which no longer applies
-          # now that generate:icons builds no asset catalog, but a pinned image
-          # is still what we want for a release build.)
-          - os: macos-15
+          # Was pinned to macos-15 because generate:icons failed on macos-26
+          # with "failed to run actool". That was never an Xcode/runner problem:
+          # it was a missing appicon.icon handed to -iconcomposerinput, which
+          # Wails only reads on macOS 26+ (wails3 skill pitfalls #11), and
+          # generate:icons no longer passes that flag. So the pin bought nothing.
+          # If macOS breaks again, check what macos-latest points at first.
+          - os: macos-latest
             target: darwin
           - os: ubuntu-latest
             target: linux
@@ -186,7 +187,7 @@ jobs:
 
           security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
-      # Native arm64 only. macos-15 is Apple Silicon; an amd64 slice would be a
+      # Native arm64 only. macos-latest is Apple Silicon; an amd64 slice would be a
       # CGO cross-compile against the universal SDK (possible, but unverified
       # here and moot while the app is non-functional on macOS).
       #

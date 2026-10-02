@@ -29,7 +29,7 @@ The color thresholds can be changed per window, with the same meaning and defaul
 | `utilization_warning` | `98` | Usage percent that turns any bar Warning color |
 | `utilization_danger` | `100` | Usage percent that turns any bar Danger color |
 
-In the Claude Code CLI they are rows in `/config`. They are stored in `~/.claude/settings.json` under `pluginConfigs`, which can also be edited directly:
+Change them from the gear in the band, or with `/tempoc`, which opens the same settings pane. In the Claude Code CLI they are also rows in `/config`. They are stored in `~/.claude/settings.json` under `pluginConfigs`, which can also be edited directly:
 
 ```json
 {

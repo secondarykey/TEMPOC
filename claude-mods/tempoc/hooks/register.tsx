@@ -11,10 +11,34 @@ const isHidden = atom({ plugin: 'tempoc', key: 'isHidden' } as const, false)
 const HIDDEN_KEY = 'isHidden'
 // An hourglass, the status bar's button that brings the bars back.
 const SHOW_ICON = String.fromCharCode(0x29d7)
-// Pixels per cell of the desktop's code font, and the cells the band's close
-// button takes: together they turn the band's width in cells into pixels.
+// Pixels per cell of the desktop's code font, and the cells the band's gear and close
+// buttons take: together they turn the band's width in cells into pixels.
 const CELL_PX = 8.4
-const CLOSE_COLUMNS = 4
+const CLOSE_COLUMNS = 7
+
+// The settings pane, opened by the band's gear or by /tempoc.
+const SETTINGS_PANE = 'tempoc-settings'
+const GEAR_ICON = String.fromCharCode(0x2699)
+
+/** Writes one of this plugin's options as the /config menu would; the module then reloads with it. */
+async function setOption($: EngineInterface, field: string, value: number | boolean) {
+  const row = (await $.config.list()).find(r => r.key.startsWith('tempoc') && r.key.endsWith(`.${field}`))
+  if (!row) {
+    $.ui.toast(`TEMPOC: ${field} is not a setting here`)
+    return
+  }
+  const { deny } = await $.config.set({ key: row.key, value })
+  if (deny) $.ui.toast(`TEMPOC: ${deny}`)
+}
+
+async function setPercentOption($: EngineInterface, field: string, text: string) {
+  const value = Number(text.trim())
+  if (text.trim() === '' || !Number.isFinite(value) || value < 0 || value > 100) {
+    $.ui.toast('TEMPOC: 0-100')
+    return
+  }
+  await setOption($, field, value)
+}
 
 async function setHidden($: EngineInterface, value: boolean) {
   await update($, isHidden, () => value)
@@ -321,7 +345,80 @@ export const register: Register = (on, options) => {
     }
     await redraw()
 
+    await $.command.register({ name: 'tempoc', description: 'Change when the TEMPOC bars turn Warning or Danger color' })
+
     return result
+  })
+
+  on('command.run', { command: 'tempoc' }, async $ => {
+    await $.ui.open({ id: SETTINGS_PANE, title: 'TEMPOC', focus: true, closeOnEscape: true })
+    return { text: 'TEMPOC settings opened.' }
+  })
+
+  // The settings: per window, whether to color the bar and the points at which
+  // it turns Warning and Danger; then the usage levels that turn any bar. Each
+  // change is written as an option, and the reload it causes redraws the bars.
+  on('ui.render', { component: 'Pane', requestId: SETTINGS_PANE }, async ($, e) => {
+    const els = $.ui.resolve(e)
+    const { Box, Text, Button } = els
+    if (!('Input' in els) || !('Select' in els)) return <Text dimColor>-</Text>
+    const { Input, Select } = els
+
+    const onOff = [
+      { value: 'on', label: 'On' },
+      { value: 'off', label: 'Off' },
+    ]
+    const windowRow = (prefix: string, kind: string, label: string) => {
+      const t = thresholdsOf(kind)
+      return (
+        <Box key={prefix} flexDirection="row" alignItems="center" gap={2}>
+          <Text bold>{label}</Text>
+          <Select
+            key={`${prefix}_color_enabled`}
+            label="Color"
+            options={onOff}
+            value={t.isEnabled ? 'on' : 'off'}
+            onSelect={v => void setOption($, `${prefix}_color_enabled`, v === 'on')}
+          />
+          <Input
+            key={`${prefix}_warning`}
+            label="Warning"
+            value={String(t.warning)}
+            onSubmit={v => void setPercentOption($, `${prefix}_warning`, v)}
+          />
+          <Input
+            key={`${prefix}_danger`}
+            label="Danger"
+            value={String(t.danger)}
+            onSubmit={v => void setPercentOption($, `${prefix}_danger`, v)}
+          />
+        </Box>
+      )
+    }
+    const shared = thresholdsOf('five_hour')
+
+    return (
+      <Box flexDirection="column" gap={1}>
+        {windowRow('hour5', 'five_hour', '5h')}
+        {windowRow('day7', 'seven_day', '7d')}
+        <Box flexDirection="row" alignItems="center" gap={2}>
+          <Text bold>Usage</Text>
+          <Input
+            key="utilization_warning"
+            label="Warning"
+            value={String(shared.utilizationWarning)}
+            onSubmit={v => void setPercentOption($, 'utilization_warning', v)}
+          />
+          <Input
+            key="utilization_danger"
+            label="Danger"
+            value={String(shared.utilizationDanger)}
+            onSubmit={v => void setPercentOption($, 'utilization_danger', v)}
+          />
+        </Box>
+        <Button key="tempoc-settings-close" role="dismiss" label="Close" onPress={() => void $.ui.close({ id: SETTINGS_PANE })} />
+      </Box>
+    )
   })
 
   // Submitting a prompt remounts the band on the desktop, and a remounted frame
@@ -373,6 +470,13 @@ export const register: Register = (on, options) => {
             isInteractive
           />
         </Box>
+        <Button
+          key="tempoc-gear"
+          plain
+          dimColor
+          label={GEAR_ICON}
+          onPress={() => void $.ui.open({ id: SETTINGS_PANE, title: 'TEMPOC', focus: true, closeOnEscape: true })}
+        />
         <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />
       </Box>
     )

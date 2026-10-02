@@ -13,6 +13,8 @@ This directory is both the module and its distribution: a Claude Code **marketpl
 | `tempoc/.claude-plugin/plugin.json` | Plugin manifest: `name` (must match the marketplace entry's), `version`, `types` |
 | `tempoc/hooks/hooks.json` | Names the one hooks module |
 | `tempoc/hooks/register.tsx` | The module |
+| `version` | The next version, the source of truth (see Versioning) |
+| `scripts/versionup.py` | Computes the version and writes it to `version` and `tempoc/.claude-plugin/plugin.json` |
 | `tempoc/types/index.d.ts` | Contract for the `$.state` values the module keeps; `claude plugin validate` holds every state key the module names to it |
 
 Why two `.claude-plugin/` directories: a plugin's folder is copied whole to each user's machine on install, so `tempoc/` holds only what ships, while `claude-mods/` holds the catalog and the repository's own documents, which never ship. A flat layout (both manifests in one `.claude-plugin/`) also works, but would ship `README.md` and `AGENTS.md` with the plugin.
@@ -21,7 +23,9 @@ Claude Code reads manifests only from directories named exactly `.claude-plugin/
 
 ## Versioning
 
-Not in the repo's release pipelines (no `version` file, no workflows, no tag). Users receive a change only when `version` in `tempoc/.claude-plugin/plugin.json` changes: Claude Code keeps an installed copy per version and does not pick up new commits under the same one. Bump it with every change meant for users.
+`version` is the source of truth; `tempoc/.claude-plugin/plugin.json` carries a copy, because that is where Claude Code reads the plugin's version, and users receive a change only when that value changes (Claude Code keeps an installed copy per version and ignores new commits under the same one).
+
+`.github/workflows/versionup-mods.yml` runs on a push to `main` that touches `tempoc/**` or `version`: `scripts/versionup.py` keeps an untagged `version` or bumps the patch of a tagged one, writes both files, merges the bump through a PR, and tags `mods-v<version>`. There is no release workflow: the bump reaching `main` is the release. Edit `version` by hand to start a minor or major one. A change to the catalog or the docs alone is no release.
 
 ## tempoc: data
 

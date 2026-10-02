@@ -12,7 +12,7 @@ This repository holds **independent modules**. They share no code and have separ
 |---|---|---|
 | `chrome-extension/` | Manifest V3 Chrome extension that injects progress bars into the claude.ai usage page | [`chrome-extension/AGENTS.md`](chrome-extension/AGENTS.md) |
 | `desktop/` | Standalone Wails v3 desktop app (Windows) that renders the same data in its own frameless React window, loading claude.ai in a hidden WebView | [`desktop/AGENTS.md`](desktop/AGENTS.md) |
-| `claude-mods/` | Claude Code mods (plugins of function hooks) and the marketplace that distributes them. `tempoc` draws the bars above the prompt from the rate-limit windows Claude Code itself receives. Prototype: not in the locale or versioning pipelines below; users update when its `plugin.json` version changes | [`claude-mods/AGENTS.md`](claude-mods/AGENTS.md) |
+| `claude-mods/` | Claude Code mods (plugins of function hooks) and the marketplace that distributes them. `tempoc` draws the bars above the prompt from the rate-limit windows Claude Code itself receives. Not in the locale pipeline below; versioned like the others but released differently (see Versioning) | [`claude-mods/AGENTS.md`](claude-mods/AGENTS.md) |
 
 **Read the module's own guide before working in it.** Each covers that module's architecture, settings, build commands, and constraints. This file covers only what spans both.
 
@@ -51,7 +51,8 @@ Consequences to keep in mind:
   |---|---|
   | `[skip versionup:extension]` | releases desktop only |
   | `[skip versionup:desktop]` | releases the extension only |
-  | `[skip versionup]` | releases neither (what the automated bump merges use) |
+  | `[skip versionup:mods]` | holds off the Claude Code mods (they read no locales, so only this marker or the one below stops them) |
+  | `[skip versionup]` | releases none of the modules (what the automated bump merges use) |
 
   **The markers are read from the head commit of the push**, which in the normal PR flow is the *merge commit* — put them in the merge subject (`gh pr merge --subject`). A marker on a branch commit is never seen. **Skipping defers, it does not drop**: the synced copy stays on `main` and goes out with that module's next release.
 - Key completeness is enforced per module: `sync_locales.py` compares every locale against `en-US.json` (keys and `{token}` placeholders) *and* checks that every key the extension's options page references exists there; the desktop build checks its own keys via `RawMessages`. The extension's keys are deliberately **not** listed in `RawMessages` — borrowing the type check that way would make every shared wording change look like a desktop change to `locale_impact.py`.
@@ -59,20 +60,23 @@ Consequences to keep in mind:
 
 ## Versioning
 
-The two modules version independently, and **each release tag is namespaced by module** so that one module's tag can never trigger the other's release workflow:
+The modules version independently, and **each release tag is namespaced by module** so that one module's tag can never trigger another's release workflow:
 
 | Module | Tag | Source of truth | Release artifact |
 |---|---|---|---|
 | `chrome-extension/` | `extension-v*` | `chrome-extension/version` | zip of `src/` |
 | `desktop/` | `desktop-v*` | `desktop/version` | per-OS: `tempoc.exe` zip (Windows), `.app` zip (macOS arm64), binary tarball (Linux) |
+| `claude-mods/` | `mods-v*` | `claude-mods/version` | none: users install from `main` through the marketplace (see below) |
 
 Tags of the form `v*` are pre-split extension releases (up to `v1.2.6`). They are left in place but trigger nothing; only `chrome-extension/scripts/versionup.py` still reads them, so that the next version computed after `v1.2.6` is `1.2.7`. Do not add new `v*` tags.
 
-**Both modules release automatically; no tag is ever pushed by hand.** Each module has the same pair of workflows, distinguished only by its `paths:` filter and tag prefix:
+**Every module releases automatically; no tag is ever pushed by hand.** The extension and the desktop have the same pair of workflows, distinguished only by its `paths:` filter and tag prefix:
 
 1. `versionup-<module>.yml` — on a push to `main` touching that module, computes the next version, commits the bump through a PR it merges itself, and pushes the module's tag.
 2. `release-<module>.yml` — on that tag, builds and attaches the artifact to a **draft** release.
 
 The version file holds the *next* version: if its value is already tagged, the bump is a patch; if not, the value is used as-is. **Editing `<module>/version` by hand is therefore how a minor or major release is started** — commit the new value and the pipeline releases exactly it. (For the desktop, make that edit with `go run ./_cmd/version.go <version>` so that its copies stay in sync; see `desktop/AGENTS.md`.)
 
-The two differ in what a bump has to touch. The extension's version lives in two files (`version`, `src/manifest.json`) and `versionup.py` writes both. The desktop's exe metadata is baked from `build/config.yml` into generated assets at build time, so its bump additionally runs `wails3 update build-assets`, and the regenerated assets get committed with the bump. `release-desktop.yml` re-checks that the tag, `desktop/version` and the committed `build/windows/info.json` all agree, and refuses to build otherwise — that guard exists because a hand-edited version bump that skips `update build-assets` would otherwise ship an exe whose version disagrees with its release.
+`claude-mods/` has only the first, `versionup-mods.yml`, filtered to what ships (`claude-mods/tempoc/**` and `claude-mods/version`) and held off by `[skip versionup:mods]`. It has no release workflow and no artifact: Claude Code installs the plugin straight from `main`, and hands users a change only when the version in `claude-mods/tempoc/.claude-plugin/plugin.json` changes. So the bump reaching `main` *is* the release; the `mods-v*` tag only marks the version as taken. `claude-mods/scripts/versionup.py` writes both `version` and that `plugin.json`.
+
+The extension and the desktop differ in what a bump has to touch. The extension's version lives in two files (`version`, `src/manifest.json`) and `versionup.py` writes both. The desktop's exe metadata is baked from `build/config.yml` into generated assets at build time, so its bump additionally runs `wails3 update build-assets`, and the regenerated assets get committed with the bump. `release-desktop.yml` re-checks that the tag, `desktop/version` and the committed `build/windows/info.json` all agree, and refuses to build otherwise — that guard exists because a hand-edited version bump that skips `update build-assets` would otherwise ship an exe whose version disagrees with its release.

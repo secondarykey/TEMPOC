@@ -1,0 +1,114 @@
+name: Version Up (Claude Code mods)
+
+on:
+  push:
+    branches: [main]
+    # Only what reaches users: the plugin's own files (copied to each user's
+    # machine on install) and the version file. The catalog and the docs under
+    # claude-mods/ never ship, so a change to them is no release.
+    paths:
+      - "claude-mods/tempoc/**"
+      - "claude-mods/version"
+  # Lets a bump be retried without a dummy commit -- e.g. after fixing GH_PAT.
+  workflow_dispatch:
+
+# There is no release workflow: users install the plugin straight from main
+# through claude-mods/.claude-plugin/marketplace.json, and Claude Code hands
+# them a change only when the version in plugin.json changes. So "releasing"
+# a mod is this bump reaching main; the mods-v* tag marks the version as
+# taken, which is what makes the next bump a patch.
+jobs:
+  versionup:
+    # `[skip versionup]` holds off every module (the bump merges use it) and
+    # `[skip versionup:mods]` holds off this one. NOTE: this reads the *head
+    # commit of the push*, which for the usual PR flow is the merge commit; put
+    # the marker in the merge subject (`gh pr merge --subject`).
+    if: >-
+      !contains(github.event.head_commit.message, '[skip versionup]') &&
+      !contains(github.event.head_commit.message, '[skip versionup:mods]')
+    # Shared with the other versionup workflows -- see versionup-desktop.yml.
+    concurrency:
+      group: versionup
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_PAT }}
+
+      # The same token as the other modules' bumps use to open and merge their
+      # PRs. This repo is public, so checkout above passes with an empty one;
+      # fail here, readably, rather than at `gh pr create`.
+      - name: Check GH_PAT
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::secrets.GH_PAT is empty or unset. Add it under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Compute and apply version
+        id: versionup
+        run: python claude-mods/scripts/versionup.py
+
+      - name: Check for file changes
+        id: changes
+        run: |
+          if git diff --quiet claude-mods/version claude-mods/tempoc/.claude-plugin/plugin.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit on release branch
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BRANCH="release/mods-v${{ steps.versionup.outputs.version }}"
+          git checkout -b "$BRANCH"
+          git add claude-mods/version claude-mods/tempoc/.claude-plugin/plugin.json
+          git commit -m "chore(claude-mods): bump version to ${{ steps.versionup.outputs.version }} [skip versionup]"
+          git push origin "$BRANCH"
+
+      - name: Create PR and merge to main
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          BRANCH="release/mods-v${{ steps.versionup.outputs.version }}"
+          VERSION="${{ steps.versionup.outputs.version }}"
+          gh pr create --base main --head "$BRANCH" \
+            --title "chore(claude-mods): bump version to $VERSION" \
+            --body "Automated version bump of the Claude Code mods to $VERSION"
+          gh pr merge "$BRANCH" --merge --delete-branch \
+            --subject "chore(claude-mods): bump version to $VERSION [skip versionup]"
+
+      # Deliberately not gated on `changed`: when claude-mods/version was bumped
+      # by hand (a minor/major release), versionup.py finds it untagged and keeps
+      # it, so there is nothing to commit -- but the tag still has to be pushed,
+      # or the next bump would reuse the version. Safe to re-run.
+      - name: Push tag
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          TAG="mods-v${{ steps.versionup.outputs.version }}"
+          if gh api "repos/${{ github.repository }}/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists, skipping."
+          else
+            SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+            gh api "repos/${{ github.repository }}/git/refs" \
+              -f ref="refs/tags/$TAG" \
+              -f sha="$SHA"
+            echo "Created tag $TAG at $SHA"
+          fi

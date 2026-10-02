@@ -25,7 +25,14 @@ Installing takes two steps: register this repository as a marketplace (a catalog
 
 The second line opens the plugin's details in the `/plugin` panel; choose a scope there (*Install for you* puts it in every project).
 
-**In the desktop app's Code tab**, add the marketplace `secondarykey/TEMPOC` from the plugin browser (**+** next to the prompt box, then **Plugins**), and install `usage-bar` from it. From a shell, the same two steps are:
+**In the desktop app's Code tab**, use the plugin browser:
+
+1. Click **+** below the prompt box and choose **Add plugins**.
+2. Open **Add** at the top right and choose **Add marketplace**, then **Add from a repository**.
+3. Type `secondarykey/TEMPOC` and pick **TEMPOC** from the suggestions.
+4. Press **Add** next to **Usage bar** in the list.
+
+From a shell, the same two steps are:
 
 ```
 claude plugin marketplace add secondarykey/TEMPOC
@@ -41,7 +48,7 @@ To remove it, in the terminal:
 /plugin marketplace remove tempoc
 ```
 
-or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin marketplace remove tempoc`. In the desktop app, **+ → Plugins → Manage plugins** uninstalls the plugin too.
+or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin marketplace remove tempoc`. Removing the marketplace also uninstalls the plugin and deletes its saved settings.
 
 ## Using it
 

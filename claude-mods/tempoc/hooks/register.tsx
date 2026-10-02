@@ -5,6 +5,17 @@ import type { TempocWindow } from '../types'
 
 const windows = atom({ plugin: 'tempoc', key: 'windows' } as const, [] as TempocWindow[])
 const now = atom({ plugin: 'tempoc', key: 'now' } as const, 0)
+const isHidden = atom({ plugin: 'tempoc', key: 'isHidden' } as const, false)
+
+// Whether the person closed the bars, kept across sessions like the reading.
+const HIDDEN_KEY = 'isHidden'
+// An hourglass, the status bar's button that brings the bars back.
+const SHOW_ICON = String.fromCharCode(0x29d7)
+
+async function setHidden($: EngineInterface, value: boolean) {
+  await update($, isHidden, () => value)
+  await $.store.set(HIDDEN_KEY, value)
+}
 
 // The last reading is kept across sessions, so a new session shows the bars
 // before its first response; elapsed time is computed from the clock anyway.
@@ -138,6 +149,7 @@ export const register: Register = on => {
 
     const stored = await $.store.get(STORE_KEY)
     if (Array.isArray(stored)) await update($, windows, () => stored as TempocWindow[])
+    if ((await $.store.get(HIDDEN_KEY)) === true) await update($, isHidden, () => true)
     await publish($, (await $.session.usage()).rateLimits)
 
     const tick = async () => {
@@ -157,16 +169,42 @@ export const register: Register = on => {
 
   // The bars sit in the band above the prompt: the only site that draws an Svg.
   // The figures stay out of sight; the Svg's alt carries them for readers.
+  // The band's close button hides it; the status bar then offers it back.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const list = await read($, windows)
-    if (e.props.hasSurvey || list.length === 0) return next(e)
+    if (e.props.hasSurvey || list.length === 0 || (await read($, isHidden))) return next(e)
 
     const els = $.ui.resolve(e)
     if (!('Svg' in els)) return next(e)
 
     const at = (await read($, now)) || (await $.clock.now())
     const rows = readings(list, at)
+    const { Box, Button } = els
 
-    return <els.Svg source={svgBars(rows)} alt={rows.map(r => r.detail).join(' / ')} height={HEIGHT_PX} />
+    return (
+      <Box flexDirection="row" alignItems="center">
+        <Box flexGrow={1}>
+          <els.Svg source={svgBars(rows)} alt={rows.map(r => r.detail).join(' / ')} height={HEIGHT_PX} />
+        </Box>
+        <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />
+      </Box>
+    )
+  })
+
+  // While the band is closed, the status bar carries one button to reopen it.
+  on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {
+    if (!(await read($, isHidden)) || (await read($, windows)).length === 0) return next(e)
+
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const reopen = (
+      <Button key="tempoc-show" plain dimColor label={SHOW_ICON} onPress={() => setHidden($, false)} />
+    )
+    if (e.props.modes.length === 0) return reopen
+    return (
+      <Box flexDirection="row">
+        <Text dimColor>{e.props.modes.join(' & ')}</Text>
+        {reopen}
+      </Box>
+    )
   })
 }

@@ -2,6 +2,8 @@
 
 A Claude Code plugin (a "mod") that draws TEMPOC's bars in the band directly above the prompt, across its whole width: the 5-hour window on the left half, the 7-day window on the right. Each bar fills to how much you have used, with a tick where the window's elapsed time is. There is no text; the figures are in the bars' accessible description.
 
+Close the bars with the band's × to give the room back; an hourglass button then appears in the status bar under the prompt, and pressing it brings the bars back. The choice is kept across sessions.
+
 The bar turns Warning color once usage is ahead of elapsed time, and Danger color once it is more than 10 points ahead — the same defaults as the extension and the desktop app.
 
 It runs inside Claude Code only: the terminal, and the Code tab of the Claude desktop app. It does not change the claude.ai website or the desktop app's chat.

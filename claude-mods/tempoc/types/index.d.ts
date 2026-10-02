@@ -14,6 +14,8 @@ declare module 'claude-code' {
       windows: TempocWindow[]
       /** Epoch milliseconds the elapsed bars are drawn against. */
       now: number
+      /** True while the person has closed the bars; the status bar offers them back. */
+      isHidden: boolean
     }
   }
 }

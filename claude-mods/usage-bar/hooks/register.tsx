@@ -535,28 +535,37 @@ export const register: Register = on => {
     // An interactive Svg sits in a frame of its own, which does not stretch to
     // the band: it needs a width in pixels. The band reports its width in cells
     // of the surface's code font, so the width is those cells at CELL_PX each,
-    // less the buttons' pixels. Should it still overflow, the row does not wrap
-    // and the bars are clipped, so the buttons stay in place.
+    // less the buttons' pixels. Should it still overflow, the Svg's box shrinks
+    // below it (minWidth 0) and clips the bars. The close Button stays a direct
+    // child of the row, where the desktop draws a role="dismiss" Button as the
+    // band's own close control (inside a Box of ours it is a boxed button). The
+    // desktop then lays the row's other children out in a container of its own
+    // that wraps, so the Svg and the gear go in one Box of ours, which keeps
+    // them on one line.
     const width = Math.max(200, Math.round(e.props.bodyColumns * CELL_PX - BUTTONS_PX))
 
     return (
       <Box flexDirection="row" flexWrap="nowrap" alignItems="center">
-        <Box flexGrow={1} flexShrink={1} overflow="hidden" alignSelf="center">
-          <els.Svg
-            source={svgBars(list, at, width)}
-            alt={list.map(w => describe(w, at).detail).join(' / ')}
-            width={width}
-            height={HEIGHT_PX}
-            isInteractive
-          />
+        <Box flexDirection="row" flexWrap="nowrap" alignItems="center" flexGrow={1} flexShrink={1} minWidth={0}>
+          <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden" alignSelf="center">
+            <els.Svg
+              source={svgBars(list, at, width)}
+              alt={list.map(w => describe(w, at).detail).join(' / ')}
+              width={width}
+              height={HEIGHT_PX}
+              isInteractive
+            />
+          </Box>
+          <Box flexShrink={0} marginRight={-1}>
+            <Button
+              key="tempoc-gear"
+              plain
+              dimColor
+              label={GEAR_ICON}
+              onPress={() => void openSettings($)}
+            />
+          </Box>
         </Box>
-        <Button
-          key="tempoc-gear"
-          plain
-          dimColor
-          label={GEAR_ICON}
-          onPress={() => void openSettings($)}
-        />
         <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />
       </Box>
     )

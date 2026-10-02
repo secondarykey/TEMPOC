@@ -1,6 +1,6 @@
 {
   "name": "usage-bar",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Shows how far you are through Claude's usage windows: amount used vs. time elapsed, above the prompt",
   "author": { "name": "secondarykey" },
   "homepage": "https://secondarykey.github.io/TEMPOC/",

@@ -3,9 +3,9 @@ import type { EngineInterface, Register, SessionRateLimit, Timer } from 'claude-
 
 import type { TempocDraft, TempocSettings, TempocThresholds, TempocView, TempocWindow } from '../types'
 
-const windows = atom({ plugin: 'tempoc', key: 'windows' } as const, [] as TempocWindow[])
-const view = atom({ plugin: 'tempoc', key: 'view' } as const, { windows: [], at: 0 } as TempocView)
-const isHidden = atom({ plugin: 'tempoc', key: 'isHidden' } as const, false)
+const windows = atom({ plugin: 'usage-bar', key: 'windows' } as const, [] as TempocWindow[])
+const view = atom({ plugin: 'usage-bar', key: 'view' } as const, { windows: [], at: 0 } as TempocView)
+const isHidden = atom({ plugin: 'usage-bar', key: 'isHidden' } as const, false)
 
 // Whether the person closed the bars, kept across sessions like the reading.
 const HIDDEN_KEY = 'isHidden'
@@ -16,7 +16,7 @@ const SHOW_ICON = String.fromCharCode(0x29d7)
 const CELL_PX = 7.8
 const CLOSE_COLUMNS = 7
 
-// The settings pane, opened by the band's gear or by /tempoc. Its edits stay
+// The settings pane, opened by the band's gear or by /usage-bar. Its edits stay
 // in `draft` until Apply, which saves them all at once in the plugin's store:
 // no option rows, so no module reload per field.
 const SETTINGS_PANE = 'tempoc-settings'
@@ -36,8 +36,8 @@ const DEFAULT_SETTINGS: TempocSettings = {
   utilizationWarning: 98,
   utilizationDanger: 100,
 }
-const settings = atom({ plugin: 'tempoc', key: 'settings' } as const, DEFAULT_SETTINGS)
-const draft = atom({ plugin: 'tempoc', key: 'draft' } as const, null as TempocDraft | null)
+const settings = atom({ plugin: 'usage-bar', key: 'settings' } as const, DEFAULT_SETTINGS)
+const draft = atom({ plugin: 'usage-bar', key: 'draft' } as const, null as TempocDraft | null)
 
 // The settings the drawing code reads; kept equal to the `settings` state.
 let current: TempocSettings = DEFAULT_SETTINGS
@@ -391,12 +391,12 @@ export const register: Register = on => {
     }
     await redraw()
 
-    await $.command.register({ name: 'tempoc', description: 'Change when the TEMPOC bars turn Warning or Danger color' })
+    await $.command.register({ name: 'usage-bar', description: 'Change when the TEMPOC bars turn Warning or Danger color' })
 
     return result
   })
 
-  on('command.run', { command: 'tempoc' }, async $ => {
+  on('command.run', { command: 'usage-bar' }, async $ => {
     await openSettings($)
     return { text: 'TEMPOC settings opened.' }
   })

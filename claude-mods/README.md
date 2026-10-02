@@ -14,22 +14,22 @@ It runs inside Claude Code only: the terminal, and the Code tab of the Claude de
 
 ## Install
 
-Installing takes two steps: register this repository as a marketplace (a catalog of plugins, named `tempoc`), then install the one plugin it lists (`tempoc@tempoc`). The bars appear in the next session.
+Installing takes two steps: register this repository as a marketplace (a catalog of plugins, named `tempoc`), then install the one plugin it lists (`usage-bar@tempoc`). The bars appear in the next session.
 
 **In the terminal**, in a Claude Code session:
 
 ```
 /plugin marketplace add secondarykey/TEMPOC
-/plugin install tempoc@tempoc
+/plugin install usage-bar@tempoc
 ```
 
 The second line opens the plugin's details in the `/plugin` panel; choose a scope there (*Install for you* puts it in every project).
 
-**In the desktop app's Code tab**, add the marketplace `secondarykey/TEMPOC` from the plugin browser (**+** next to the prompt box, then **Plugins**), and install `tempoc` from it. From a shell, the same two steps are:
+**In the desktop app's Code tab**, add the marketplace `secondarykey/TEMPOC` from the plugin browser (**+** next to the prompt box, then **Plugins**), and install `usage-bar` from it. From a shell, the same two steps are:
 
 ```
 claude plugin marketplace add secondarykey/TEMPOC
-claude plugin install tempoc@tempoc
+claude plugin install usage-bar@tempoc
 ```
 
 The terminal and the desktop app read the same settings, so a marketplace or plugin added in one shows up in the other.
@@ -37,11 +37,11 @@ The terminal and the desktop app read the same settings, so a marketplace or plu
 To remove it, in the terminal:
 
 ```
-/plugin uninstall tempoc@tempoc
+/plugin uninstall usage-bar@tempoc
 /plugin marketplace remove tempoc
 ```
 
-or from a shell, `claude plugin uninstall tempoc@tempoc` and `claude plugin marketplace remove tempoc`. In the desktop app, **+ → Plugins → Manage plugins** uninstalls the plugin too.
+or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin marketplace remove tempoc`. In the desktop app, **+ → Plugins → Manage plugins** uninstalls the plugin too.
 
 ## Using it
 
@@ -50,7 +50,7 @@ or from a shell, `claude plugin uninstall tempoc@tempoc` and `claude plugin mark
 | ⚙ | Right end of the band | Opens the settings |
 | × | Right end of the band | Hides the band; an hourglass button appears in the status bar under the prompt |
 | Hourglass | Status bar | Brings the band back |
-| `/tempoc` | Prompt | Opens the settings |
+| `/usage-bar` | Prompt | Opens the settings |
 
 Whether the band is hidden is kept across sessions.
 

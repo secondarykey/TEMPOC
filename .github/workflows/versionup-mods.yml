@@ -8,7 +8,7 @@ on:
     # .claude-plugin/) and the docs under claude-mods/ never ship, so a change
     # to them is no release.
     paths:
-      - "claude-mods/tempoc/**"
+      - "claude-mods/usage-bar/**"
       - "claude-mods/version"
   # Lets a bump be retried without a dummy commit -- e.g. after fixing GH_PAT.
   workflow_dispatch:
@@ -65,7 +65,7 @@ jobs:
       - name: Check for file changes
         id: changes
         run: |
-          if git diff --quiet claude-mods/version claude-mods/tempoc/.claude-plugin/plugin.json; then
+          if git diff --quiet claude-mods/version claude-mods/usage-bar/.claude-plugin/plugin.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -78,7 +78,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           BRANCH="release/mods-v${{ steps.versionup.outputs.version }}"
           git checkout -b "$BRANCH"
-          git add claude-mods/version claude-mods/tempoc/.claude-plugin/plugin.json
+          git add claude-mods/version claude-mods/usage-bar/.claude-plugin/plugin.json
           git commit -m "chore(claude-mods): bump version to ${{ steps.versionup.outputs.version }} [skip versionup]"
           git push origin "$BRANCH"
 

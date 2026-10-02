@@ -15,6 +15,7 @@ This directory holds the module's plugins, one per subdirectory. They are distri
 | `usage-bar/hooks/register.tsx` | The module |
 | `version` | The next version, the source of truth (see Versioning) |
 | `scripts/versionup.py` | Computes the version and writes it to `version` and `usage-bar/.claude-plugin/plugin.json` |
+| `scripts/dev_copy.py` | Copies a plugin under another name (`usage-bar-dev`) for development beside the installed one (see Developing) |
 | `usage-bar/types/index.d.ts` | Contract for the `$.state` values the module keeps; `claude plugin validate` holds every state key the module names to it |
 
 Why the catalog sits at the repository root: Claude Code reads manifests only from directories named exactly `.claude-plugin/`, and adding a marketplace by repository (`/plugin marketplace add secondarykey/TEMPOC`, or the same from a plugin browser) reads only the repo-root `.claude-plugin/marketplace.json`. No add command takes a path inside the repository; only `extraKnownMarketplaces` in settings does. With the catalog under `claude-mods/`, users had to add it by the file's raw URL, and a plugin browser that adds by repository could not reach it.
@@ -61,5 +62,13 @@ Re-check these on a newer build: the render sites and what each surface draws ma
 
 - `claude plugin validate .` from the repository root (marketplace) and `claude plugin validate claude-mods/usage-bar` (plugin and module) after every change.
 - Run from the working tree with `claude --plugin-dir claude-mods/usage-bar`.
-- Hot reload inside a session: the `plugin-authoring` skill watches a per-session mods folder under `~/.claude/dev-mods/`. **A junction to `claude-mods/usage-bar` does not work** (the file watcher does not see changes behind it); copy the four source files there after each edit instead.
+- Hot reload inside a session: the `plugin-authoring` skill watches a per-session mods folder under `~/.claude/dev-mods/`. **A junction to `claude-mods/usage-bar` does not work** (the file watcher does not see changes behind it); copy the source files there after each edit instead.
+- **Copy under another name.** A copy loaded under the plugin's own name (hot reload or `--plugin-dir`) takes the installed `usage-bar@tempoc`'s place in that session: nothing is uninstalled, other sessions keep the installed version, but this one shows only the copy. To keep the installed version in view beside the copy (to compare, or to watch an update arrive), make the copy with `scripts/dev_copy.py`, which renames every identifier the name is (manifest, state contract, atoms, command, settings pane) to `usage-bar-dev`:
+
+  ```bash
+  python3 claude-mods/scripts/dev_copy.py ~/.claude/dev-mods/<session id>
+  ```
+
+  Run it again after each edit; the hot reload picks the copy up when the turn ends. The session then draws two bands, the installed one and the copy's, each with its own settings (`/usage-bar`, `/usage-bar-dev`). `--plugin-dir` takes the same copy: `python3 claude-mods/scripts/dev_copy.py <folder>`, then `claude --plugin-dir <folder>/usage-bar-dev`. Never load a copy as `usage-bar` beside the installed plugin.
+- Which copy is drawing: the settings pane shows the version from the copy's own `plugin.json`, and `local` when it was not installed from a marketplace (its root is not under `plugins/cache/`).
 - Type-check with the `tsconfig.json` Claude Code writes beside a locally loaded plugin (it extends `.claude-plugin/types/tsconfig.json`; both are git-ignored).

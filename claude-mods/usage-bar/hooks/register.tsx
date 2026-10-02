@@ -357,6 +357,24 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
 // (it needs that hook's `$`), called again when a new reading arrives.
 let redraw: (() => Promise<void>) | undefined
 
+// What the settings pane shows of this copy of the plugin: the version from
+// its own manifest ($.plugin carries no version), and "local" when it was not
+// installed from a marketplace (a --plugin-dir or hot-reloaded copy), so a
+// development copy is told apart from the installed one. Read at session.start.
+let versionLabel = ''
+
+async function readVersionLabel($: EngineInterface): Promise<string> {
+  let version = ''
+  try {
+    const manifest = JSON.parse(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)) as { version?: unknown }
+    if (typeof manifest.version === 'string') version = manifest.version
+  } catch {
+    // No manifest to read: the label says what it can.
+  }
+  const isInstalled = /[\\/]plugins[\\/]cache[\\/]/.test($.plugin.root)
+  return [version && `v${version}`, isInstalled ? '' : 'local'].filter(Boolean).join(' ')
+}
+
 /** The saved settings, read leniently: anything missing or malformed keeps its default. */
 function readSettings(saved: unknown): TempocSettings {
   const s = (typeof saved === 'object' && saved !== null ? saved : {}) as Partial<Record<string, unknown>>
@@ -407,6 +425,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
 
+    versionLabel = await readVersionLabel($)
     current = readSettings(await $.store.get(SETTINGS_KEY))
     await update($, settings, () => current)
 
@@ -492,7 +511,10 @@ export const register: Register = on => {
           {field('usage-warning', 'Warning', d.utilizationWarning, v => setShared({ utilizationWarning: v }))}
           {field('usage-danger', 'Danger', d.utilizationDanger, v => setShared({ utilizationDanger: v }))}
         </Box>
-        <Box flexDirection="row" justifyContent="flex-end" gap={2}>
+        <Box flexDirection="row" justifyContent="flex-end" alignItems="center" gap={2}>
+          <Box flexGrow={1}>
+            <Text dimColor>{versionLabel}</Text>
+          </Box>
           <Button key="tempoc-settings-apply" variant="primary" label="Apply" onPress={() => void applyDraft($)} />
           <Button key="tempoc-settings-close" role="dismiss" label="Close" onPress={() => void closeSettings($)} />
         </Box>

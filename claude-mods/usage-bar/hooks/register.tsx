@@ -548,6 +548,16 @@ export const register: Register = on => {
     return next(e)
   })
 
+  // Switching to another session detaches the desktop from this one, and
+  // switching back attaches it again before the band is drawn. The band then
+  // remounts and its SMIL replays from the last rebuild, up to an hour stale,
+  // so rebuilding here keeps it current, as prompt.submit does.
+  on('session.attach', async ($, e, next) => {
+    const result = await next(e)
+    await redraw?.()
+    return result
+  })
+
   on('session.measure', async ($, e, next) => {
     if (e.changed.includes('rateLimits')) {
       await publish($, e.rateLimits)

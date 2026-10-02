@@ -102,6 +102,6 @@ Claude Code receives the account's usage windows (`five_hour`, `seven_day`) with
 ## Known limits
 
 - The band always takes one row above the prompt. Claude Code gives mods no place to draw a bar without taking room.
-- The band blinks when it is redrawn: when you send a prompt, when the amount used changes, when a bar changes color, and once an hour.
+- The band blinks when it is redrawn: when you send a prompt, when you come back to the session from another one, when the amount used changes, when a bar changes color, and once an hour.
 
 Mods are an early-access Claude Code feature; the API may change between Claude Code releases.

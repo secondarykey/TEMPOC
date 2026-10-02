@@ -134,45 +134,53 @@ const readings = (list: TempocWindow[], at: number): Reading[] =>
 
 const clamp = (n: number) => Math.min(100, Math.max(0, n))
 
-// The band holds one card per window side by side, 5-hour on the left half
-// and 7-day on the right, laid out like the desktop app's bars: the label and
-// the amount used above the bar, the reset time and the time left below it.
-// The bar is the track, the amount used in the tone's color, and a tick where
-// elapsed time is; elapsed itself is in the tooltip, as on the desktop.
-const GAP_PX = 24
-const HEIGHT_PX = 36
-const HEAD_Y = 10
-const TRACK_Y = 14
-const TRACK_H = 6
-const TICK_Y = 12
+// The band holds one row per window side by side, 5-hour on the left half and
+// 7-day on the right, laid out like the desktop app's compact mode so the band
+// stays one line tall: the label and the amount used, the bar, then the reset
+// time and the time left. The bar is the track, the amount used in the tone's
+// color, and a tick where elapsed time is; elapsed itself is in the tooltip,
+// as on the desktop.
+const GAP_PX = 20
+const HEIGHT_PX = 14
+const TEXT_Y = 10.5
+const TRACK_Y = 5
+const TRACK_H = 4
+const TICK_Y = 2
 const TICK_H = 10
 const TICK_W = 2
-const FOOT_Y = 32
+const PAD_PX = 6
+// Rough advance of a character of the band's small sans-serif text, used to
+// leave room for the texts beside the bar.
+const CHAR_PX = 5.6
 
 function svgBars(rows: Reading[], width: number): string {
   const span = (width - GAP_PX * (rows.length - 1)) / rows.length
-  const text = (x: number, y: number, size: number, anchor: string, cls: string, fill: string, s: string) =>
-    `<text class="${cls}" x="${x.toFixed(1)}" y="${y}" font-size="${size}" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
+  const text = (x: number, anchor: string, cls: string, fill: string, s: string) =>
+    `<text class="${cls}" x="${x.toFixed(1)}" y="${TEXT_Y}" font-size="10" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
   const body = rows
     .map((r, n) => {
       const x = n * (span + GAP_PX)
-      const right = x + span
-      const fill = (clamp(r.used) / 100) * span
       const color = PALETTE[r.tone][0]
+      const tail = [r.resetText, r.remainText].filter(Boolean).join(' \u00b7 ')
+      const labelW = (r.label.length + 1) * CHAR_PX
+      const usedW = (r.usedText.length + 0.5) * CHAR_PX
+      const tailW = tail.length * CHAR_PX
+      const barX = x + labelW + usedW + PAD_PX
+      const barW = Math.max(24, span - (labelW + usedW + tailW + PAD_PX * 2))
+      const fill = (clamp(r.used) / 100) * barW
       const tick =
         r.elapsed === null
           ? ''
-          : `<rect class="t" x="${(x + Math.min(span - TICK_W, (r.elapsed / 100) * span - TICK_W / 2)).toFixed(1)}" y="${TICK_Y}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb"/>`
+          : `<rect class="t" x="${(barX + Math.min(barW - TICK_W, (r.elapsed / 100) * barW - TICK_W / 2)).toFixed(1)}" y="${TICK_Y}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb"/>`
       return (
         `<g><title>${esc(r.detail)}</title>` +
         `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
-        text(x, HEAD_Y, 10, 'start', 'm', '#9ca3af', r.label) +
-        text(right, HEAD_Y, 10, 'end', `u${r.tone[0]}`, color, r.usedText) +
-        `<rect class="k" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${span.toFixed(1)}" height="${TRACK_H}" rx="3" fill="#4b5563"/>` +
-        `<rect class="f${r.tone[0]}" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="3" fill="${color}"/>` +
+        text(x, 'start', 'm', '#9ca3af', r.label) +
+        text(x + labelW + usedW, 'end', `u${r.tone[0]}`, color, r.usedText) +
+        `<rect class="k" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${barW.toFixed(1)}" height="${TRACK_H}" rx="2" fill="#4b5563"/>` +
+        `<rect class="f${r.tone[0]}" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="2" fill="${color}"/>` +
         tick +
-        text(x, FOOT_Y, 9, 'start', 'm', '#9ca3af', r.resetText) +
-        text(right, FOOT_Y, 9, 'end', 'm', '#9ca3af', r.remainText) +
+        text(x + span, 'end', 'm', '#9ca3af', tail) +
         `</g>`
       )
     })
@@ -180,7 +188,7 @@ function svgBars(rows: Reading[], width: number): string {
   const light =
     `.k{fill:#d1d5db}.t{fill:#374151}.m{fill:#6b7280}` +
     `.fa,.ua{fill:${PALETTE.accent[1]}}.fw,.uw{fill:${PALETTE.warning[1]}}.fe,.ue{fill:${PALETTE.error[1]}}`
-  // The Svg is drawn interactive so each card's <title> shows as a tooltip.
+  // The Svg is drawn interactive so each row's <title> shows as a tooltip.
   // That puts it in a frame of its own; declaring both color schemes keeps the
   // frame from painting an opaque page behind the bars.
   return (

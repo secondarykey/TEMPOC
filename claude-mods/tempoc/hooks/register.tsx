@@ -13,7 +13,7 @@ const HIDDEN_KEY = 'isHidden'
 const SHOW_ICON = String.fromCharCode(0x29d7)
 // Pixels per cell of the desktop's code font, and the cells the band's gear and close
 // buttons take: together they turn the band's width in cells into pixels.
-const CELL_PX = 8.4
+const CELL_PX = 7.8
 const CLOSE_COLUMNS = 7
 
 // The settings pane, opened by the band's gear or by /tempoc. Its edits stay
@@ -496,12 +496,13 @@ export const register: Register = on => {
     // An interactive Svg sits in a frame of its own, which does not stretch to
     // the band: it needs a width in pixels. The band reports its width in cells
     // of the surface's code font, so the width is those cells at CELL_PX each,
-    // less the close button's.
+    // less the buttons'. The estimate errs short; should it still overflow, the
+    // row does not wrap and the bars are clipped, so the buttons stay in place.
     const width = Math.max(200, Math.round((e.props.bodyColumns - CLOSE_COLUMNS) * CELL_PX))
 
     return (
-      <Box flexDirection="row" alignItems="center">
-        <Box flexGrow={1} alignSelf="center">
+      <Box flexDirection="row" flexWrap="nowrap" alignItems="center">
+        <Box flexGrow={1} flexShrink={1} overflow="hidden" alignSelf="center">
           <els.Svg
             source={svgBars(list, at, width)}
             alt={list.map(w => describe(w, at).detail).join(' / ')}

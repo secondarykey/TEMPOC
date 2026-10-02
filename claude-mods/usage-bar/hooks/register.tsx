@@ -247,26 +247,29 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
   const text = (x: number, anchor: string, cls: string, fill: string, s: string) =>
     `<text class="${cls}" x="${x.toFixed(1)}" y="${TEXT_Y}" font-size="12" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
 
-  const body = list
-    .map((w, n) => {
-      const r = describe(w, at)
+  const rows = list.map(w => {
+    // The minute-by-minute texts, merged where a run of minutes reads the same.
+    const states: { from: number; to: number; tail: string; detail: string }[] = []
+    for (let k = 0; k < STATES; k++) {
+      const d = describe(w, at + k * MINUTE)
+      const last = states[states.length - 1]
+      if (last && last.tail === d.tail && last.detail === d.detail) last.to = k + 1
+      else states.push({ from: k, to: k + 1, tail: d.tail, detail: d.detail })
+    }
+    return { w, r: describe(w, at), states }
+  })
+
+  // Every row leaves room for the longest texts of any row, so the bars come
+  // out the same length however long one window's reset time reads.
+  const headW = Math.max(...rows.map(({ r }) => (r.label.length + 1 + r.usedText.length + 0.5) * CHAR_PX))
+  const tailW = Math.max(...rows.flatMap(({ states }) => states.map(s => s.tail.length))) * CHAR_PX
+  const barW = Math.max(24, span - (headW + tailW + PAD_PX * 2))
+
+  const body = rows
+    .map(({ w, r, states }, n) => {
       const x = n * (span + GAP_PX)
       const color = PALETTE[r.tone][0]
-
-      // The minute-by-minute texts, merged where a run of minutes reads the same.
-      const states: { from: number; to: number; tail: string; detail: string }[] = []
-      for (let k = 0; k < STATES; k++) {
-        const d = describe(w, at + k * MINUTE)
-        const last = states[states.length - 1]
-        if (last && last.tail === d.tail && last.detail === d.detail) last.to = k + 1
-        else states.push({ from: k, to: k + 1, tail: d.tail, detail: d.detail })
-      }
-
-      const labelW = (r.label.length + 1) * CHAR_PX
-      const usedW = (r.usedText.length + 0.5) * CHAR_PX
-      const tailW = Math.max(...states.map(s => s.tail.length)) * CHAR_PX
-      const barX = x + labelW + usedW + PAD_PX
-      const barW = Math.max(24, span - (labelW + usedW + tailW + PAD_PX * 2))
+      const barX = x + headW + PAD_PX
       const fill = (clamp(r.used) / 100) * barW
       const tickX = (e: number) => barX + Math.min(barW - TICK_W, (e / 100) * barW - TICK_W / 2)
 
@@ -288,7 +291,7 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
           return (
             `<g visibility="hidden"><set attributeName="visibility" to="visible" begin="${s.from * 60}s"${end}/>` +
             `<title>${esc(s.detail)}</title>` +
-            text(x + span, 'end', 'm', '#9ca3af', s.tail) +
+            text(barX + barW + PAD_PX, 'start', 'm', '#9ca3af', s.tail) +
             `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
             `</g>`
           )
@@ -297,7 +300,7 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
 
       return (
         text(x, 'start', 'm', '#9ca3af', r.label) +
-        text(x + labelW + usedW, 'end', `u${r.tone[0]}`, color, r.usedText) +
+        text(x + headW, 'end', `u${r.tone[0]}`, color, r.usedText) +
         `<rect class="k" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${barW.toFixed(1)}" height="${TRACK_H}" rx="3" fill="#4b5563"/>` +
         `<rect class="f${r.tone[0]}" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="3" fill="${color}"/>` +
         tick +

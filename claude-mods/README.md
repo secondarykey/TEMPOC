@@ -50,6 +50,21 @@ To remove it, in the terminal:
 
 or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin marketplace remove tempoc`. Removing the marketplace also uninstalls the plugin and deletes its saved settings.
 
+## Updating
+
+Claude Code updates plugins on its own only from Anthropic's official marketplaces. For a marketplace like `tempoc`, auto-update is off by default, so a new version does not arrive by restarting: Claude Code keeps the copy it installed until you update it.
+
+From a shell, refresh the catalog, then update the plugin:
+
+```
+claude plugin marketplace update tempoc
+claude plugin update usage-bar@tempoc
+```
+
+The new version takes effect in the next session. To have it happen at startup from then on, turn on auto-update for `tempoc` in the marketplace list of the `/plugin` panel (in a terminal session; the desktop app's Code tab does not open that panel).
+
+The version in use is shown in the title of the settings pane (`TEMPOC v<version>`).
+
 ## Using it
 
 | Control | Where | What it does |

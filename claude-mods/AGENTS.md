@@ -28,7 +28,7 @@ Naming: the marketplace is `tempoc` (the product), and each plugin is named for 
 
 `version` is the source of truth; `usage-bar/.claude-plugin/plugin.json` carries a copy, because that is where Claude Code reads the plugin's version, and users receive a change only when that value changes (Claude Code keeps an installed copy per version and ignores new commits under the same one).
 
-`.github/workflows/versionup-mods.yml` runs on a push to `main` that touches `usage-bar/**` or `version`: `scripts/versionup.py` keeps an untagged `version` or bumps the patch of a tagged one, writes both files, merges the bump through a PR, and tags `mods-v<version>`. There is no release workflow: the bump reaching `main` is the release. Edit `version` by hand to start a minor or major one. A change to the catalog (`../.claude-plugin/`) or the docs alone is no release.
+`.github/workflows/versionup-mods.yml` runs on a push to `main` that touches `usage-bar/**` or `version`: `scripts/versionup.py` keeps an untagged `version` or bumps the patch of a tagged one, writes both files, merges the bump through a PR, and tags `mods-v<version>`. There is no release workflow: the bump reaching `main` is the release. It does not reach users by itself: Claude Code auto-updates only Anthropic's official marketplaces by default, so for `tempoc` a user runs `claude plugin marketplace update tempoc` and `claude plugin update usage-bar@tempoc`, or turns auto-update on in `/plugin` (README, Updating). A restart alone keeps the installed version. Edit `version` by hand to start a minor or major one. A change to the catalog (`../.claude-plugin/`) or the docs alone is no release.
 
 ## usage-bar: data
 

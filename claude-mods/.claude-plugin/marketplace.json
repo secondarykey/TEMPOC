@@ -1,0 +1,20 @@
+{
+  "name": "tempoc",
+  "owner": {
+    "name": "secondarykey"
+  },
+  "metadata": {
+    "description": "TEMPOC: Claude usage windows, amount used vs. time elapsed"
+  },
+  "plugins": [
+    {
+      "name": "tempoc",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/secondarykey/TEMPOC.git",
+        "path": "claude-mods/tempoc"
+      },
+      "description": "Shows how far you are through Claude's usage windows: amount used vs. time elapsed, above the prompt"
+    }
+  ]
+}

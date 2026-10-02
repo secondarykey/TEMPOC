@@ -2,16 +2,17 @@
 
 This file provides guidance to coding agents when working with code in this repository.
 
-TEMPOC shows how far you are through Claude's usage windows. claude.ai reports how much of each window you have consumed, but not how much of the window's *time* has elapsed, nor exactly when it resets. Both modules below intercept the same claude.ai usage API and answer those two questions; they differ only in how they present the answer.
+TEMPOC shows how far you are through Claude's usage windows. claude.ai reports how much of each window you have consumed, but not how much of the window's *time* has elapsed, nor exactly when it resets. The modules below answer those two questions from the same usage figures; they differ in where they read them and how they present the answer.
 
 ## Modules
 
-This repository holds **two independent modules**. They share no code and have separate versions and release pipelines — a change to one should not touch the other.
+This repository holds **independent modules**. They share no code and have separate versions and release pipelines — a change to one should not touch the other.
 
 | Module | What it is | Guide |
 |---|---|---|
 | `chrome-extension/` | Manifest V3 Chrome extension that injects progress bars into the claude.ai usage page | [`chrome-extension/AGENTS.md`](chrome-extension/AGENTS.md) |
 | `desktop/` | Standalone Wails v3 desktop app (Windows) that renders the same data in its own frameless React window, loading claude.ai in a hidden WebView | [`desktop/AGENTS.md`](desktop/AGENTS.md) |
+| `claude-mods/` | Claude Code mods (plugins of function hooks) and the marketplace that distributes them. `tempoc` draws the bars above the prompt from the rate-limit windows Claude Code itself receives. Prototype, on hold: not in the locale or versioning pipelines below | [`claude-mods/AGENTS.md`](claude-mods/AGENTS.md) |
 
 **Read the module's own guide before working in it.** Each covers that module's architecture, settings, build commands, and constraints. This file covers only what spans both.
 

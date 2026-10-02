@@ -14,21 +14,39 @@ It runs inside Claude Code only: the terminal, and the Code tab of the Claude de
 
 ## Install
 
-In a Claude Code session:
+Installing takes two steps: register this repository's catalog of plugins (the *marketplace*, named `tempoc`), then install the one plugin it lists (`tempoc@tempoc`). The bars appear in the next session.
+
+**In the terminal**, in a Claude Code session:
 
 ```
 /plugin marketplace add https://raw.githubusercontent.com/secondarykey/TEMPOC/main/claude-mods/.claude-plugin/marketplace.json
 /plugin install tempoc@tempoc
 ```
 
-The first line registers this repository's catalog of plugins; the second installs the one plugin it lists. The bars appear in the next session.
+The second line opens the plugin's details in the `/plugin` panel; choose a scope there (*Install for you* puts it in every project).
 
-To remove it:
+**In the desktop app's Code tab**, typing `/plugin` opens the plugin browser instead of taking arguments, and the browser has no place to add a marketplace by URL. Register the marketplace from a shell, where the `claude` command is available:
+
+```
+claude plugin marketplace add https://raw.githubusercontent.com/secondarykey/TEMPOC/main/claude-mods/.claude-plugin/marketplace.json
+```
+
+Then click **+** next to the prompt box, choose **Plugins → Add plugin**, and select `tempoc`. Or skip the browser and install from the shell as well:
+
+```
+claude plugin install tempoc@tempoc
+```
+
+The terminal and the desktop app read the same settings, so a marketplace or plugin added in one shows up in the other.
+
+To remove it, in the terminal:
 
 ```
 /plugin uninstall tempoc@tempoc
 /plugin marketplace remove tempoc
 ```
+
+or from a shell, `claude plugin uninstall tempoc@tempoc` and `claude plugin marketplace remove tempoc`. In the desktop app, **+ → Plugins → Manage plugins** uninstalls the plugin too.
 
 ## Using it
 

@@ -112,9 +112,10 @@ const clamp = (n: number) => Math.min(100, Math.max(0, n))
 // markup's width up to the slot, and its markup is wider than any slot.
 const VIEW_W = 1000
 const GAP_W = 16
-const HEIGHT_PX = 12
-const TRACK_Y = 3
-const TRACK_H = 6
+const HEIGHT_PX = 20
+const TRACK_H = 8
+const TRACK_Y = (HEIGHT_PX - TRACK_H) / 2
+const TICK_H = 16
 const TICK_W = 3
 
 function svgBars(rows: Reading[]): string {
@@ -126,7 +127,7 @@ function svgBars(rows: Reading[]): string {
       const tick =
         r.elapsed === null
           ? ''
-          : `<rect class="t" x="${(x + Math.min(span - TICK_W, (r.elapsed / 100) * span - TICK_W / 2)).toFixed(1)}" y="0" width="${TICK_W}" height="${HEIGHT_PX}" fill="#e5e7eb"/>`
+          : `<rect class="t" x="${(x + Math.min(span - TICK_W, (r.elapsed / 100) * span - TICK_W / 2)).toFixed(1)}" y="${(HEIGHT_PX - TICK_H) / 2}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb"/>`
       return (
         `<rect class="k" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${span.toFixed(1)}" height="${TRACK_H}" fill="#4b5563"/>` +
         `<rect class="f${r.tone[0]}" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" fill="${PALETTE[r.tone][0]}"/>` +
@@ -183,7 +184,7 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="row" alignItems="center">
-        <Box flexGrow={1}>
+        <Box flexGrow={1} alignSelf="center">
           <els.Svg source={svgBars(rows)} alt={rows.map(r => r.detail).join(' / ')} height={HEIGHT_PX} />
         </Box>
         <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />

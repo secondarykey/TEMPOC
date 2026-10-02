@@ -24,6 +24,9 @@ const GEAR_ICON = String.fromCharCode(0x2699)
 // Ballot boxes, checked and not: the settings pane's color switches.
 const CHECKED = 0x2611
 const UNCHECKED = 0x2610
+// The settings pane's column widths, in cells: a field's label, its input.
+const LABEL_COLUMNS = 10
+const INPUT_COLUMNS = 8
 const SETTINGS_KEY = 'settings'
 
 // Same defaults as the extension and the desktop app: warn as soon as usage
@@ -411,9 +414,16 @@ export const register: Register = on => {
     // One setting per line so the pane stays readable when narrow. There is no
     // checkbox element, so the color switch is a Button drawn as one.
     const d = (await read($, draft)) ?? toDraft(await read($, settings))
+    // The label in a box of its own, so Warning and Danger line up, and the
+    // input in a fixed-width box, since it otherwise stretches across the pane.
     const field = (key: string, label: string, value: string, onChange: (v: string) => void) => (
-      <Box key={key} flexDirection="row" alignItems="center" paddingLeft={2}>
-        <Input key={key} label={label} value={value} onInput={onChange} onSubmit={onChange} />
+      <Box key={key} flexDirection="row" alignItems="center" justifyContent="flex-start" paddingLeft={2}>
+        <Box width={LABEL_COLUMNS} flexShrink={0}>
+          <Text>{label}</Text>
+        </Box>
+        <Box width={INPUT_COLUMNS} flexShrink={0}>
+          <Input key={key} value={value} onInput={onChange} onSubmit={onChange} />
+        </Box>
       </Box>
     )
     const windowBlock = (which: 'hour5' | 'day7', label: string) => {

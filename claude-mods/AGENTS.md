@@ -1,39 +1,56 @@
 # claude-mods/AGENTS.md
 
-Claude Code mods: plugins of **function hooks**. No build step: Claude Code compiles and runs each plugin's hooks module itself, in its own sandbox (no DOM, no Node; everything outside goes through `$`).
+Claude Code mods: plugins of **function hooks**. No build step: Claude Code compiles and runs each plugin's hooks module (`.tsx`) itself, in a sandbox of its own (no DOM, no Node; everything outside goes through the engine interface `$`). The API is early access: its authority is the `claude-code.d.ts` that Claude Code writes for the running build (`/plugin-types`, or the `plugin-authoring` skill). These notes were written against Claude Code 2.1.286.
 
-This directory is both the module and its distribution: it is a Claude Code **marketplace** (`.claude-plugin/marketplace.json`) whose plugins live in subdirectories. Everything the module needs stays under `claude-mods/`.
+This directory is both the module and its distribution: a Claude Code **marketplace** whose plugins live in subdirectories. Everything the module needs stays under `claude-mods/`.
 
 ## Layout
 
 | Path | Role |
 |---|---|
-| `.claude-plugin/marketplace.json` | The marketplace, `tempoc`. Each entry's `source` is `git-subdir` (this repo, `claude-mods/<plugin>`), so the catalog also works when added by its raw URL, where a relative source would not |
-| `.gitignore` | Re-includes `.claude-plugin/` (the root `.gitignore` drops every dot-path) and drops what Claude Code writes when loading a plugin locally |
-| `tempoc/.claude-plugin/plugin.json` | Plugin manifest: name `tempoc` (must match the marketplace entry's `name`), version, `types` contract |
+| `.claude-plugin/marketplace.json` | The marketplace, `tempoc`. Each entry's `source` is `git-subdir` (this repo, `claude-mods/<plugin>`), so the catalog works when added by its raw URL, where a relative source would not |
+| `.gitignore` | Re-includes `.claude-plugin/` (the root `.gitignore` drops every dot-path) and drops what Claude Code writes when it loads a plugin from a local folder |
+| `tempoc/.claude-plugin/plugin.json` | Plugin manifest: `name` (must match the marketplace entry's), `version`, `types` |
 | `tempoc/hooks/hooks.json` | Names the one hooks module |
-| `tempoc/hooks/register.tsx` | The module: reads rate-limit windows, draws one interactive SVG in the band above the prompt (`AbovePrompt`): per window, a compact line (label and usage, bar, reset time and time left) with a tooltip, 5h on the left half and 7d on the right |
-| `tempoc/types/index.d.ts` | Contract for the `$.state` values the module keeps |
+| `tempoc/hooks/register.tsx` | The module |
+| `tempoc/types/index.d.ts` | Contract for the `$.state` values the module keeps; `claude plugin validate` holds every state key the module names to it |
 
-Claude Code reads manifests only from directories named exactly `.claude-plugin/`; the name cannot change. `/plugin marketplace add owner/repo` reads only a repo-root `.claude-plugin/`, which is why users add this marketplace by the raw URL of its `marketplace.json` instead (see `README.md`).
+Claude Code reads manifests only from directories named exactly `.claude-plugin/`. `/plugin marketplace add owner/repo` reads only a repo-root `.claude-plugin/`, which is why users add this marketplace by the raw URL of its `marketplace.json` (see `README.md`).
 
-## tempoc: how it works
+## Versioning
 
-- Data: `$.session.usage().rateLimits` at `session.start`, then `session.measure` whenever a window moves. Each window is `{ kind, percentUsed, resetsAt }`; `kind` is `five_hour` / `seven_day` (or a gateway's `spend_limit`, shown without elapsed time).
-- Elapsed % = `(span − (resetsAt − now)) / span`.
-- Redraws: an interactive Svg is a frame that reloads (blinks) whenever its source changes, so the source is built against the `now` state (the last scheduled rebuild), not the clock, and stays fixed for up to an hour: the elapsed tick moves by SMIL `<animate>`, and the per-minute texts (time left, tooltip) are drawn ahead for 60 minutes and switched by SMIL `<set>`. `untilRedraw` schedules the next rebuild at the earliest of that hour, a reset, or the moment a color threshold is crossed; a new reading rebuilds at once, setting the windows and the moment together in the one `view` state so the frame reloads once. A prompt submit also rebuilds: it remounts the band on the desktop (a blink that cannot be avoided), and a remounted frame replays its SMIL from the start, so the start must be current. A remount for any other reason shows texts up to an hour stale until the next rebuild.
-- Width: the interactive frame does not stretch (it defaults to 300px), so the Svg gets `bodyColumns × CELL_PX` pixels. `CELL_PX` (7.8) is an estimate that errs short: 8.4 (from 82 columns ≈ 700px including padding) overflowed in a wide window and wrapped the buttons onto a new line. The row is `flexWrap="nowrap"` with the Svg's box `overflow="hidden"`, so an overflow clips the bars instead.
-- The last reading is mirrored to `$.store` so a fresh session draws before its first response.
-- Close / reopen: the band's `Button role="dismiss"` sets `isHidden` (state, mirrored to `$.store`); while hidden, `SessionMode` draws one plain `Button` (U+29D7) that clears it. Buttons do draw in the footer (seen); a press there was not yet confirmed when this was written.
-- Status: **prototype, on hold.** Every placement either takes a row or cannot draw a bar (below); the band is the least bad. Revisit when the mod API gains a site that draws graphics without taking room.
-- Placement: the band above the prompt (`AbovePrompt`) is the only site on the desktop that draws an `Svg`, and it always takes about one row, however thin the drawing. The prompt footer (`SessionMode`) takes no room but cannot hold a bar. On the desktop it draws text only (no `Svg`, no hidden or absolute `Box`), trims every `Text` (so space-only cells vanish) and is narrow, so a bar of cells does not fit, and one-glyph vertical meters were tried and found hard to read. An interactive Svg paints an opaque white frame unless its markup declares `color-scheme: light dark`. The desktop app's own chrome (the branch row, the left sidebar, the context ring) and its Chat tab are not mod sites; a `Pane` docks beside the transcript. `PromptHint` is not drawn on the desktop at all.
-- Color thresholds: edited in the mod's own settings pane (`Pane` `tempoc-settings`, opened by the band's gear or `/tempoc`), same items and defaults as the extension's settings. Edits go to the `draft` state as typed (`onInput`, so no Enter needed); Apply validates them and saves the whole `TempocSettings` at once to `$.store` and the `settings` state, then redraws. They are deliberately not plugin.json `userConfig`: `$.config.set` writes one field at a time and each write reloads the module, so applying several fields at once lost values.
+Not in the repo's release pipelines (no `version` file, no workflows, no tag). Users receive a change only when `version` in `tempoc/.claude-plugin/plugin.json` changes: Claude Code keeps an installed copy per version and does not pick up new commits under the same one. Bump it with every change meant for users.
 
-## Checking
+## tempoc: data
 
-```
-claude plugin validate claude-mods
-claude plugin validate claude-mods/tempoc
-```
+- Readings: `$.session.usage().rateLimits` at `session.start`, then `session.measure` whenever a window moves a whole point. Each window is `{ kind, percentUsed, resetsAt }`; `kind` is `five_hour` / `seven_day` (or a gateway's `spend_limit`, drawn without elapsed time). Elapsed % = `(span − (resetsAt − now)) / span`.
+- State (`types/index.d.ts`): `windows` (latest reading), `view` (what the band draws: windows plus the moment it is built against), `settings`, `draft` (the settings pane's unapplied edits), `isHidden`.
+- `$.store` (kept across sessions): `windows`, `settings`, `isHidden`.
+- Colors: `level()` mirrors the extension's rule (usage ≥ utilization danger → Danger; usage − elapsed > danger → Danger; > warning, or usage ≥ utilization warning → Warning). Palette from the desktop app's theme, dark and light.
 
-To run it from the working tree: `claude --plugin-dir claude-mods/tempoc`. The API is early access; its authority is the `claude-code.d.ts` that Claude Code writes for the running build (`/plugin-types`). These notes were written against Claude Code 2.1.286; re-check the render sites on a newer build before resuming.
+## tempoc: drawing
+
+- The band above the prompt (`ui.render` `AbovePrompt`) holds one **interactive** `Svg` plus the ⚙ and × `Button`s. Interactive so each line's `<title>` shows as a tooltip and SMIL runs; it then sits in a frame of its own, which:
+  - paints an opaque white page unless the markup declares `color-scheme: light dark`;
+  - does not stretch (300px by default), so it gets `(bodyColumns − CLOSE_COLUMNS) × CELL_PX` pixels. `CELL_PX` 7.8 errs short (8.4 overflowed in a wide window); the row is `flexWrap="nowrap"` and the Svg's box `overflow="hidden"`, so an overflow clips the bars rather than wrapping the buttons;
+  - **reloads, and blinks, whenever its source changes.**
+- Against the blinking, the source is built from `view`, not the clock, and stays fixed for up to an hour: the elapsed tick moves by SMIL `<animate>`, and the per-minute texts (time left, tooltip) are drawn ahead for 60 minutes and switched on in turn by SMIL `<set>`. `redraw()` rebuilds `view` and schedules the next rebuild with `untilRedraw`: the earliest of that hour, a reset, or the moment a color threshold is crossed. A new reading rebuilds at once (windows and moment set together, so one reload).
+- Sending a prompt remounts the band on the desktop (a blink no mod can avoid), and a remounted frame replays its SMIL from the start, so `prompt.submit` rebuilds to keep that start current. A remount for any other reason (switching sessions) shows texts up to an hour stale until the next rebuild.
+- × sets `isHidden`; while hidden, the prompt footer (`SessionMode`) draws one plain hourglass `Button` (U+29D7) that clears it.
+- Settings: `Pane` `tempoc-settings`, opened by ⚙ or the `/tempoc` command. One setting per line; the color switch is a `Button` drawn as a checkbox (☑/☐, there is no checkbox element); number `Input`s in fixed-width boxes at the right edge. Edits go to `draft` as typed (`onInput`, no Enter needed); Apply validates all of them and saves the whole `TempocSettings` at once, then redraws; Close discards the draft. Deliberately not plugin.json `userConfig`: `$.config.set` writes one field per call and each write reloads the module.
+
+## What the desktop Code tab allows (found by trial)
+
+- `AbovePrompt` is the only site on the desktop that draws an `Svg`, and it always takes about one row, however thin the drawing.
+- The prompt footer (`SessionMode`) takes no room but draws text and `Button`s only: no `Svg`, `display`/`position` on a `Box` are ignored (a hidden hover card shows inline), every `Text` is trimmed (space-only cells vanish), and it is narrow. A bar of glyph cells did not fit; one-glyph vertical meters were tried and found hard to read.
+- `PromptHint` is not drawn on the desktop. The desktop app's own chrome (the branch row, the left sidebar, the context ring) and its Chat tab are not mod sites at all. A `Pane` docks beside the transcript.
+- A `Button` takes one string; nothing drawn (an `Svg`) can be pressed, and an interactive Svg's frame runs no script. Hover (`<title>`) is the only per-bar interaction.
+
+Re-check these on a newer build: the render sites and what each surface draws may grow.
+
+## Developing
+
+- `claude plugin validate claude-mods` (marketplace) and `claude plugin validate claude-mods/tempoc` (plugin and module) after every change.
+- Run from the working tree with `claude --plugin-dir claude-mods/tempoc`.
+- Hot reload inside a session: the `plugin-authoring` skill watches a per-session mods folder under `~/.claude/dev-mods/`. **A junction to `claude-mods/tempoc` does not work** (the file watcher does not see changes behind it); copy the four source files there after each edit instead.
+- Type-check with the `tsconfig.json` Claude Code writes beside a locally loaded plugin (it extends `.claude-plugin/types/tsconfig.json`; both are git-ignored).

@@ -12,7 +12,7 @@ This repository holds **independent modules**. They share no code and have separ
 |---|---|---|
 | `chrome-extension/` | Manifest V3 Chrome extension that injects progress bars into the claude.ai usage page | [`chrome-extension/AGENTS.md`](chrome-extension/AGENTS.md) |
 | `desktop/` | Standalone Wails v3 desktop app (Windows) that renders the same data in its own frameless React window, loading claude.ai in a hidden WebView | [`desktop/AGENTS.md`](desktop/AGENTS.md) |
-| `claude-mods/` | Claude Code mods (plugins of function hooks) and the marketplace that distributes them. `tempoc` draws the bars above the prompt from the rate-limit windows Claude Code itself receives. Prototype, on hold: not in the locale or versioning pipelines below | [`claude-mods/AGENTS.md`](claude-mods/AGENTS.md) |
+| `claude-mods/` | Claude Code mods (plugins of function hooks) and the marketplace that distributes them. `tempoc` draws the bars above the prompt from the rate-limit windows Claude Code itself receives. Prototype: not in the locale or versioning pipelines below; users update when its `plugin.json` version changes | [`claude-mods/AGENTS.md`](claude-mods/AGENTS.md) |
 
 **Read the module's own guide before working in it.** Each covers that module's architecture, settings, build commands, and constraints. This file covers only what spans both.
 

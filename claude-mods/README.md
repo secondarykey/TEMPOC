@@ -17,6 +17,28 @@ In a Claude Code session:
 /plugin install tempoc@tempoc
 ```
 
+## Settings
+
+The color thresholds can be changed per window, with the same meaning and defaults as in the extension and the desktop app:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `hour5_color_enabled` / `day7_color_enabled` | `true` | Color the bar at all |
+| `hour5_warning` / `day7_warning` | `0` | Points by which usage must exceed elapsed time to turn Warning color |
+| `hour5_danger` / `day7_danger` | `10` | Points by which usage must exceed elapsed time to turn Danger color |
+| `utilization_warning` | `98` | Usage percent that turns any bar Warning color |
+| `utilization_danger` | `100` | Usage percent that turns any bar Danger color |
+
+In the Claude Code CLI they are rows in `/config`. They are stored in `~/.claude/settings.json` under `pluginConfigs`, which can also be edited directly:
+
+```json
+{
+  "pluginConfigs": {
+    "tempoc@tempoc": { "options": { "hour5_danger": 20 } }
+  }
+}
+```
+
 ## Where the figures come from
 
 Claude Code reports the account's usage windows (`five_hour`, `seven_day`) with each API response, and this plugin reads them from there — it makes no request of its own. So:

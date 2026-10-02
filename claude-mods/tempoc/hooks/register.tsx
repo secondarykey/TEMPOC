@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionRateLimit, Timer } from 'claude-code'
+import type { EngineInterface, PluginOptions, Register, SessionRateLimit, Timer } from 'claude-code'
 
 import type { TempocView, TempocWindow } from '../types'
 
@@ -32,12 +32,48 @@ const SPAN_MS: Record<string, number> = {
   seven_day: 7 * 24 * HOUR,
 }
 
+/** When a window's bar turns Warning or Danger color: the plugin's options for it. */
+type Thresholds = {
+  isEnabled: boolean
+  /** Points by which usage must exceed elapsed time. */
+  warning: number
+  danger: number
+  /** Usage percent that turns the bar regardless of elapsed time. */
+  utilizationWarning: number
+  utilizationDanger: number
+}
+
 // Same defaults as the extension and the desktop app: warn as soon as usage
-// is ahead of elapsed time, danger once it is more than 10 points ahead.
-const WARNING_AT = 0
-const DANGER_AT = 10
-const UTILIZATION_WARNING = 98
-const UTILIZATION_DANGER = 100
+// is ahead of elapsed time, danger once it is more than 10 points ahead. The
+// options (plugin.json `userConfig`) override them per window; a change of
+// option reloads the module, and register() sets these again.
+let thresholds: Record<string, Thresholds> = {}
+const DEFAULT_THRESHOLDS: Thresholds = {
+  isEnabled: true,
+  warning: 0,
+  danger: 10,
+  utilizationWarning: 98,
+  utilizationDanger: 100,
+}
+const thresholdsOf = (kind: string): Thresholds => thresholds[kind] ?? DEFAULT_THRESHOLDS
+
+function readThresholds(options: PluginOptions): Record<string, Thresholds> {
+  const num = (key: string, fallback: number) => {
+    const v = options[key]
+    return typeof v === 'number' ? v : fallback
+  }
+  const shared = {
+    utilizationWarning: num('utilization_warning', DEFAULT_THRESHOLDS.utilizationWarning),
+    utilizationDanger: num('utilization_danger', DEFAULT_THRESHOLDS.utilizationDanger),
+  }
+  const forWindow = (prefix: string): Thresholds => ({
+    isEnabled: options[`${prefix}_color_enabled`] !== false,
+    warning: num(`${prefix}_warning`, DEFAULT_THRESHOLDS.warning),
+    danger: num(`${prefix}_danger`, DEFAULT_THRESHOLDS.danger),
+    ...shared,
+  })
+  return { five_hour: forWindow('hour5'), seven_day: forWindow('day7') }
+}
 
 const toWindow = (r: SessionRateLimit): TempocWindow => {
   const t = r.resetsAt ? Date.parse(r.resetsAt) : NaN
@@ -53,11 +89,12 @@ const elapsedPercent = (w: TempocWindow, at: number): number | null => {
   return Math.min(100, Math.max(0, ((span - left) / span) * 100))
 }
 
-const level = (used: number, elapsed: number | null): 'error' | 'warning' | undefined => {
-  if (used >= UTILIZATION_DANGER) return 'error'
+const level = (used: number, elapsed: number | null, t: Thresholds): 'error' | 'warning' | undefined => {
+  if (!t.isEnabled) return undefined
+  if (used >= t.utilizationDanger) return 'error'
   const diff = elapsed === null ? 0 : used - elapsed
-  if (diff > DANGER_AT) return 'error'
-  if (diff > WARNING_AT || used >= UTILIZATION_WARNING) return 'warning'
+  if (diff > t.danger) return 'error'
+  if (diff > t.warning || used >= t.utilizationWarning) return 'warning'
   return undefined
 }
 
@@ -114,7 +151,7 @@ function describe(w: TempocWindow, at: number): Reading {
   return {
     used: w.percentUsed,
     elapsed,
-    tone: level(w.percentUsed, elapsed) ?? 'accent',
+    tone: level(w.percentUsed, elapsed, thresholdsOf(w.kind)) ?? 'accent',
     label,
     usedText,
     tail: w.resetsAt === null ? '' : `${resetClock(w, at)} (${remaining(w, at)})`,
@@ -149,7 +186,9 @@ function untilRedraw(list: TempocWindow[], at: number): number {
     if (w.resetsAt > at) wait = Math.min(wait, w.resetsAt - at + 1000)
     // The color depends on usage minus elapsed; elapsed only grows, so each
     // threshold is crossed once, when elapsed reaches usage minus it.
-    for (const threshold of [DANGER_AT, WARNING_AT]) {
+    const t = thresholdsOf(w.kind)
+    if (!t.isEnabled) continue
+    for (const threshold of [t.danger, t.warning]) {
       const target = w.percentUsed - threshold
       if (target <= 0 || target >= 100) continue
       const crossAt = w.resetsAt - span * (1 - target / 100)
@@ -260,7 +299,9 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
 // (it needs that hook's `$`), called again when a new reading arrives.
 let redraw: (() => Promise<void>) | undefined
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  thresholds = readThresholds(options)
+
   on('session.start', async ($, e, next) => {
     const result = await next(e)
 

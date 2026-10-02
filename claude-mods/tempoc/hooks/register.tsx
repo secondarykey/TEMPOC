@@ -1,10 +1,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, SessionRateLimit, Timer } from 'claude-code'
 
-import type { TempocWindow } from '../types'
+import type { TempocView, TempocWindow } from '../types'
 
 const windows = atom({ plugin: 'tempoc', key: 'windows' } as const, [] as TempocWindow[])
-const now = atom({ plugin: 'tempoc', key: 'now' } as const, 0)
+const view = atom({ plugin: 'tempoc', key: 'view' } as const, { windows: [], at: 0 } as TempocView)
 const isHidden = atom({ plugin: 'tempoc', key: 'isHidden' } as const, false)
 
 // Whether the person closed the bars, kept across sessions like the reading.
@@ -273,13 +273,22 @@ export const register: Register = on => {
     redraw = async () => {
       timer?.cancel()
       const t = await $.clock.now()
-      await update($, now, () => t)
-      const wait = untilRedraw(await read($, windows), t)
+      const list = await read($, windows)
+      await update($, view, () => ({ windows: list, at: t }))
+      const wait = untilRedraw(list, t)
       timer = $.clock.after(wait, () => void redraw?.())
     }
     await redraw()
 
     return result
+  })
+
+  // Submitting a prompt remounts the band on the desktop, and a remounted frame
+  // replays its SMIL from the start, as of the last rebuild. Rebuilding here
+  // keeps that start current; the remount blinks either way.
+  on('prompt.submit', async ($, e, next) => {
+    await redraw?.()
+    return next(e)
   })
 
   on('session.measure', async ($, e, next) => {
@@ -293,17 +302,17 @@ export const register: Register = on => {
   // The bars sit in the band above the prompt: the only site that draws an Svg.
   // The band's close button hides it; the status bar then offers it back.
   //
-  // The drawing is built against `now`, the moment of the last scheduled
-  // rebuild, not the clock: the band redraws for its own reasons too (a turn
-  // starting or ending), and an unchanged source keeps the frame from reloading.
+  // The drawing is built from `view`, the windows and the moment of the last
+  // rebuild, not from the clock: the band redraws for its own reasons too (a
+  // turn starting or ending), and an unchanged source keeps the frame from
+  // reloading. A rebuild sets both at once, so a new reading reloads it once.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const list = await read($, windows)
+    const { windows: list, at } = await read($, view)
     if (e.props.hasSurvey || list.length === 0 || (await read($, isHidden))) return next(e)
 
     const els = $.ui.resolve(e)
     if (!('Svg' in els)) return next(e)
 
-    const at = (await read($, now)) || (await $.clock.now())
     const { Box, Button } = els
 
     // An interactive Svg sits in a frame of its own, which does not stretch to

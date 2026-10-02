@@ -21,6 +21,9 @@ const CLOSE_COLUMNS = 7
 // no option rows, so no module reload per field.
 const SETTINGS_PANE = 'tempoc-settings'
 const GEAR_ICON = String.fromCharCode(0x2699)
+// Ballot boxes, checked and not: the settings pane's color switches.
+const CHECKED = 0x2611
+const UNCHECKED = 0x2610
 const SETTINGS_KEY = 'settings'
 
 // Same defaults as the extension and the desktop app: warn as soon as usage
@@ -402,30 +405,34 @@ export const register: Register = on => {
   on('ui.render', { component: 'Pane', requestId: SETTINGS_PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
-    if (!('Input' in els) || !('Select' in els)) return <Text dimColor>-</Text>
-    const { Input, Select } = els
+    if (!('Input' in els)) return <Text dimColor>-</Text>
+    const { Input } = els
 
+    // One setting per line so the pane stays readable when narrow. There is no
+    // checkbox element, so the color switch is a Button drawn as one.
     const d = (await read($, draft)) ?? toDraft(await read($, settings))
-    const onOff = [
-      { value: 'on', label: 'On' },
-      { value: 'off', label: 'Off' },
-    ]
-    const windowRow = (which: 'hour5' | 'day7', label: string) => {
+    const field = (key: string, label: string, value: string, onChange: (v: string) => void) => (
+      <Box key={key} flexDirection="row" alignItems="center" paddingLeft={2}>
+        <Input key={key} label={label} value={value} onInput={onChange} onSubmit={onChange} />
+      </Box>
+    )
+    const windowBlock = (which: 'hour5' | 'day7', label: string) => {
       const w = d[which]
       const set = (patch: Partial<TempocDraft['hour5']>) =>
         void editDraft($, x => ({ ...x, [which]: { ...x[which], ...patch } }))
       return (
-        <Box key={which} flexDirection="row" alignItems="center" gap={2}>
-          <Text bold>{label}</Text>
-          <Select
-            key={`${which}-color`}
-            label="Color"
-            options={onOff}
-            value={w.isEnabled ? 'on' : 'off'}
-            onSelect={v => set({ isEnabled: v === 'on' })}
-          />
-          <Input key={`${which}-warning`} label="Warning" value={w.warning} onInput={v => set({ warning: v })} onSubmit={v => set({ warning: v })} />
-          <Input key={`${which}-danger`} label="Danger" value={w.danger} onInput={v => set({ danger: v })} onSubmit={v => set({ danger: v })} />
+        <Box key={which} flexDirection="column">
+          <Box flexDirection="row" alignItems="center" gap={2}>
+            <Text bold>{label}</Text>
+            <Button
+              key={`${which}-color`}
+              plain
+              label={`${String.fromCharCode(w.isEnabled ? CHECKED : UNCHECKED)} Color`}
+              onPress={() => set({ isEnabled: !w.isEnabled })}
+            />
+          </Box>
+          {field(`${which}-warning`, 'Warning', w.warning, v => set({ warning: v }))}
+          {field(`${which}-danger`, 'Danger', w.danger, v => set({ danger: v }))}
         </Box>
       )
     }
@@ -434,24 +441,12 @@ export const register: Register = on => {
 
     return (
       <Box flexDirection="column" gap={1}>
-        {windowRow('hour5', '5h')}
-        {windowRow('day7', '7d')}
-        <Box flexDirection="row" alignItems="center" gap={2}>
+        {windowBlock('hour5', '5h')}
+        {windowBlock('day7', '7d')}
+        <Box flexDirection="column">
           <Text bold>Usage</Text>
-          <Input
-            key="usage-warning"
-            label="Warning"
-            value={d.utilizationWarning}
-            onInput={v => setShared({ utilizationWarning: v })}
-            onSubmit={v => setShared({ utilizationWarning: v })}
-          />
-          <Input
-            key="usage-danger"
-            label="Danger"
-            value={d.utilizationDanger}
-            onInput={v => setShared({ utilizationDanger: v })}
-            onSubmit={v => setShared({ utilizationDanger: v })}
-          />
+          {field('usage-warning', 'Warning', d.utilizationWarning, v => setShared({ utilizationWarning: v }))}
+          {field('usage-danger', 'Danger', d.utilizationDanger, v => setShared({ utilizationDanger: v }))}
         </Box>
         <Box flexDirection="row" gap={2}>
           <Button key="tempoc-settings-apply" variant="primary" label="Apply" onPress={() => void applyDraft($)} />

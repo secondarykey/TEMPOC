@@ -15,6 +15,8 @@ This directory is both the module and its distribution: a Claude Code **marketpl
 | `tempoc/hooks/register.tsx` | The module |
 | `tempoc/types/index.d.ts` | Contract for the `$.state` values the module keeps; `claude plugin validate` holds every state key the module names to it |
 
+Why two `.claude-plugin/` directories: a plugin's folder is copied whole to each user's machine on install, so `tempoc/` holds only what ships, while `claude-mods/` holds the catalog and the repository's own documents, which never ship. A flat layout (both manifests in one `.claude-plugin/`) also works, but would ship `README.md` and `AGENTS.md` with the plugin.
+
 Claude Code reads manifests only from directories named exactly `.claude-plugin/`. `/plugin marketplace add owner/repo` reads only a repo-root `.claude-plugin/`, which is why users add this marketplace by the raw URL of its `marketplace.json` (see `README.md`).
 
 ## Versioning

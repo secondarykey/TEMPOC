@@ -100,11 +100,13 @@ type Reading = {
   usedText: string
   resetText: string
   remainText: string
+  /** The line's short form beside the bar: the reset time, the time left in brackets. */
+  tail: string
   /** The tooltip and the readers' text: every figure, elapsed included. */
   detail: string
 }
 
-const LABEL: Record<string, string> = { five_hour: '5-Hour', seven_day: '7-Day' }
+const LABEL: Record<string, string> = { five_hour: '5h', seven_day: '7d' }
 
 const readings = (list: TempocWindow[], at: number): Reading[] =>
   list.map(w => {
@@ -121,6 +123,7 @@ const readings = (list: TempocWindow[], at: number): Reading[] =>
       usedText,
       resetText,
       remainText,
+      tail: w.resetsAt === null ? '' : `${resetClock(w, at)} (${remaining(w, at)})`,
       detail: [
         `${label}: ${usedText} used`,
         resetText,
@@ -161,7 +164,7 @@ function svgBars(rows: Reading[], width: number): string {
     .map((r, n) => {
       const x = n * (span + GAP_PX)
       const color = PALETTE[r.tone][0]
-      const tail = [r.resetText, r.remainText].filter(Boolean).join(' \u00b7 ')
+      const tail = r.tail
       const labelW = (r.label.length + 1) * CHAR_PX
       const usedW = (r.usedText.length + 0.5) * CHAR_PX
       const tailW = tail.length * CHAR_PX

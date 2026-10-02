@@ -24,11 +24,16 @@ const BUTTONS_PX = 70
 // no option rows, so no module reload per field.
 const SETTINGS_PANE = 'tempoc-settings'
 const GEAR_ICON = String.fromCharCode(0x2699)
-// Ballot boxes, checked and not: the settings pane's color switches.
-const CHECKED = 0x2611
-const UNCHECKED = 0x2610
-// The width of the settings pane's number inputs, in cells.
+// The settings pane's color switches: there is no toggle element, so each is a
+// Select of these two, beside the window's heading. The labels say it is the
+// coloring that switches, not whether the window is shown.
+const ON_OFF = [
+  { value: 'on', label: 'Color on' },
+  { value: 'off', label: 'Color off' },
+] as const
+// The width of the settings pane's number inputs and color selects, in cells.
 const INPUT_COLUMNS = 8
+const SELECT_COLUMNS = 13
 const SETTINGS_KEY = 'settings'
 
 // Same defaults as the extension and the desktop app: warn as soon as usage
@@ -462,38 +467,54 @@ export const register: Register = on => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
     if (!('Input' in els)) return <Text dimColor>-</Text>
-    const { Input } = els
+    const { Input, Select } = els
 
-    // One setting per line so the pane stays readable when narrow. There is no
-    // checkbox element, so the color switch is a Button drawn as one.
+    // One setting per line so the pane stays readable when narrow.
     const d = (await read($, draft)) ?? toDraft(await read($, settings))
-    // The label on the left, the input at the pane's right edge in a box of a
+    // The label on the left, the control at the pane's right edge in a box of a
     // fixed width, since it otherwise stretches across the pane.
-    const field = (key: string, label: string, value: string, onChange: (v: string) => void) => (
-      <Box key={key} flexDirection="row" alignItems="center" justifyContent="space-between" paddingLeft={2}>
-        <Box flexGrow={1}>
-          <Text>{label}</Text>
-        </Box>
-        <Box width={INPUT_COLUMNS} flexShrink={0}>
-          <Input key={key} value={value} onInput={onChange} onSubmit={onChange} />
+    const row = (key: string, label: unknown, control: unknown, indent = 2, columns = INPUT_COLUMNS) => (
+      <Box key={key} flexDirection="row" alignItems="center" justifyContent="space-between" paddingLeft={indent}>
+        <Box flexGrow={1}>{label}</Box>
+        <Box width={columns} flexShrink={0}>
+          {control}
         </Box>
       </Box>
     )
+    // Every number is a percent (the windows' thresholds, points of it), so
+    // each input carries the sign after it.
+    const field = (key: string, label: string, value: string, onChange: (v: string) => void) =>
+      row(
+        key,
+        <Text>{label}</Text>,
+        <Box flexDirection="row" alignItems="center" gap={1}>
+          {/* A fixed width: an Input otherwise takes its own default width, past the pane's edge. */}
+          <Box width={INPUT_COLUMNS} flexShrink={0}>
+            <Input key={key} value={value} onInput={onChange} onSubmit={onChange} />
+          </Box>
+          <Text dimColor>%</Text>
+        </Box>,
+        2,
+        INPUT_COLUMNS + 2,
+      )
     const windowBlock = (which: 'hour5' | 'day7', label: string) => {
       const w = d[which]
       const set = (patch: Partial<TempocDraft['hour5']>) =>
         void editDraft($, x => ({ ...x, [which]: { ...x[which], ...patch } }))
       return (
         <Box key={which} flexDirection="column">
-          <Box flexDirection="row" alignItems="center" gap={2}>
-            <Text bold>{label}</Text>
-            <Button
+          {row(
+            `${which}-color`,
+            <Text bold>{label}</Text>,
+            <Select
               key={`${which}-color`}
-              plain
-              label={`${String.fromCharCode(w.isEnabled ? CHECKED : UNCHECKED)} Color`}
-              onPress={() => set({ isEnabled: !w.isEnabled })}
-            />
-          </Box>
+              options={ON_OFF}
+              value={w.isEnabled ? 'on' : 'off'}
+              onSelect={v => set({ isEnabled: v === 'on' })}
+            />,
+            0,
+            SELECT_COLUMNS,
+          )}
           {field(`${which}-warning`, 'Warning', w.warning, v => set({ warning: v }))}
           {field(`${which}-danger`, 'Danger', w.danger, v => set({ danger: v }))}
         </Box>
@@ -507,7 +528,7 @@ export const register: Register = on => {
         {windowBlock('hour5', '5h')}
         {windowBlock('day7', '7d')}
         <Box flexDirection="column">
-          <Text bold>Usage</Text>
+          <Text bold>Utilization Threshold</Text>
           {field('usage-warning', 'Warning', d.utilizationWarning, v => setShared({ utilizationWarning: v }))}
           {field('usage-danger', 'Danger', d.utilizationDanger, v => setShared({ utilizationDanger: v }))}
         </Box>

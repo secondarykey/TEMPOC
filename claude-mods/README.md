@@ -67,11 +67,11 @@ The same items and defaults as in the extension and the desktop app:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| 5h / 7d Color | On | Color the bar at all |
+| 5h / 7d (Color on / off) | Color on | Color the bar at all |
 | 5h / 7d Warning | 0 | Points by which usage must exceed elapsed time to turn Warning color |
 | 5h / 7d Danger | 10 | Points by which usage must exceed elapsed time to turn Danger color |
-| Usage Warning | 98 | Usage percent that turns any bar Warning color |
-| Usage Danger | 100 | Usage percent that turns any bar Danger color |
+| Utilization Threshold: Warning | 98 | Usage percent that turns any bar Warning color |
+| Utilization Threshold: Danger | 100 | Usage percent that turns any bar Danger color |
 
 Changes take effect on Apply and are kept across sessions.
 

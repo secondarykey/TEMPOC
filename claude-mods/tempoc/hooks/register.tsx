@@ -11,8 +11,10 @@ const isHidden = atom({ plugin: 'tempoc', key: 'isHidden' } as const, false)
 const HIDDEN_KEY = 'isHidden'
 // An hourglass, the status bar's button that brings the bars back.
 const SHOW_ICON = String.fromCharCode(0x29d7)
-// A circled i, the band's button that shows every window's figures in a toast.
-const INFO_ICON = String.fromCharCode(0x24d8)
+// Pixels per cell of the desktop's code font, and the cells the band's close
+// button takes: together they turn the band's width in cells into pixels.
+const CELL_PX = 8.4
+const CLOSE_COLUMNS = 4
 
 async function setHidden($: EngineInterface, value: boolean) {
   await update($, isHidden, () => value)
@@ -89,76 +91,101 @@ const PALETTE = {
   error: ['#ef4444', '#dc2626'],
 } as const
 
-/** One window, ready to draw. */
+/** One window, ready to draw: the bar's figures and the texts around it. */
 type Reading = {
   used: number
   elapsed: number | null
   tone: keyof typeof PALETTE
+  label: string
+  usedText: string
+  resetText: string
+  remainText: string
+  /** The tooltip and the readers' text: every figure, elapsed included. */
   detail: string
 }
 
+const LABEL: Record<string, string> = { five_hour: '5-Hour', seven_day: '7-Day' }
+
 const readings = (list: TempocWindow[], at: number): Reading[] =>
   list.map(w => {
-    const label = SPAN[w.kind]?.label ?? w.kind
+    const label = LABEL[w.kind] ?? w.kind
     const elapsed = elapsedPercent(w, at)
+    const usedText = `${w.percentUsed.toFixed(0)}%`
+    const resetText = w.resetsAt === null ? '' : `Resets ${resetClock(w, at)}`
+    const remainText = w.resetsAt === null ? '' : `${remaining(w, at)} left`
     return {
       used: w.percentUsed,
       elapsed,
       tone: level(w.percentUsed, elapsed) ?? 'accent',
-      detail:
-        `${label}: ${w.percentUsed.toFixed(0)}% used` +
-        (elapsed === null
-          ? ''
-          : `, ${elapsed.toFixed(0)}% elapsed, resets ${resetClock(w, at)} (in ${remaining(w, at)})`),
+      label,
+      usedText,
+      resetText,
+      remainText,
+      detail: [
+        `${label}: ${usedText} used`,
+        resetText,
+        elapsed === null ? '' : `Elapsed ${elapsed.toFixed(1)}%`,
+        remainText,
+      ]
+        .filter(Boolean)
+        .join(' / '),
     }
   })
 
 const clamp = (n: number) => Math.min(100, Math.max(0, n))
 
-// The band holds one bar per window across its whole width, 5-hour on the
-// left half and 7-day on the right: the track, the amount used in the tone's
-// color, and a tick where elapsed time is. No text, no frame.
-//
-// The SVG is drawn in viewBox units stretched to the band (preserveAspectRatio
-// "none"): the Svg element gets a height but no width, so it takes the
-// markup's width up to the slot, and its markup is wider than any slot.
-const VIEW_W = 1000
-const GAP_W = 16
-const HEIGHT_PX = 20
-const TRACK_H = 8
-const TRACK_Y = (HEIGHT_PX - TRACK_H) / 2
-const TICK_H = 16
-const TICK_W = 3
+// The band holds one card per window side by side, 5-hour on the left half
+// and 7-day on the right, laid out like the desktop app's bars: the label and
+// the amount used above the bar, the reset time and the time left below it.
+// The bar is the track, the amount used in the tone's color, and a tick where
+// elapsed time is; elapsed itself is in the tooltip, as on the desktop.
+const GAP_PX = 24
+const HEIGHT_PX = 36
+const HEAD_Y = 10
+const TRACK_Y = 14
+const TRACK_H = 6
+const TICK_Y = 12
+const TICK_H = 10
+const TICK_W = 2
+const FOOT_Y = 32
 
-function svgBars(rows: Reading[]): string {
-  const span = (VIEW_W - GAP_W * (rows.length - 1)) / rows.length
+function svgBars(rows: Reading[], width: number): string {
+  const span = (width - GAP_PX * (rows.length - 1)) / rows.length
+  const text = (x: number, y: number, size: number, anchor: string, cls: string, fill: string, s: string) =>
+    `<text class="${cls}" x="${x.toFixed(1)}" y="${y}" font-size="${size}" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
   const body = rows
     .map((r, n) => {
-      const x = n * (span + GAP_W)
+      const x = n * (span + GAP_PX)
+      const right = x + span
       const fill = (clamp(r.used) / 100) * span
+      const color = PALETTE[r.tone][0]
       const tick =
         r.elapsed === null
           ? ''
-          : `<rect class="t" x="${(x + Math.min(span - TICK_W, (r.elapsed / 100) * span - TICK_W / 2)).toFixed(1)}" y="${(HEIGHT_PX - TICK_H) / 2}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb"/>`
+          : `<rect class="t" x="${(x + Math.min(span - TICK_W, (r.elapsed / 100) * span - TICK_W / 2)).toFixed(1)}" y="${TICK_Y}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb"/>`
       return (
         `<g><title>${esc(r.detail)}</title>` +
         `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
-        `<rect class="k" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${span.toFixed(1)}" height="${TRACK_H}" fill="#4b5563"/>` +
-        `<rect class="f${r.tone[0]}" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" fill="${PALETTE[r.tone][0]}"/>` +
+        text(x, HEAD_Y, 10, 'start', 'm', '#9ca3af', r.label) +
+        text(right, HEAD_Y, 10, 'end', `u${r.tone[0]}`, color, r.usedText) +
+        `<rect class="k" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${span.toFixed(1)}" height="${TRACK_H}" rx="3" fill="#4b5563"/>` +
+        `<rect class="f${r.tone[0]}" x="${x.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="3" fill="${color}"/>` +
         tick +
+        text(x, FOOT_Y, 9, 'start', 'm', '#9ca3af', r.resetText) +
+        text(right, FOOT_Y, 9, 'end', 'm', '#9ca3af', r.remainText) +
         `</g>`
       )
     })
     .join('')
   const light =
-    `.k{fill:#d1d5db}.t{fill:#374151}` +
-    `.fa{fill:${PALETTE.accent[1]}}.fw{fill:${PALETTE.warning[1]}}.fe{fill:${PALETTE.error[1]}}`
-  // The Svg is drawn interactive so each bar's <title> shows as a tooltip. That
-  // puts it in a frame of its own; declaring both color schemes keeps the frame
-  // from painting an opaque page behind the bars.
+    `.k{fill:#d1d5db}.t{fill:#374151}.m{fill:#6b7280}` +
+    `.fa,.ua{fill:${PALETTE.accent[1]}}.fw,.uw{fill:${PALETTE.warning[1]}}.fe,.ue{fill:${PALETTE.error[1]}}`
+  // The Svg is drawn interactive so each card's <title> shows as a tooltip.
+  // That puts it in a frame of its own; declaring both color schemes keeps the
+  // frame from painting an opaque page behind the bars.
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" width="4000" height="${HEIGHT_PX}" viewBox="0 0 ${VIEW_W} ${HEIGHT_PX}" preserveAspectRatio="none" style="color-scheme: light dark; background: transparent">` +
-    `<style>:root{color-scheme: light dark; background: transparent}@media (prefers-color-scheme: light){${light}}</style>${body}</svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${HEIGHT_PX}" viewBox="0 0 ${width} ${HEIGHT_PX}" style="color-scheme: light dark; background: transparent">` +
+    `<style>:root{color-scheme: light dark; background: transparent}text{font-family: system-ui, sans-serif; font-variant-numeric: tabular-nums}@media (prefers-color-scheme: light){${light}}</style>${body}</svg>`
   )
 }
 
@@ -202,18 +229,24 @@ export const register: Register = on => {
     const rows = readings(list, at)
     const { Box, Button } = els
 
+    // An interactive Svg sits in a frame of its own, which does not stretch to
+    // the band: it needs a width in pixels. The band reports its width in cells
+    // of the surface's code font, so the width is those cells at CELL_PX each,
+    // less the close button's.
+    const width = Math.max(200, Math.round((e.props.bodyColumns - CLOSE_COLUMNS) * CELL_PX))
+    void $.store.set('bandColumns', e.props.bodyColumns)
+
     return (
       <Box flexDirection="row" alignItems="center">
         <Box flexGrow={1} alignSelf="center">
-          <els.Svg source={svgBars(rows)} alt={rows.map(r => r.detail).join(' / ')} height={HEIGHT_PX} isInteractive />
+          <els.Svg
+            source={svgBars(rows, width)}
+            alt={rows.map(r => r.detail).join(' / ')}
+            width={width}
+            height={HEIGHT_PX}
+            isInteractive
+          />
         </Box>
-        <Button
-          key="tempoc-detail"
-          plain
-          dimColor
-          label={INFO_ICON}
-          onPress={() => $.ui.toast(rows.map(r => r.detail).join('  /  '), { timeoutMs: 10_000 })}
-        />
         <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />
       </Box>
     )

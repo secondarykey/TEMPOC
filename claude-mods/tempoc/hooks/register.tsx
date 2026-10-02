@@ -24,8 +24,7 @@ const GEAR_ICON = String.fromCharCode(0x2699)
 // Ballot boxes, checked and not: the settings pane's color switches.
 const CHECKED = 0x2611
 const UNCHECKED = 0x2610
-// The settings pane's column widths, in cells: a field's label, its input.
-const LABEL_COLUMNS = 10
+// The width of the settings pane's number inputs, in cells.
 const INPUT_COLUMNS = 8
 const SETTINGS_KEY = 'settings'
 
@@ -414,11 +413,11 @@ export const register: Register = on => {
     // One setting per line so the pane stays readable when narrow. There is no
     // checkbox element, so the color switch is a Button drawn as one.
     const d = (await read($, draft)) ?? toDraft(await read($, settings))
-    // The label in a box of its own, so Warning and Danger line up, and the
-    // input in a fixed-width box, since it otherwise stretches across the pane.
+    // The label on the left, the input at the pane's right edge in a box of a
+    // fixed width, since it otherwise stretches across the pane.
     const field = (key: string, label: string, value: string, onChange: (v: string) => void) => (
-      <Box key={key} flexDirection="row" alignItems="center" justifyContent="flex-start" paddingLeft={2}>
-        <Box width={LABEL_COLUMNS} flexShrink={0}>
+      <Box key={key} flexDirection="row" alignItems="center" justifyContent="space-between" paddingLeft={2}>
+        <Box flexGrow={1}>
           <Text>{label}</Text>
         </Box>
         <Box width={INPUT_COLUMNS} flexShrink={0}>
@@ -458,7 +457,7 @@ export const register: Register = on => {
           {field('usage-warning', 'Warning', d.utilizationWarning, v => setShared({ utilizationWarning: v }))}
           {field('usage-danger', 'Danger', d.utilizationDanger, v => setShared({ utilizationDanger: v }))}
         </Box>
-        <Box flexDirection="row" gap={2}>
+        <Box flexDirection="row" justifyContent="flex-end" gap={2}>
           <Button key="tempoc-settings-apply" variant="primary" label="Apply" onPress={() => void applyDraft($)} />
           <Button key="tempoc-settings-close" role="dismiss" label="Close" onPress={() => void closeSettings($)} />
         </Box>

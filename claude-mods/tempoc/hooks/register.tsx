@@ -141,22 +141,22 @@ const clamp = (n: number) => Math.min(100, Math.max(0, n))
 // color, and a tick where elapsed time is; elapsed itself is in the tooltip,
 // as on the desktop.
 const GAP_PX = 20
-const HEIGHT_PX = 14
-const TEXT_Y = 10.5
-const TRACK_Y = 5
-const TRACK_H = 4
-const TICK_Y = 2
-const TICK_H = 10
+const HEIGHT_PX = 20
+const TEXT_Y = 14.5
+const TRACK_Y = 7
+const TRACK_H = 6
+const TICK_Y = 3
+const TICK_H = 14
 const TICK_W = 2
-const PAD_PX = 6
+const PAD_PX = 8
 // Rough advance of a character of the band's small sans-serif text, used to
 // leave room for the texts beside the bar.
-const CHAR_PX = 5.6
+const CHAR_PX = 6.6
 
 function svgBars(rows: Reading[], width: number): string {
   const span = (width - GAP_PX * (rows.length - 1)) / rows.length
   const text = (x: number, anchor: string, cls: string, fill: string, s: string) =>
-    `<text class="${cls}" x="${x.toFixed(1)}" y="${TEXT_Y}" font-size="10" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
+    `<text class="${cls}" x="${x.toFixed(1)}" y="${TEXT_Y}" font-size="12" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
   const body = rows
     .map((r, n) => {
       const x = n * (span + GAP_PX)
@@ -177,8 +177,8 @@ function svgBars(rows: Reading[], width: number): string {
         `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
         text(x, 'start', 'm', '#9ca3af', r.label) +
         text(x + labelW + usedW, 'end', `u${r.tone[0]}`, color, r.usedText) +
-        `<rect class="k" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${barW.toFixed(1)}" height="${TRACK_H}" rx="2" fill="#4b5563"/>` +
-        `<rect class="f${r.tone[0]}" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="2" fill="${color}"/>` +
+        `<rect class="k" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${barW.toFixed(1)}" height="${TRACK_H}" rx="3" fill="#4b5563"/>` +
+        `<rect class="f${r.tone[0]}" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="3" fill="${color}"/>` +
         tick +
         text(x + span, 'end', 'm', '#9ca3af', tail) +
         `</g>`

@@ -54,7 +54,7 @@ or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin m
 
 Claude Code updates plugins on its own only from Anthropic's official marketplaces. For a marketplace like `tempoc`, auto-update is off by default, so a new version does not arrive by restarting: Claude Code keeps the copy it installed until you update it.
 
-From a shell, refresh the catalog, then update the plugin:
+The Update button in the desktop app's plugin browser stays disabled for this plugin, even when a newer version is out. From a shell, refresh the catalog, then update the plugin:
 
 ```
 claude plugin marketplace update tempoc

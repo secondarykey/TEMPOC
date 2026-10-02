@@ -19,25 +19,17 @@ In a Claude Code session:
 
 ## Settings
 
-The color thresholds can be changed per window, with the same meaning and defaults as in the extension and the desktop app:
+The gear in the band, or `/tempoc`, opens the settings. They have the same meaning and defaults as in the extension and the desktop app:
 
-| Option | Default | Meaning |
+| Setting | Default | Meaning |
 |---|---|---|
-| `hour5_color_enabled` / `day7_color_enabled` | `true` | Color the bar at all |
-| `hour5_warning` / `day7_warning` | `0` | Points by which usage must exceed elapsed time to turn Warning color |
-| `hour5_danger` / `day7_danger` | `10` | Points by which usage must exceed elapsed time to turn Danger color |
-| `utilization_warning` | `98` | Usage percent that turns any bar Warning color |
-| `utilization_danger` | `100` | Usage percent that turns any bar Danger color |
+| 5h / 7d Color | On | Color the bar at all |
+| 5h / 7d Warning | 0 | Points by which usage must exceed elapsed time to turn Warning color |
+| 5h / 7d Danger | 10 | Points by which usage must exceed elapsed time to turn Danger color |
+| Usage Warning | 98 | Usage percent that turns any bar Warning color |
+| Usage Danger | 100 | Usage percent that turns any bar Danger color |
 
-Change them from the gear in the band, or with `/tempoc`, which opens the same settings pane. In the Claude Code CLI they are also rows in `/config`. They are stored in `~/.claude/settings.json` under `pluginConfigs`, which can also be edited directly:
-
-```json
-{
-  "pluginConfigs": {
-    "tempoc@tempoc": { "options": { "hour5_danger": 20 } }
-  }
-}
-```
+Changes take effect on Apply and are kept across sessions.
 
 ## Where the figures come from
 

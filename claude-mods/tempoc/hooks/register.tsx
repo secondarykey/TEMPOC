@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, PluginOptions, Register, SessionRateLimit, Timer } from 'claude-code'
+import type { EngineInterface, Register, SessionRateLimit, Timer } from 'claude-code'
 
-import type { TempocView, TempocWindow } from '../types'
+import type { TempocDraft, TempocSettings, TempocThresholds, TempocView, TempocWindow } from '../types'
 
 const windows = atom({ plugin: 'tempoc', key: 'windows' } as const, [] as TempocWindow[])
 const view = atom({ plugin: 'tempoc', key: 'view' } as const, { windows: [], at: 0 } as TempocView)
@@ -16,28 +16,57 @@ const SHOW_ICON = String.fromCharCode(0x29d7)
 const CELL_PX = 8.4
 const CLOSE_COLUMNS = 7
 
-// The settings pane, opened by the band's gear or by /tempoc.
+// The settings pane, opened by the band's gear or by /tempoc. Its edits stay
+// in `draft` until Apply, which saves them all at once in the plugin's store:
+// no option rows, so no module reload per field.
 const SETTINGS_PANE = 'tempoc-settings'
 const GEAR_ICON = String.fromCharCode(0x2699)
+const SETTINGS_KEY = 'settings'
 
-/** Writes one of this plugin's options as the /config menu would; the module then reloads with it. */
-async function setOption($: EngineInterface, field: string, value: number | boolean) {
-  const row = (await $.config.list()).find(r => r.key.startsWith('tempoc') && r.key.endsWith(`.${field}`))
-  if (!row) {
-    $.ui.toast(`TEMPOC: ${field} is not a setting here`)
-    return
+// Same defaults as the extension and the desktop app: warn as soon as usage
+// is ahead of elapsed time, danger once it is more than 10 points ahead.
+const DEFAULT_SETTINGS: TempocSettings = {
+  hour5: { isEnabled: true, warning: 0, danger: 10 },
+  day7: { isEnabled: true, warning: 0, danger: 10 },
+  utilizationWarning: 98,
+  utilizationDanger: 100,
+}
+const settings = atom({ plugin: 'tempoc', key: 'settings' } as const, DEFAULT_SETTINGS)
+const draft = atom({ plugin: 'tempoc', key: 'draft' } as const, null as TempocDraft | null)
+
+// The settings the drawing code reads; kept equal to the `settings` state.
+let current: TempocSettings = DEFAULT_SETTINGS
+
+const toDraft = (s: TempocSettings): TempocDraft => ({
+  hour5: { isEnabled: s.hour5.isEnabled, warning: String(s.hour5.warning), danger: String(s.hour5.danger) },
+  day7: { isEnabled: s.day7.isEnabled, warning: String(s.day7.warning), danger: String(s.day7.danger) },
+  utilizationWarning: String(s.utilizationWarning),
+  utilizationDanger: String(s.utilizationDanger),
+})
+
+/** The draft as settings, or null when a number is not 0 to 100. */
+function fromDraft(d: TempocDraft): TempocSettings | null {
+  const pct = (text: string) => {
+    const n = Number(text.trim())
+    return text.trim() !== '' && Number.isFinite(n) && n >= 0 && n <= 100 ? n : null
   }
-  const { deny } = await $.config.set({ key: row.key, value })
-  if (deny) $.ui.toast(`TEMPOC: ${deny}`)
+  const values = [d.hour5.warning, d.hour5.danger, d.day7.warning, d.day7.danger, d.utilizationWarning, d.utilizationDanger].map(pct)
+  if (values.some(v => v === null)) return null
+  const [h5w, h5d, d7w, d7d, uw, ud] = values as number[]
+  return {
+    hour5: { isEnabled: d.hour5.isEnabled, warning: h5w!, danger: h5d! },
+    day7: { isEnabled: d.day7.isEnabled, warning: d7w!, danger: d7d! },
+    utilizationWarning: uw!,
+    utilizationDanger: ud!,
+  }
 }
 
-async function setPercentOption($: EngineInterface, field: string, text: string) {
-  const value = Number(text.trim())
-  if (text.trim() === '' || !Number.isFinite(value) || value < 0 || value > 100) {
-    $.ui.toast('TEMPOC: 0-100')
-    return
-  }
-  await setOption($, field, value)
+/** Saves settings, makes the drawing use them and redraws. */
+async function saveSettings($: EngineInterface, next: TempocSettings) {
+  current = next
+  await update($, settings, () => next)
+  await $.store.set(SETTINGS_KEY, next)
+  await redraw?.()
 }
 
 async function setHidden($: EngineInterface, value: boolean) {
@@ -56,47 +85,12 @@ const SPAN_MS: Record<string, number> = {
   seven_day: 7 * 24 * HOUR,
 }
 
-/** When a window's bar turns Warning or Danger color: the plugin's options for it. */
-type Thresholds = {
-  isEnabled: boolean
-  /** Points by which usage must exceed elapsed time. */
-  warning: number
-  danger: number
-  /** Usage percent that turns the bar regardless of elapsed time. */
-  utilizationWarning: number
-  utilizationDanger: number
-}
+/** A window's color thresholds, its own and the shared usage levels. */
+type Thresholds = TempocThresholds & { utilizationWarning: number; utilizationDanger: number }
 
-// Same defaults as the extension and the desktop app: warn as soon as usage
-// is ahead of elapsed time, danger once it is more than 10 points ahead. The
-// options (plugin.json `userConfig`) override them per window; a change of
-// option reloads the module, and register() sets these again.
-let thresholds: Record<string, Thresholds> = {}
-const DEFAULT_THRESHOLDS: Thresholds = {
-  isEnabled: true,
-  warning: 0,
-  danger: 10,
-  utilizationWarning: 98,
-  utilizationDanger: 100,
-}
-const thresholdsOf = (kind: string): Thresholds => thresholds[kind] ?? DEFAULT_THRESHOLDS
-
-function readThresholds(options: PluginOptions): Record<string, Thresholds> {
-  const num = (key: string, fallback: number) => {
-    const v = options[key]
-    return typeof v === 'number' ? v : fallback
-  }
-  const shared = {
-    utilizationWarning: num('utilization_warning', DEFAULT_THRESHOLDS.utilizationWarning),
-    utilizationDanger: num('utilization_danger', DEFAULT_THRESHOLDS.utilizationDanger),
-  }
-  const forWindow = (prefix: string): Thresholds => ({
-    isEnabled: options[`${prefix}_color_enabled`] !== false,
-    warning: num(`${prefix}_warning`, DEFAULT_THRESHOLDS.warning),
-    danger: num(`${prefix}_danger`, DEFAULT_THRESHOLDS.danger),
-    ...shared,
-  })
-  return { five_hour: forWindow('hour5'), seven_day: forWindow('day7') }
+const thresholdsOf = (kind: string): Thresholds => {
+  const own = kind === 'five_hour' ? current.hour5 : kind === 'seven_day' ? current.day7 : DEFAULT_SETTINGS.hour5
+  return { ...own, utilizationWarning: current.utilizationWarning, utilizationDanger: current.utilizationDanger }
 }
 
 const toWindow = (r: SessionRateLimit): TempocWindow => {
@@ -323,11 +317,58 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
 // (it needs that hook's `$`), called again when a new reading arrives.
 let redraw: (() => Promise<void>) | undefined
 
-export const register: Register = (on, options) => {
-  thresholds = readThresholds(options)
+/** The saved settings, read leniently: anything missing or malformed keeps its default. */
+function readSettings(saved: unknown): TempocSettings {
+  const s = (typeof saved === 'object' && saved !== null ? saved : {}) as Partial<Record<string, unknown>>
+  const pct = (v: unknown, d: number) => (typeof v === 'number' && v >= 0 && v <= 100 ? v : d)
+  const win = (v: unknown, d: TempocThresholds): TempocThresholds => {
+    const o = (typeof v === 'object' && v !== null ? v : {}) as Partial<Record<string, unknown>>
+    return {
+      isEnabled: typeof o.isEnabled === 'boolean' ? o.isEnabled : d.isEnabled,
+      warning: pct(o.warning, d.warning),
+      danger: pct(o.danger, d.danger),
+    }
+  }
+  return {
+    hour5: win(s.hour5, DEFAULT_SETTINGS.hour5),
+    day7: win(s.day7, DEFAULT_SETTINGS.day7),
+    utilizationWarning: pct(s.utilizationWarning, DEFAULT_SETTINGS.utilizationWarning),
+    utilizationDanger: pct(s.utilizationDanger, DEFAULT_SETTINGS.utilizationDanger),
+  }
+}
 
+async function openSettings($: EngineInterface) {
+  await update($, draft, () => null)
+  await $.ui.open({ id: SETTINGS_PANE, title: 'TEMPOC', focus: true, closeOnEscape: true })
+}
+
+async function closeSettings($: EngineInterface) {
+  await update($, draft, () => null)
+  await $.ui.close({ id: SETTINGS_PANE })
+}
+
+async function editDraft($: EngineInterface, edit: (d: TempocDraft) => TempocDraft) {
+  await update($, draft, d => edit(d ?? toDraft(current)))
+}
+
+async function applyDraft($: EngineInterface) {
+  const d = await read($, draft)
+  if (d === null) return
+  const next = fromDraft(d)
+  if (next === null) {
+    $.ui.toast('TEMPOC: 0-100')
+    return
+  }
+  await saveSettings($, next)
+  await update($, draft, () => null)
+}
+
+export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
+
+    current = readSettings(await $.store.get(SETTINGS_KEY))
+    await update($, settings, () => current)
 
     const stored = await $.store.get(STORE_KEY)
     if (Array.isArray(stored)) await update($, windows, () => stored as TempocWindow[])
@@ -351,72 +392,71 @@ export const register: Register = (on, options) => {
   })
 
   on('command.run', { command: 'tempoc' }, async $ => {
-    await $.ui.open({ id: SETTINGS_PANE, title: 'TEMPOC', focus: true, closeOnEscape: true })
+    await openSettings($)
     return { text: 'TEMPOC settings opened.' }
   })
 
   // The settings: per window, whether to color the bar and the points at which
-  // it turns Warning and Danger; then the usage levels that turn any bar. Each
-  // change is written as an option, and the reload it causes redraws the bars.
+  // it turns Warning and Danger; then the usage levels that turn any bar. Edits
+  // go to the draft as they are typed; Apply saves them all and redraws.
   on('ui.render', { component: 'Pane', requestId: SETTINGS_PANE }, async ($, e) => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
     if (!('Input' in els) || !('Select' in els)) return <Text dimColor>-</Text>
     const { Input, Select } = els
 
+    const d = (await read($, draft)) ?? toDraft(await read($, settings))
     const onOff = [
       { value: 'on', label: 'On' },
       { value: 'off', label: 'Off' },
     ]
-    const windowRow = (prefix: string, kind: string, label: string) => {
-      const t = thresholdsOf(kind)
+    const windowRow = (which: 'hour5' | 'day7', label: string) => {
+      const w = d[which]
+      const set = (patch: Partial<TempocDraft['hour5']>) =>
+        void editDraft($, x => ({ ...x, [which]: { ...x[which], ...patch } }))
       return (
-        <Box key={prefix} flexDirection="row" alignItems="center" gap={2}>
+        <Box key={which} flexDirection="row" alignItems="center" gap={2}>
           <Text bold>{label}</Text>
           <Select
-            key={`${prefix}_color_enabled`}
+            key={`${which}-color`}
             label="Color"
             options={onOff}
-            value={t.isEnabled ? 'on' : 'off'}
-            onSelect={v => void setOption($, `${prefix}_color_enabled`, v === 'on')}
+            value={w.isEnabled ? 'on' : 'off'}
+            onSelect={v => set({ isEnabled: v === 'on' })}
           />
-          <Input
-            key={`${prefix}_warning`}
-            label="Warning"
-            value={String(t.warning)}
-            onSubmit={v => void setPercentOption($, `${prefix}_warning`, v)}
-          />
-          <Input
-            key={`${prefix}_danger`}
-            label="Danger"
-            value={String(t.danger)}
-            onSubmit={v => void setPercentOption($, `${prefix}_danger`, v)}
-          />
+          <Input key={`${which}-warning`} label="Warning" value={w.warning} onInput={v => set({ warning: v })} onSubmit={v => set({ warning: v })} />
+          <Input key={`${which}-danger`} label="Danger" value={w.danger} onInput={v => set({ danger: v })} onSubmit={v => set({ danger: v })} />
         </Box>
       )
     }
-    const shared = thresholdsOf('five_hour')
+    const setShared = (patch: Partial<Pick<TempocDraft, 'utilizationWarning' | 'utilizationDanger'>>) =>
+      void editDraft($, x => ({ ...x, ...patch }))
 
     return (
       <Box flexDirection="column" gap={1}>
-        {windowRow('hour5', 'five_hour', '5h')}
-        {windowRow('day7', 'seven_day', '7d')}
+        {windowRow('hour5', '5h')}
+        {windowRow('day7', '7d')}
         <Box flexDirection="row" alignItems="center" gap={2}>
           <Text bold>Usage</Text>
           <Input
-            key="utilization_warning"
+            key="usage-warning"
             label="Warning"
-            value={String(shared.utilizationWarning)}
-            onSubmit={v => void setPercentOption($, 'utilization_warning', v)}
+            value={d.utilizationWarning}
+            onInput={v => setShared({ utilizationWarning: v })}
+            onSubmit={v => setShared({ utilizationWarning: v })}
           />
           <Input
-            key="utilization_danger"
+            key="usage-danger"
             label="Danger"
-            value={String(shared.utilizationDanger)}
-            onSubmit={v => void setPercentOption($, 'utilization_danger', v)}
+            value={d.utilizationDanger}
+            onInput={v => setShared({ utilizationDanger: v })}
+            onSubmit={v => setShared({ utilizationDanger: v })}
           />
         </Box>
-        <Button key="tempoc-settings-close" role="dismiss" label="Close" onPress={() => void $.ui.close({ id: SETTINGS_PANE })} />
+        <Box flexDirection="row" gap={2}>
+          <Button key="tempoc-settings-apply" variant="primary" label="Apply" onPress={() => void applyDraft($)} />
+          <Button key="tempoc-settings-close" role="dismiss" label="Close" onPress={() => void closeSettings($)} />
+        </Box>
       </Box>
     )
   })
@@ -475,7 +515,7 @@ export const register: Register = (on, options) => {
           plain
           dimColor
           label={GEAR_ICON}
-          onPress={() => void $.ui.open({ id: SETTINGS_PANE, title: 'TEMPOC', focus: true, closeOnEscape: true })}
+          onPress={() => void openSettings($)}
         />
         <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />
       </Box>

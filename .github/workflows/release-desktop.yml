@@ -320,7 +320,8 @@ jobs:
           xattr -dr com.apple.quarantine /Applications/tempoc.app
           ```
 
-          Right-click -> Open does not work around this on macOS 15 or later.
+          Right-click -> Open does not help: macOS 15 removed that bypass, and this
+          dialog offers no override in any case. The command above is the only way in.
           EOF
           fi
           touch release-body.md

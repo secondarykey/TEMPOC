@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { EngineInterface, Register, SessionRateLimit } from 'claude-code'
+import type { EngineInterface, Register, SessionRateLimit, Timer } from 'claude-code'
 
 import type { TempocWindow } from '../types'
 
@@ -25,10 +25,11 @@ async function setHidden($: EngineInterface, value: boolean) {
 // before its first response; elapsed time is computed from the clock anyway.
 const STORE_KEY = 'windows'
 
-const HOUR = 60 * 60 * 1000
-const SPAN: Record<string, { label: string; ms: number }> = {
-  five_hour: { label: '5h', ms: 5 * HOUR },
-  seven_day: { label: '7d', ms: 7 * 24 * HOUR },
+const MINUTE = 60 * 1000
+const HOUR = 60 * MINUTE
+const SPAN_MS: Record<string, number> = {
+  five_hour: 5 * HOUR,
+  seven_day: 7 * 24 * HOUR,
 }
 
 // Same defaults as the extension and the desktop app: warn as soon as usage
@@ -45,11 +46,11 @@ const toWindow = (r: SessionRateLimit): TempocWindow => {
 
 /** Percent of the window's time that has passed, or null when it cannot be known. */
 const elapsedPercent = (w: TempocWindow, at: number): number | null => {
-  const span = SPAN[w.kind]
+  const span = SPAN_MS[w.kind]
   if (!span || w.resetsAt === null) return null
   const left = w.resetsAt - at
   if (left <= 0) return 100
-  return Math.min(100, Math.max(0, ((span.ms - left) / span.ms) * 100))
+  return Math.min(100, Math.max(0, ((span - left) / span) * 100))
 }
 
 const level = (used: number, elapsed: number | null): 'error' | 'warning' | undefined => {
@@ -62,7 +63,7 @@ const level = (used: number, elapsed: number | null): 'error' | 'warning' | unde
 
 const remaining = (w: TempocWindow, at: number): string => {
   if (w.resetsAt === null) return ''
-  const min = Math.max(0, Math.round((w.resetsAt - at) / 60000))
+  const min = Math.max(0, Math.round((w.resetsAt - at) / MINUTE))
   const d = Math.floor(min / 1440)
   const h = Math.floor((min % 1440) / 60)
   const m = min % 60
@@ -91,51 +92,72 @@ const PALETTE = {
   error: ['#ef4444', '#dc2626'],
 } as const
 
-/** One window, ready to draw: the bar's figures and the texts around it. */
+const LABEL: Record<string, string> = { five_hour: '5h', seven_day: '7d' }
+
+/** One window at one moment: the bar's figures and the texts around it. */
 type Reading = {
   used: number
   elapsed: number | null
   tone: keyof typeof PALETTE
   label: string
   usedText: string
-  resetText: string
-  remainText: string
   /** The line's short form beside the bar: the reset time, the time left in brackets. */
   tail: string
   /** The tooltip and the readers' text: every figure, elapsed included. */
   detail: string
 }
 
-const LABEL: Record<string, string> = { five_hour: '5h', seven_day: '7d' }
-
-const readings = (list: TempocWindow[], at: number): Reading[] =>
-  list.map(w => {
-    const label = LABEL[w.kind] ?? w.kind
-    const elapsed = elapsedPercent(w, at)
-    const usedText = `${w.percentUsed.toFixed(0)}%`
-    const resetText = w.resetsAt === null ? '' : `Resets ${resetClock(w, at)}`
-    const remainText = w.resetsAt === null ? '' : `${remaining(w, at)} left`
-    return {
-      used: w.percentUsed,
-      elapsed,
-      tone: level(w.percentUsed, elapsed) ?? 'accent',
-      label,
-      usedText,
-      resetText,
-      remainText,
-      tail: w.resetsAt === null ? '' : `${resetClock(w, at)} (${remaining(w, at)})`,
-      detail: [
-        `${label}: ${usedText} used`,
-        resetText,
-        elapsed === null ? '' : `Elapsed ${elapsed.toFixed(1)}%`,
-        remainText,
-      ]
-        .filter(Boolean)
-        .join(' / '),
-    }
-  })
+function describe(w: TempocWindow, at: number): Reading {
+  const label = LABEL[w.kind] ?? w.kind
+  const elapsed = elapsedPercent(w, at)
+  const usedText = `${w.percentUsed.toFixed(0)}%`
+  return {
+    used: w.percentUsed,
+    elapsed,
+    tone: level(w.percentUsed, elapsed) ?? 'accent',
+    label,
+    usedText,
+    tail: w.resetsAt === null ? '' : `${resetClock(w, at)} (${remaining(w, at)})`,
+    detail: [
+      `${label}: ${usedText} used`,
+      w.resetsAt === null ? '' : `Resets ${resetClock(w, at)}`,
+      elapsed === null ? '' : `Elapsed ${elapsed.toFixed(1)}%`,
+      w.resetsAt === null ? '' : `${remaining(w, at)} left`,
+    ]
+      .filter(Boolean)
+      .join(' / '),
+  }
+}
 
 const clamp = (n: number) => Math.min(100, Math.max(0, n))
+
+// An interactive Svg is a frame that reloads whenever its source changes, and
+// a reload blinks. So the source is built to stay the same for an hour: the
+// elapsed tick moves by SMIL animation, and the texts that change by the
+// minute (the time left, the tooltip) are drawn ahead for STATES minutes and
+// switched on in turn by SMIL. The hooks redraw only when that runs out, when
+// a color is due to change, or when a new reading arrives.
+const STATES = 60
+const REDRAW_MS = STATES * MINUTE
+
+/** Milliseconds until the drawing must be rebuilt: a color change, a reset, or the drawn-ahead hour running out. */
+function untilRedraw(list: TempocWindow[], at: number): number {
+  let wait = REDRAW_MS
+  for (const w of list) {
+    const span = SPAN_MS[w.kind]
+    if (!span || w.resetsAt === null) continue
+    if (w.resetsAt > at) wait = Math.min(wait, w.resetsAt - at + 1000)
+    // The color depends on usage minus elapsed; elapsed only grows, so each
+    // threshold is crossed once, when elapsed reaches usage minus it.
+    for (const threshold of [DANGER_AT, WARNING_AT]) {
+      const target = w.percentUsed - threshold
+      if (target <= 0 || target >= 100) continue
+      const crossAt = w.resetsAt - span * (1 - target / 100)
+      if (crossAt > at) wait = Math.min(wait, crossAt - at + 1000)
+    }
+  }
+  return Math.max(5000, wait)
+}
 
 // The band holds one row per window side by side, 5-hour on the left half and
 // 7-day on the right, laid out like the desktop app's compact mode so the band
@@ -156,51 +178,87 @@ const PAD_PX = 8
 // leave room for the texts beside the bar.
 const CHAR_PX = 6.6
 
-function svgBars(rows: Reading[], width: number): string {
-  const span = (width - GAP_PX * (rows.length - 1)) / rows.length
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+function svgBars(list: TempocWindow[], at: number, width: number): string {
+  const span = (width - GAP_PX * (list.length - 1)) / list.length
   const text = (x: number, anchor: string, cls: string, fill: string, s: string) =>
     `<text class="${cls}" x="${x.toFixed(1)}" y="${TEXT_Y}" font-size="12" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
-  const body = rows
-    .map((r, n) => {
+
+  const body = list
+    .map((w, n) => {
+      const r = describe(w, at)
       const x = n * (span + GAP_PX)
       const color = PALETTE[r.tone][0]
-      const tail = r.tail
+
+      // The minute-by-minute texts, merged where a run of minutes reads the same.
+      const states: { from: number; to: number; tail: string; detail: string }[] = []
+      for (let k = 0; k < STATES; k++) {
+        const d = describe(w, at + k * MINUTE)
+        const last = states[states.length - 1]
+        if (last && last.tail === d.tail && last.detail === d.detail) last.to = k + 1
+        else states.push({ from: k, to: k + 1, tail: d.tail, detail: d.detail })
+      }
+
       const labelW = (r.label.length + 1) * CHAR_PX
       const usedW = (r.usedText.length + 0.5) * CHAR_PX
-      const tailW = tail.length * CHAR_PX
+      const tailW = Math.max(...states.map(s => s.tail.length)) * CHAR_PX
       const barX = x + labelW + usedW + PAD_PX
       const barW = Math.max(24, span - (labelW + usedW + tailW + PAD_PX * 2))
       const fill = (clamp(r.used) / 100) * barW
-      const tick =
-        r.elapsed === null
-          ? ''
-          : `<rect class="t" x="${(barX + Math.min(barW - TICK_W, (r.elapsed / 100) * barW - TICK_W / 2)).toFixed(1)}" y="${TICK_Y}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb"/>`
+      const tickX = (e: number) => barX + Math.min(barW - TICK_W, (e / 100) * barW - TICK_W / 2)
+
+      let tick = ''
+      if (r.elapsed !== null && w.resetsAt !== null) {
+        const seconds = Math.max(1, (w.resetsAt - at) / 1000)
+        tick =
+          `<rect class="t" x="${tickX(r.elapsed).toFixed(1)}" y="${TICK_Y}" width="${TICK_W}" height="${TICK_H}" fill="#e5e7eb">` +
+          `<animate attributeName="x" from="${tickX(r.elapsed).toFixed(1)}" to="${tickX(100).toFixed(1)}" dur="${seconds.toFixed(0)}s" fill="freeze"/>` +
+          `</rect>`
+      }
+
+      // Each state is hidden but for its own minutes; the last stays on, so a
+      // late redraw shows a slightly old text rather than none. Its transparent
+      // rect, drawn over the row, carries the tooltip.
+      const timed = states
+        .map((s, i) => {
+          const end = i === states.length - 1 ? '' : ` end="${s.to * 60}s"`
+          return (
+            `<g visibility="hidden"><set attributeName="visibility" to="visible" begin="${s.from * 60}s"${end}/>` +
+            `<title>${esc(s.detail)}</title>` +
+            text(x + span, 'end', 'm', '#9ca3af', s.tail) +
+            `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
+            `</g>`
+          )
+        })
+        .join('')
+
       return (
-        `<g><title>${esc(r.detail)}</title>` +
-        `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
         text(x, 'start', 'm', '#9ca3af', r.label) +
         text(x + labelW + usedW, 'end', `u${r.tone[0]}`, color, r.usedText) +
         `<rect class="k" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${barW.toFixed(1)}" height="${TRACK_H}" rx="3" fill="#4b5563"/>` +
         `<rect class="f${r.tone[0]}" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="3" fill="${color}"/>` +
         tick +
-        text(x + span, 'end', 'm', '#9ca3af', tail) +
-        `</g>`
+        timed
       )
     })
     .join('')
+
   const light =
     `.k{fill:#d1d5db}.t{fill:#374151}.m{fill:#6b7280}` +
     `.fa,.ua{fill:${PALETTE.accent[1]}}.fw,.uw{fill:${PALETTE.warning[1]}}.fe,.ue{fill:${PALETTE.error[1]}}`
-  // The Svg is drawn interactive so each row's <title> shows as a tooltip.
-  // That puts it in a frame of its own; declaring both color schemes keeps the
-  // frame from painting an opaque page behind the bars.
+  // The Svg is drawn interactive so each row's <title> shows as a tooltip and
+  // the SMIL above runs. That puts it in a frame of its own; declaring both
+  // color schemes keeps the frame from painting an opaque page behind it.
   return (
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${HEIGHT_PX}" viewBox="0 0 ${width} ${HEIGHT_PX}" style="color-scheme: light dark; background: transparent">` +
     `<style>:root{color-scheme: light dark; background: transparent}text{font-family: system-ui, sans-serif; font-variant-numeric: tabular-nums}@media (prefers-color-scheme: light){${light}}</style>${body}</svg>`
   )
 }
 
-const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+// Rebuilds the drawing now and schedules the next rebuild. Set by session.start
+// (it needs that hook's `$`), called again when a new reading arrives.
+let redraw: (() => Promise<void>) | undefined
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -211,24 +269,33 @@ export const register: Register = on => {
     if ((await $.store.get(HIDDEN_KEY)) === true) await update($, isHidden, () => true)
     await publish($, (await $.session.usage()).rateLimits)
 
-    const tick = async () => {
+    let timer: Timer | undefined
+    redraw = async () => {
+      timer?.cancel()
       const t = await $.clock.now()
       await update($, now, () => t)
+      const wait = untilRedraw(await read($, windows), t)
+      timer = $.clock.after(wait, () => void redraw?.())
     }
-    await tick()
-    $.clock.every(30_000, () => void tick())
+    await redraw()
 
     return result
   })
 
   on('session.measure', async ($, e, next) => {
-    if (e.changed.includes('rateLimits')) await publish($, e.rateLimits)
+    if (e.changed.includes('rateLimits')) {
+      await publish($, e.rateLimits)
+      await redraw?.()
+    }
     return next(e)
   })
 
   // The bars sit in the band above the prompt: the only site that draws an Svg.
-  // The figures stay out of sight; the Svg's alt carries them for readers.
   // The band's close button hides it; the status bar then offers it back.
+  //
+  // The drawing is built against `now`, the moment of the last scheduled
+  // rebuild, not the clock: the band redraws for its own reasons too (a turn
+  // starting or ending), and an unchanged source keeps the frame from reloading.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const list = await read($, windows)
     if (e.props.hasSurvey || list.length === 0 || (await read($, isHidden))) return next(e)
@@ -237,7 +304,6 @@ export const register: Register = on => {
     if (!('Svg' in els)) return next(e)
 
     const at = (await read($, now)) || (await $.clock.now())
-    const rows = readings(list, at)
     const { Box, Button } = els
 
     // An interactive Svg sits in a frame of its own, which does not stretch to
@@ -245,14 +311,13 @@ export const register: Register = on => {
     // of the surface's code font, so the width is those cells at CELL_PX each,
     // less the close button's.
     const width = Math.max(200, Math.round((e.props.bodyColumns - CLOSE_COLUMNS) * CELL_PX))
-    void $.store.set('bandColumns', e.props.bodyColumns)
 
     return (
       <Box flexDirection="row" alignItems="center">
         <Box flexGrow={1} alignSelf="center">
           <els.Svg
-            source={svgBars(rows, width)}
-            alt={rows.map(r => r.detail).join(' / ')}
+            source={svgBars(list, at, width)}
+            alt={list.map(w => describe(w, at).detail).join(' / ')}
             width={width}
             height={HEIGHT_PX}
             isInteractive

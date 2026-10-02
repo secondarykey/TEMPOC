@@ -70,5 +70,5 @@ Re-check these on a newer build: the render sites and what each surface draws ma
   ```
 
   Run it again after each edit; the hot reload picks the copy up when the turn ends. The session then draws two bands, the installed one and the copy's, each with its own settings (`/usage-bar`, `/usage-bar-dev`). `--plugin-dir` takes the same copy: `python3 claude-mods/scripts/dev_copy.py <folder>`, then `claude --plugin-dir <folder>/usage-bar-dev`. Never load a copy as `usage-bar` beside the installed plugin.
-- Which copy is drawing: the settings pane shows the version from the copy's own `plugin.json`, and `local` when it was not installed from a marketplace (its root is not under `plugins/cache/`).
+- Which copy is drawing: the settings pane's title reads `TEMPOC v<version>` from the copy's own `plugin.json`, with `local` after it when it was not installed from a marketplace (its root is not under `plugins/cache/`). The desktop shows the title on the docked pane; the terminal draws a pane's title only as a tab, when more than one pane is open.
 - Type-check with the `tsconfig.json` Claude Code writes beside a locally loaded plugin (it extends `.claude-plugin/types/tsconfig.json`; both are git-ignored).

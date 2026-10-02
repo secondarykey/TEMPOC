@@ -357,7 +357,7 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
 // (it needs that hook's `$`), called again when a new reading arrives.
 let redraw: (() => Promise<void>) | undefined
 
-// What the settings pane shows of this copy of the plugin: the version from
+// What the settings pane's title shows of this copy of the plugin: the version from
 // its own manifest ($.plugin carries no version), and "local" when it was not
 // installed from a marketplace (a --plugin-dir or hot-reloaded copy), so a
 // development copy is told apart from the installed one. Read at session.start.
@@ -397,7 +397,7 @@ function readSettings(saved: unknown): TempocSettings {
 
 async function openSettings($: EngineInterface) {
   await update($, draft, () => null)
-  await $.ui.open({ id: SETTINGS_PANE, title: 'TEMPOC', focus: true, closeOnEscape: true })
+  await $.ui.open({ id: SETTINGS_PANE, title: ['TEMPOC', versionLabel].filter(Boolean).join(' '), focus: true, closeOnEscape: true })
 }
 
 async function closeSettings($: EngineInterface) {
@@ -511,10 +511,7 @@ export const register: Register = on => {
           {field('usage-warning', 'Warning', d.utilizationWarning, v => setShared({ utilizationWarning: v }))}
           {field('usage-danger', 'Danger', d.utilizationDanger, v => setShared({ utilizationDanger: v }))}
         </Box>
-        <Box flexDirection="row" justifyContent="flex-end" alignItems="center" gap={2}>
-          <Box flexGrow={1}>
-            <Text dimColor>{versionLabel}</Text>
-          </Box>
+        <Box flexDirection="row" justifyContent="flex-end" gap={2}>
           <Button key="tempoc-settings-apply" variant="primary" label="Apply" onPress={() => void applyDraft($)} />
           <Button key="tempoc-settings-close" role="dismiss" label="Close" onPress={() => void closeSettings($)} />
         </Box>

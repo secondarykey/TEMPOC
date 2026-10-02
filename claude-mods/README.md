@@ -25,7 +25,14 @@ Installing takes two steps: register this repository as a marketplace (a catalog
 
 The second line opens the plugin's details in the `/plugin` panel; choose a scope there (*Install for you* puts it in every project).
 
-**In the desktop app's Code tab**, add the marketplace `secondarykey/TEMPOC` from the plugin browser (**+** next to the prompt box, then **Plugins**), and install `usage-bar` from it. From a shell, the same two steps are:
+**In the desktop app's Code tab**, use the plugin browser:
+
+1. Click **+** below the prompt box and choose **Add plugins**.
+2. Open **Add** at the top right and choose **Add marketplace**, then **Add from a repository**.
+3. Type `secondarykey/TEMPOC` and pick **TEMPOC** from the suggestions.
+4. Press **Add** next to **Usage bar** in the list.
+
+From a shell, the same two steps are:
 
 ```
 claude plugin marketplace add secondarykey/TEMPOC
@@ -41,7 +48,7 @@ To remove it, in the terminal:
 /plugin marketplace remove tempoc
 ```
 
-or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin marketplace remove tempoc`. In the desktop app, **+ → Plugins → Manage plugins** uninstalls the plugin too.
+or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin marketplace remove tempoc`. Removing the marketplace also uninstalls the plugin and deletes its saved settings.
 
 ## Using it
 
@@ -60,11 +67,11 @@ The same items and defaults as in the extension and the desktop app:
 
 | Setting | Default | Meaning |
 |---|---|---|
-| 5h / 7d Color | On | Color the bar at all |
+| 5h / 7d (Color on / off) | Color on | Color the bar at all |
 | 5h / 7d Warning | 0 | Points by which usage must exceed elapsed time to turn Warning color |
 | 5h / 7d Danger | 10 | Points by which usage must exceed elapsed time to turn Danger color |
-| Usage Warning | 98 | Usage percent that turns any bar Warning color |
-| Usage Danger | 100 | Usage percent that turns any bar Danger color |
+| Utilization Threshold: Warning | 98 | Usage percent that turns any bar Warning color |
+| Utilization Threshold: Danger | 100 | Usage percent that turns any bar Danger color |
 
 Changes take effect on Apply and are kept across sessions.
 

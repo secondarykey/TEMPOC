@@ -11,21 +11,29 @@ const isHidden = atom({ plugin: 'usage-bar', key: 'isHidden' } as const, false)
 const HIDDEN_KEY = 'isHidden'
 // An hourglass, the status bar's button that brings the bars back.
 const SHOW_ICON = String.fromCharCode(0x29d7)
-// Pixels per cell of the desktop's code font, and the cells the band's gear and close
-// buttons take: together they turn the band's width in cells into pixels.
-const CELL_PX = 7.8
-const CLOSE_COLUMNS = 7
+// Pixels per cell of the desktop's code font (14px, 0.6em a cell), and the
+// pixels the band's gear and close buttons take, which do not scale with the
+// cells: together they turn the band's width in cells into the Svg's slot.
+// Measured on the desktop: 77 cells left a 584px slot beside the buttons, so
+// the buttons take about 63px; BUTTONS_PX adds a few pixels of margin.
+const CELL_PX = 8.4
+const BUTTONS_PX = 70
 
 // The settings pane, opened by the band's gear or by /usage-bar. Its edits stay
 // in `draft` until Apply, which saves them all at once in the plugin's store:
 // no option rows, so no module reload per field.
 const SETTINGS_PANE = 'tempoc-settings'
 const GEAR_ICON = String.fromCharCode(0x2699)
-// Ballot boxes, checked and not: the settings pane's color switches.
-const CHECKED = 0x2611
-const UNCHECKED = 0x2610
-// The width of the settings pane's number inputs, in cells.
+// The settings pane's color switches: there is no toggle element, so each is a
+// Select of these two, beside the window's heading. The labels say it is the
+// coloring that switches, not whether the window is shown.
+const ON_OFF = [
+  { value: 'on', label: 'Color on' },
+  { value: 'off', label: 'Color off' },
+] as const
+// The width of the settings pane's number inputs and color selects, in cells.
 const INPUT_COLUMNS = 8
+const SELECT_COLUMNS = 13
 const SETTINGS_KEY = 'settings'
 
 // Same defaults as the extension and the desktop app: warn as soon as usage
@@ -161,8 +169,10 @@ type Reading = {
   tone: keyof typeof PALETTE
   label: string
   usedText: string
-  /** The line's short form beside the bar: the reset time, the time left in brackets. */
-  tail: string
+  /** The reset time beside the bar ('' without one). */
+  reset: string
+  /** The time left, in brackets after the reset time ('' without one). */
+  left: string
   /** The tooltip and the readers' text: every figure, elapsed included. */
   detail: string
 }
@@ -177,7 +187,8 @@ function describe(w: TempocWindow, at: number): Reading {
     tone: level(w.percentUsed, elapsed, thresholdsOf(w.kind)) ?? 'accent',
     label,
     usedText,
-    tail: w.resetsAt === null ? '' : `${resetClock(w, at)} (${remaining(w, at)})`,
+    reset: resetClock(w, at),
+    left: remaining(w, at),
     detail: [
       `${label}: ${usedText} used`,
       w.resetsAt === null ? '' : `Resets ${resetClock(w, at)}`,
@@ -236,37 +247,61 @@ const TICK_Y = 3
 const TICK_H = 14
 const TICK_W = 2
 const PAD_PX = 8
-// Rough advance of a character of the band's small sans-serif text, used to
-// leave room for the texts beside the bar.
-const CHAR_PX = 6.6
+const FONT_PX = 12
+// Advance of each character of the band's text in ems, close to the system
+// sans-serif with tabular figures. The Svg's frame runs no script, so the
+// texts cannot be measured; a flat width per character left too much room for
+// texts that are mostly figures and spaces, and the bars paid for it.
+const ADVANCE_EM: Record<string, number> = { ' ': 0.27, ':': 0.27, '/': 0.4, '(': 0.32, ')': 0.32, '%': 0.85, d: 0.58, h: 0.56, m: 0.86 }
+const textPx = (t: string) => [...t].reduce((n, c) => n + (ADVANCE_EM[c] ?? 0.56), 0) * FONT_PX
+// The shortest a bar may get before the texts beside it give way: first the
+// time left, then the reset time (both stay in the tooltip).
+const MIN_BAR_PX = 80
+const MIN_BAR_SHARE = 0.4
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 function svgBars(list: TempocWindow[], at: number, width: number): string {
-  const span = (width - GAP_PX * (list.length - 1)) / list.length
   const text = (x: number, anchor: string, cls: string, fill: string, s: string) =>
     `<text class="${cls}" x="${x.toFixed(1)}" y="${TEXT_Y}" font-size="12" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
 
-  const body = list
-    .map((w, n) => {
-      const r = describe(w, at)
-      const x = n * (span + GAP_PX)
+  const rows = list.map(w => {
+    // The minute-by-minute texts, merged where a run of minutes reads the same.
+    const states: { from: number; to: number; reset: string; left: string; detail: string }[] = []
+    for (let k = 0; k < STATES; k++) {
+      const d = describe(w, at + k * MINUTE)
+      const last = states[states.length - 1]
+      if (last && last.reset === d.reset && last.left === d.left && last.detail === d.detail) last.to = k + 1
+      else states.push({ from: k, to: k + 1, reset: d.reset, left: d.left, detail: d.detail })
+    }
+    return { w, r: describe(w, at), states }
+  })
+
+  // The bar comes first. All bars are one length; each row takes only the
+  // room its own texts need (the longest of its drawn-ahead minutes), and the
+  // next row starts right after it, so no row carries another's longer text
+  // as blank space. When that would leave the bars shorter than their minimum,
+  // the texts beside them give way instead.
+  const tailOf = (s: { reset: string; left: string }, full: boolean) =>
+    !s.reset ? '' : full && s.left ? `${s.reset} (${s.left})` : s.reset
+  const headW = Math.max(...rows.map(({ r }) => textPx(r.label) + FONT_PX * 0.4 + textPx(r.usedText)))
+  const free = width - GAP_PX * (rows.length - 1)
+  const minBar = Math.max(MIN_BAR_PX, (free / rows.length) * MIN_BAR_SHARE)
+  const layout = (full: boolean, show: boolean) => {
+    const tails = rows.map(({ states }) => (show ? Math.max(0, ...states.map(s => textPx(tailOf(s, full)))) : 0))
+    const besideBar = tails.map(t => headW + PAD_PX + (t > 0 ? PAD_PX + t : 0))
+    const barW = (free - besideBar.reduce((a, b) => a + b, 0)) / rows.length
+    return { full, show, barW, rowW: besideBar.map(b => b + Math.max(24, barW)) }
+  }
+  const fit = [layout(true, true), layout(false, true)].find(f => f.barW >= minBar) ?? layout(false, false)
+  const barW = Math.max(24, fit.barW)
+  const rowX = fit.rowW.map((_, n) => fit.rowW.slice(0, n).reduce((a, b) => a + b + GAP_PX, 0))
+
+  const body = rows
+    .map(({ w, r, states }, n) => {
+      const x = rowX[n]
       const color = PALETTE[r.tone][0]
-
-      // The minute-by-minute texts, merged where a run of minutes reads the same.
-      const states: { from: number; to: number; tail: string; detail: string }[] = []
-      for (let k = 0; k < STATES; k++) {
-        const d = describe(w, at + k * MINUTE)
-        const last = states[states.length - 1]
-        if (last && last.tail === d.tail && last.detail === d.detail) last.to = k + 1
-        else states.push({ from: k, to: k + 1, tail: d.tail, detail: d.detail })
-      }
-
-      const labelW = (r.label.length + 1) * CHAR_PX
-      const usedW = (r.usedText.length + 0.5) * CHAR_PX
-      const tailW = Math.max(...states.map(s => s.tail.length)) * CHAR_PX
-      const barX = x + labelW + usedW + PAD_PX
-      const barW = Math.max(24, span - (labelW + usedW + tailW + PAD_PX * 2))
+      const barX = x + headW + PAD_PX
       const fill = (clamp(r.used) / 100) * barW
       const tickX = (e: number) => barX + Math.min(barW - TICK_W, (e / 100) * barW - TICK_W / 2)
 
@@ -288,16 +323,21 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
           return (
             `<g visibility="hidden"><set attributeName="visibility" to="visible" begin="${s.from * 60}s"${end}/>` +
             `<title>${esc(s.detail)}</title>` +
-            text(x + span, 'end', 'm', '#9ca3af', s.tail) +
-            `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
+            (fit.show ? `<g clip-path="url(#tail${n})">${text(barX + barW + PAD_PX, 'start', 'm', '#9ca3af', tailOf(s, fit.full))}</g>` : '') +
+            `<rect x="${x.toFixed(1)}" y="0" width="${fit.rowW[n].toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
             `</g>`
           )
         })
         .join('')
 
+      // The texts are estimated, not measured. Should one run longer than its
+      // room, it is cut where its row ends (most of the gap to the next row, or
+      // the drawing's edge) rather than running into the next row's label.
+      const clipW = n < rows.length - 1 ? fit.rowW[n] + GAP_PX - 6 : width - x
       return (
+        `<clipPath id="tail${n}"><rect x="${x.toFixed(1)}" y="0" width="${clipW.toFixed(1)}" height="${HEIGHT_PX}"/></clipPath>` +
         text(x, 'start', 'm', '#9ca3af', r.label) +
-        text(x + labelW + usedW, 'end', `u${r.tone[0]}`, color, r.usedText) +
+        text(x + headW, 'end', `u${r.tone[0]}`, color, r.usedText) +
         `<rect class="k" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${barW.toFixed(1)}" height="${TRACK_H}" rx="3" fill="#4b5563"/>` +
         `<rect class="f${r.tone[0]}" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${fill.toFixed(1)}" height="${TRACK_H}" rx="3" fill="${color}"/>` +
         tick +
@@ -322,6 +362,24 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
 // (it needs that hook's `$`), called again when a new reading arrives.
 let redraw: (() => Promise<void>) | undefined
 
+// What the settings pane's title shows of this copy of the plugin: the version from
+// its own manifest ($.plugin carries no version), and "local" when it was not
+// installed from a marketplace (a --plugin-dir or hot-reloaded copy), so a
+// development copy is told apart from the installed one. Read at session.start.
+let versionLabel = ''
+
+async function readVersionLabel($: EngineInterface): Promise<string> {
+  let version = ''
+  try {
+    const manifest = JSON.parse(await $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`)) as { version?: unknown }
+    if (typeof manifest.version === 'string') version = manifest.version
+  } catch {
+    // No manifest to read: the label says what it can.
+  }
+  const isInstalled = /[\\/]plugins[\\/]cache[\\/]/.test($.plugin.root)
+  return [version && `v${version}`, isInstalled ? '' : 'local'].filter(Boolean).join(' ')
+}
+
 /** The saved settings, read leniently: anything missing or malformed keeps its default. */
 function readSettings(saved: unknown): TempocSettings {
   const s = (typeof saved === 'object' && saved !== null ? saved : {}) as Partial<Record<string, unknown>>
@@ -344,7 +402,7 @@ function readSettings(saved: unknown): TempocSettings {
 
 async function openSettings($: EngineInterface) {
   await update($, draft, () => null)
-  await $.ui.open({ id: SETTINGS_PANE, title: 'TEMPOC', focus: true, closeOnEscape: true })
+  await $.ui.open({ id: SETTINGS_PANE, title: ['TEMPOC', versionLabel].filter(Boolean).join(' '), focus: true, closeOnEscape: true })
 }
 
 async function closeSettings($: EngineInterface) {
@@ -372,6 +430,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const result = await next(e)
 
+    versionLabel = await readVersionLabel($)
     current = readSettings(await $.store.get(SETTINGS_KEY))
     await update($, settings, () => current)
 
@@ -408,38 +467,54 @@ export const register: Register = on => {
     const els = $.ui.resolve(e)
     const { Box, Text, Button } = els
     if (!('Input' in els)) return <Text dimColor>-</Text>
-    const { Input } = els
+    const { Input, Select } = els
 
-    // One setting per line so the pane stays readable when narrow. There is no
-    // checkbox element, so the color switch is a Button drawn as one.
+    // One setting per line so the pane stays readable when narrow.
     const d = (await read($, draft)) ?? toDraft(await read($, settings))
-    // The label on the left, the input at the pane's right edge in a box of a
+    // The label on the left, the control at the pane's right edge in a box of a
     // fixed width, since it otherwise stretches across the pane.
-    const field = (key: string, label: string, value: string, onChange: (v: string) => void) => (
-      <Box key={key} flexDirection="row" alignItems="center" justifyContent="space-between" paddingLeft={2}>
-        <Box flexGrow={1}>
-          <Text>{label}</Text>
-        </Box>
-        <Box width={INPUT_COLUMNS} flexShrink={0}>
-          <Input key={key} value={value} onInput={onChange} onSubmit={onChange} />
+    const row = (key: string, label: unknown, control: unknown, indent = 2, columns = INPUT_COLUMNS) => (
+      <Box key={key} flexDirection="row" alignItems="center" justifyContent="space-between" paddingLeft={indent}>
+        <Box flexGrow={1}>{label}</Box>
+        <Box width={columns} flexShrink={0}>
+          {control}
         </Box>
       </Box>
     )
+    // Every number is a percent (the windows' thresholds, points of it), so
+    // each input carries the sign after it.
+    const field = (key: string, label: string, value: string, onChange: (v: string) => void) =>
+      row(
+        key,
+        <Text>{label}</Text>,
+        <Box flexDirection="row" alignItems="center" gap={1}>
+          {/* A fixed width: an Input otherwise takes its own default width, past the pane's edge. */}
+          <Box width={INPUT_COLUMNS} flexShrink={0}>
+            <Input key={key} value={value} onInput={onChange} onSubmit={onChange} />
+          </Box>
+          <Text dimColor>%</Text>
+        </Box>,
+        2,
+        INPUT_COLUMNS + 2,
+      )
     const windowBlock = (which: 'hour5' | 'day7', label: string) => {
       const w = d[which]
       const set = (patch: Partial<TempocDraft['hour5']>) =>
         void editDraft($, x => ({ ...x, [which]: { ...x[which], ...patch } }))
       return (
         <Box key={which} flexDirection="column">
-          <Box flexDirection="row" alignItems="center" gap={2}>
-            <Text bold>{label}</Text>
-            <Button
+          {row(
+            `${which}-color`,
+            <Text bold>{label}</Text>,
+            <Select
               key={`${which}-color`}
-              plain
-              label={`${String.fromCharCode(w.isEnabled ? CHECKED : UNCHECKED)} Color`}
-              onPress={() => set({ isEnabled: !w.isEnabled })}
-            />
-          </Box>
+              options={ON_OFF}
+              value={w.isEnabled ? 'on' : 'off'}
+              onSelect={v => set({ isEnabled: v === 'on' })}
+            />,
+            0,
+            SELECT_COLUMNS,
+          )}
           {field(`${which}-warning`, 'Warning', w.warning, v => set({ warning: v }))}
           {field(`${which}-danger`, 'Danger', w.danger, v => set({ danger: v }))}
         </Box>
@@ -453,7 +528,7 @@ export const register: Register = on => {
         {windowBlock('hour5', '5h')}
         {windowBlock('day7', '7d')}
         <Box flexDirection="column">
-          <Text bold>Usage</Text>
+          <Text bold>Utilization Threshold</Text>
           {field('usage-warning', 'Warning', d.utilizationWarning, v => setShared({ utilizationWarning: v }))}
           {field('usage-danger', 'Danger', d.utilizationDanger, v => setShared({ utilizationDanger: v }))}
         </Box>
@@ -500,28 +575,37 @@ export const register: Register = on => {
     // An interactive Svg sits in a frame of its own, which does not stretch to
     // the band: it needs a width in pixels. The band reports its width in cells
     // of the surface's code font, so the width is those cells at CELL_PX each,
-    // less the buttons'. The estimate errs short; should it still overflow, the
-    // row does not wrap and the bars are clipped, so the buttons stay in place.
-    const width = Math.max(200, Math.round((e.props.bodyColumns - CLOSE_COLUMNS) * CELL_PX))
+    // less the buttons' pixels. Should it still overflow, the Svg's box shrinks
+    // below it (minWidth 0) and clips the bars. The close Button stays a direct
+    // child of the row, where the desktop draws a role="dismiss" Button as the
+    // band's own close control (inside a Box of ours it is a boxed button). The
+    // desktop then lays the row's other children out in a container of its own
+    // that wraps, so the Svg and the gear go in one Box of ours, which keeps
+    // them on one line.
+    const width = Math.max(200, Math.round(e.props.bodyColumns * CELL_PX - BUTTONS_PX))
 
     return (
       <Box flexDirection="row" flexWrap="nowrap" alignItems="center">
-        <Box flexGrow={1} flexShrink={1} overflow="hidden" alignSelf="center">
-          <els.Svg
-            source={svgBars(list, at, width)}
-            alt={list.map(w => describe(w, at).detail).join(' / ')}
-            width={width}
-            height={HEIGHT_PX}
-            isInteractive
-          />
+        <Box flexDirection="row" flexWrap="nowrap" alignItems="center" flexGrow={1} flexShrink={1} minWidth={0}>
+          <Box flexGrow={1} flexShrink={1} minWidth={0} overflow="hidden" alignSelf="center">
+            <els.Svg
+              source={svgBars(list, at, width)}
+              alt={list.map(w => describe(w, at).detail).join(' / ')}
+              width={width}
+              height={HEIGHT_PX}
+              isInteractive
+            />
+          </Box>
+          <Box flexShrink={0} marginRight={-1}>
+            <Button
+              key="tempoc-gear"
+              plain
+              dimColor
+              label={GEAR_ICON}
+              onPress={() => void openSettings($)}
+            />
+          </Box>
         </Box>
-        <Button
-          key="tempoc-gear"
-          plain
-          dimColor
-          label={GEAR_ICON}
-          onPress={() => void openSettings($)}
-        />
         <Button key="tempoc-hide" role="dismiss" label="×" onPress={() => setHidden($, true)} />
       </Box>
     )

@@ -11,10 +11,13 @@ const isHidden = atom({ plugin: 'usage-bar', key: 'isHidden' } as const, false)
 const HIDDEN_KEY = 'isHidden'
 // An hourglass, the status bar's button that brings the bars back.
 const SHOW_ICON = String.fromCharCode(0x29d7)
-// Pixels per cell of the desktop's code font, and the cells the band's gear and close
-// buttons take: together they turn the band's width in cells into pixels.
-const CELL_PX = 7.8
-const CLOSE_COLUMNS = 7
+// Pixels per cell of the desktop's code font (14px, 0.6em a cell), and the
+// pixels the band's gear and close buttons take, which do not scale with the
+// cells: together they turn the band's width in cells into the Svg's slot.
+// Measured on the desktop: 77 cells left a 584px slot beside the buttons, so
+// the buttons take about 63px; BUTTONS_PX adds a few pixels of margin.
+const CELL_PX = 8.4
+const BUTTONS_PX = 70
 
 // The settings pane, opened by the band's gear or by /usage-bar. Its edits stay
 // in `draft` until Apply, which saves them all at once in the plugin's store:
@@ -161,8 +164,10 @@ type Reading = {
   tone: keyof typeof PALETTE
   label: string
   usedText: string
-  /** The line's short form beside the bar: the reset time, the time left in brackets. */
-  tail: string
+  /** The reset time beside the bar ('' without one). */
+  reset: string
+  /** The time left, in brackets after the reset time ('' without one). */
+  left: string
   /** The tooltip and the readers' text: every figure, elapsed included. */
   detail: string
 }
@@ -177,7 +182,8 @@ function describe(w: TempocWindow, at: number): Reading {
     tone: level(w.percentUsed, elapsed, thresholdsOf(w.kind)) ?? 'accent',
     label,
     usedText,
-    tail: w.resetsAt === null ? '' : `${resetClock(w, at)} (${remaining(w, at)})`,
+    reset: resetClock(w, at),
+    left: remaining(w, at),
     detail: [
       `${label}: ${usedText} used`,
       w.resetsAt === null ? '' : `Resets ${resetClock(w, at)}`,
@@ -236,38 +242,59 @@ const TICK_Y = 3
 const TICK_H = 14
 const TICK_W = 2
 const PAD_PX = 8
-// Rough advance of a character of the band's small sans-serif text, used to
-// leave room for the texts beside the bar.
-const CHAR_PX = 6.6
+const FONT_PX = 12
+// Advance of each character of the band's text in ems, close to the system
+// sans-serif with tabular figures. The Svg's frame runs no script, so the
+// texts cannot be measured; a flat width per character left too much room for
+// texts that are mostly figures and spaces, and the bars paid for it.
+const ADVANCE_EM: Record<string, number> = { ' ': 0.27, ':': 0.27, '/': 0.4, '(': 0.32, ')': 0.32, '%': 0.85, d: 0.58, h: 0.56, m: 0.86 }
+const textPx = (t: string) => [...t].reduce((n, c) => n + (ADVANCE_EM[c] ?? 0.56), 0) * FONT_PX
+// The shortest a bar may get before the texts beside it give way: first the
+// time left, then the reset time (both stay in the tooltip).
+const MIN_BAR_PX = 80
+const MIN_BAR_SHARE = 0.4
 
 const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 function svgBars(list: TempocWindow[], at: number, width: number): string {
-  const span = (width - GAP_PX * (list.length - 1)) / list.length
   const text = (x: number, anchor: string, cls: string, fill: string, s: string) =>
     `<text class="${cls}" x="${x.toFixed(1)}" y="${TEXT_Y}" font-size="12" text-anchor="${anchor}" fill="${fill}">${esc(s)}</text>`
 
   const rows = list.map(w => {
     // The minute-by-minute texts, merged where a run of minutes reads the same.
-    const states: { from: number; to: number; tail: string; detail: string }[] = []
+    const states: { from: number; to: number; reset: string; left: string; detail: string }[] = []
     for (let k = 0; k < STATES; k++) {
       const d = describe(w, at + k * MINUTE)
       const last = states[states.length - 1]
-      if (last && last.tail === d.tail && last.detail === d.detail) last.to = k + 1
-      else states.push({ from: k, to: k + 1, tail: d.tail, detail: d.detail })
+      if (last && last.reset === d.reset && last.left === d.left && last.detail === d.detail) last.to = k + 1
+      else states.push({ from: k, to: k + 1, reset: d.reset, left: d.left, detail: d.detail })
     }
     return { w, r: describe(w, at), states }
   })
 
-  // Every row leaves room for the longest texts of any row, so the bars come
-  // out the same length however long one window's reset time reads.
-  const headW = Math.max(...rows.map(({ r }) => (r.label.length + 1 + r.usedText.length + 0.5) * CHAR_PX))
-  const tailW = Math.max(...rows.flatMap(({ states }) => states.map(s => s.tail.length))) * CHAR_PX
-  const barW = Math.max(24, span - (headW + tailW + PAD_PX * 2))
+  // The bar comes first. All bars are one length; each row takes only the
+  // room its own texts need (the longest of its drawn-ahead minutes), and the
+  // next row starts right after it, so no row carries another's longer text
+  // as blank space. When that would leave the bars shorter than their minimum,
+  // the texts beside them give way instead.
+  const tailOf = (s: { reset: string; left: string }, full: boolean) =>
+    !s.reset ? '' : full && s.left ? `${s.reset} (${s.left})` : s.reset
+  const headW = Math.max(...rows.map(({ r }) => textPx(r.label) + FONT_PX * 0.4 + textPx(r.usedText)))
+  const free = width - GAP_PX * (rows.length - 1)
+  const minBar = Math.max(MIN_BAR_PX, (free / rows.length) * MIN_BAR_SHARE)
+  const layout = (full: boolean, show: boolean) => {
+    const tails = rows.map(({ states }) => (show ? Math.max(0, ...states.map(s => textPx(tailOf(s, full)))) : 0))
+    const besideBar = tails.map(t => headW + PAD_PX + (t > 0 ? PAD_PX + t : 0))
+    const barW = (free - besideBar.reduce((a, b) => a + b, 0)) / rows.length
+    return { full, show, barW, rowW: besideBar.map(b => b + Math.max(24, barW)) }
+  }
+  const fit = [layout(true, true), layout(false, true)].find(f => f.barW >= minBar) ?? layout(false, false)
+  const barW = Math.max(24, fit.barW)
+  const rowX = fit.rowW.map((_, n) => fit.rowW.slice(0, n).reduce((a, b) => a + b + GAP_PX, 0))
 
   const body = rows
     .map(({ w, r, states }, n) => {
-      const x = n * (span + GAP_PX)
+      const x = rowX[n]
       const color = PALETTE[r.tone][0]
       const barX = x + headW + PAD_PX
       const fill = (clamp(r.used) / 100) * barW
@@ -291,14 +318,19 @@ function svgBars(list: TempocWindow[], at: number, width: number): string {
           return (
             `<g visibility="hidden"><set attributeName="visibility" to="visible" begin="${s.from * 60}s"${end}/>` +
             `<title>${esc(s.detail)}</title>` +
-            text(barX + barW + PAD_PX, 'start', 'm', '#9ca3af', s.tail) +
-            `<rect x="${x.toFixed(1)}" y="0" width="${span.toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
+            (fit.show ? `<g clip-path="url(#tail${n})">${text(barX + barW + PAD_PX, 'start', 'm', '#9ca3af', tailOf(s, fit.full))}</g>` : '') +
+            `<rect x="${x.toFixed(1)}" y="0" width="${fit.rowW[n].toFixed(1)}" height="${HEIGHT_PX}" fill="transparent"/>` +
             `</g>`
           )
         })
         .join('')
 
+      // The texts are estimated, not measured. Should one run longer than its
+      // room, it is cut where its row ends (most of the gap to the next row, or
+      // the drawing's edge) rather than running into the next row's label.
+      const clipW = n < rows.length - 1 ? fit.rowW[n] + GAP_PX - 6 : width - x
       return (
+        `<clipPath id="tail${n}"><rect x="${x.toFixed(1)}" y="0" width="${clipW.toFixed(1)}" height="${HEIGHT_PX}"/></clipPath>` +
         text(x, 'start', 'm', '#9ca3af', r.label) +
         text(x + headW, 'end', `u${r.tone[0]}`, color, r.usedText) +
         `<rect class="k" x="${barX.toFixed(1)}" y="${TRACK_Y}" width="${barW.toFixed(1)}" height="${TRACK_H}" rx="3" fill="#4b5563"/>` +
@@ -503,9 +535,9 @@ export const register: Register = on => {
     // An interactive Svg sits in a frame of its own, which does not stretch to
     // the band: it needs a width in pixels. The band reports its width in cells
     // of the surface's code font, so the width is those cells at CELL_PX each,
-    // less the buttons'. The estimate errs short; should it still overflow, the
-    // row does not wrap and the bars are clipped, so the buttons stay in place.
-    const width = Math.max(200, Math.round((e.props.bodyColumns - CLOSE_COLUMNS) * CELL_PX))
+    // less the buttons' pixels. Should it still overflow, the row does not wrap
+    // and the bars are clipped, so the buttons stay in place.
+    const width = Math.max(200, Math.round(e.props.bodyColumns * CELL_PX - BUTTONS_PX))
 
     return (
       <Box flexDirection="row" flexWrap="nowrap" alignItems="center">

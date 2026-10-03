@@ -146,11 +146,36 @@ const resetClock = (w: TempocWindow, at: number): string => {
   return t.toDateString() === new Date(at).toDateString() ? hm : `${t.getMonth() + 1}/${t.getDate()} ${hm}`
 }
 
+// A running session did not see the readings another session saved to the
+// store (found by trial), so the latest reading is also kept in a file, which
+// a session reads when it is switched back to. It sits where Claude Code keeps
+// a plugin's data (plugins/data/<name>-<marketplace>), so it goes with the
+// plugin.
+let sharedPath: string | undefined
+
+async function findSharedPath($: EngineInterface): Promise<string | undefined> {
+  const home = (await $.env.get('USERPROFILE')) ?? (await $.env.get('HOME'))
+  const config = (await $.env.get('CLAUDE_CONFIG_DIR')) ?? (home && `${home}/.claude`)
+  return config ? `${config}/plugins/data/${$.plugin.name}-tempoc/windows.json` : undefined
+}
+
+async function readShared($: EngineInterface): Promise<TempocWindow[] | undefined> {
+  if (!sharedPath) return undefined
+  try {
+    const list: unknown = JSON.parse(await $.fs.read(sharedPath))
+    return Array.isArray(list) ? (list as TempocWindow[]) : undefined
+  } catch {
+    // Not written yet, or caught mid-write: keep the reading at hand.
+    return undefined
+  }
+}
+
 async function publish($: EngineInterface, limits: SessionRateLimit[]) {
   if (limits.length === 0) return
   const list = limits.map(toWindow)
   await update($, windows, () => list)
   await $.store.set(STORE_KEY, list)
+  if (sharedPath) await $.fs.write(sharedPath, JSON.stringify(list)).catch(() => undefined)
 }
 
 // Bar colors, from the desktop app's theme (dark first, light second).
@@ -431,6 +456,7 @@ export const register: Register = on => {
     const result = await next(e)
 
     versionLabel = await readVersionLabel($)
+    sharedPath = await findSharedPath($)
     current = readSettings(await $.store.get(SETTINGS_KEY))
     await update($, settings, () => current)
 
@@ -551,9 +577,13 @@ export const register: Register = on => {
   // Switching to another session detaches the desktop from this one, and
   // switching back attaches it again before the band is drawn. The band then
   // remounts and its SMIL replays from the last rebuild, up to an hour stale,
-  // so rebuilding here keeps it current, as prompt.submit does.
+  // so rebuilding here keeps it current, as prompt.submit does. The reading is
+  // taken from the shared file, where whichever session last got a response
+  // left it, so usage spent in the session just left shows here too.
   on('session.attach', async ($, e, next) => {
     const result = await next(e)
+    const shared = await readShared($)
+    if (shared) await update($, windows, () => shared)
     await redraw?.()
     return result
   })

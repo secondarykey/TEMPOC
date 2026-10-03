@@ -94,7 +94,7 @@ Changes take effect on Apply and are kept across sessions.
 
 Claude Code receives the account's usage windows (`five_hour`, `seven_day`) with each of its own API responses, and this plugin reads them from there. It makes no request of its own and sends nothing anywhere. So:
 
-- The amount used updates when this Claude Code session gets a response. Usage you spend elsewhere (claude.ai, another session or machine) shows up at the next response. Elapsed time follows the clock on its own.
+- The amount used updates when this Claude Code session gets a response. Usage you spend elsewhere (claude.ai, another session or machine) shows up at the next response, or, for another Claude Code session on the same machine, as soon as you come back to this one. Elapsed time follows the clock on its own.
 - The last reading is kept between sessions, so a new session shows the bars before its first response.
 - Nothing is shown off a subscription (an API key), where there are no usage windows.
 - Per-model weekly limits and usage credits are not part of these figures.

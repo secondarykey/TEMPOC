@@ -15,15 +15,6 @@
         "path": "claude-mods/usage-bar"
       },
       "description": "Shows how far you are through Claude's usage windows: amount used vs. time elapsed, above the prompt"
-    },
-    {
-      "name": "hello",
-      "source": {
-        "source": "git-subdir",
-        "url": "https://github.com/secondarykey/TEMPOC.git",
-        "path": "claude-mods/hello"
-      },
-      "description": "Template mod: a status bar button that says Hello ClaudeCodeMods"
     }
   ]
 }

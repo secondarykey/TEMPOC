@@ -1,8 +1,0 @@
-{
-  "name": "hello",
-  "version": "0.1.0",
-  "description": "Template mod: a status bar button that says Hello ClaudeCodeMods",
-  "author": { "name": "secondarykey" },
-  "repository": "https://github.com/secondarykey/TEMPOC",
-  "license": "MIT"
-}

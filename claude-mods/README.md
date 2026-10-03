@@ -14,7 +14,7 @@ It runs inside Claude Code only: the terminal, and the Code tab of the Claude de
 
 ## Install
 
-Installing takes two steps: register this repository as a marketplace (a catalog of plugins, named `tempoc`), then install the one plugin it lists (`usage-bar@tempoc`). The bars appear in the next session.
+Installing takes two steps: register this repository as a marketplace (a catalog of plugins, named `tempoc`), then install the plugin from it (`usage-bar@tempoc`; the catalog also lists `hello`, a template, see below). The bars appear in the next session.
 
 **In the terminal**, in a Claude Code session:
 
@@ -103,5 +103,9 @@ Claude Code receives the account's usage windows (`five_hour`, `seven_day`) with
 
 - The band always takes one row above the prompt. Claude Code gives mods no place to draw a bar without taking room.
 - The band blinks when it is redrawn: when you send a prompt, when you come back to the session from another one, when the amount used changes, when a bar changes color, and once an hour.
+
+## Hello (template)
+
+The catalog also lists `hello@tempoc`, the smallest whole mod, kept as a starting point for writing one: a **Hello** button in the status bar under the prompt that pops up `Hello ClaudeCodeMods`. Install it the same way (`claude plugin install hello@tempoc`); its source is in [`hello/`](hello/).
 
 Mods are an early-access Claude Code feature; the API may change between Claude Code releases.

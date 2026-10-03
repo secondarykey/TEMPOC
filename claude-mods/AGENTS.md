@@ -17,13 +17,13 @@ This directory holds the module's plugins, one per subdirectory. They are distri
 | `scripts/versionup.py` | Computes the version and writes it to `version` and `usage-bar/.claude-plugin/plugin.json` |
 | `scripts/dev_copy.py` | Copies a plugin under another name (`usage-bar-dev`) for development beside the installed one (see Developing) |
 | `usage-bar/types/index.d.ts` | Contract for the `$.state` values the module keeps; `claude plugin validate` holds every state key the module names to it |
-| `hello/` | A template mod, the smallest whole plugin: a `Hello` button in the prompt footer (`SessionMode`) that toasts `Hello ClaudeCodeMods`. Copy it to start a new mod. Not in the marketplace and outside `versionup-mods.yml`, so it ships to no one; its `plugin.json` version stays `0.1.0` |
+| `hello/` | A template mod, the smallest whole plugin: a `Hello` button in the prompt footer (`SessionMode`) that toasts `Hello ClaudeCodeMods`. Copy it to start a new mod. Listed in the marketplace (`hello@tempoc`), but outside `versionup-mods.yml`: its `plugin.json` version is its own, raised by hand when a change should reach users |
 
 Why the catalog sits at the repository root: Claude Code reads manifests only from directories named exactly `.claude-plugin/`, and adding a marketplace by repository (`/plugin marketplace add secondarykey/TEMPOC`, or the same from a plugin browser) reads only the repo-root `.claude-plugin/marketplace.json`. No add command takes a path inside the repository; only `extraKnownMarketplaces` in settings does. With the catalog under `claude-mods/`, users had to add it by the file's raw URL, and a plugin browser that adds by repository could not reach it.
 
 Why two `.claude-plugin/` directories: a plugin's folder is copied whole to each user's machine on install, so `usage-bar/` holds only what ships, while the catalog and the module's own documents never ship.
 
-Naming: the marketplace is `tempoc` (the product), and each plugin is named for its feature, so a plugin's id reads `<feature>@tempoc` (today `usage-bar@tempoc`). The directory, the marketplace entry's `name`, `plugin.json`'s `name`, the `plugin` of every `atom` and the `PluginState` key in `types/index.d.ts` all carry that same feature name; the settings command takes it too (`/usage-bar`). Renaming a plugin changes its id, so users reinstall it, and what it kept in `$.store` may not carry over.
+Naming: the marketplace is `tempoc` (the product), and each plugin is named for its feature, so a plugin's id reads `<feature>@tempoc` (today `usage-bar@tempoc` and the template `hello@tempoc`). The directory, the marketplace entry's `name`, `plugin.json`'s `name`, the `plugin` of every `atom` and the `PluginState` key in `types/index.d.ts` all carry that same feature name; the settings command takes it too (`/usage-bar`). Renaming a plugin changes its id, so users reinstall it, and what it kept in `$.store` may not carry over.
 
 ## Versioning
 

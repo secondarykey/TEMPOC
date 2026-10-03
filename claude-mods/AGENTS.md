@@ -14,7 +14,7 @@ This directory holds the module's plugins, one per subdirectory. They are distri
 | `usage-bar/hooks/hooks.json` | Names the one hooks module |
 | `usage-bar/hooks/register.tsx` | The module |
 | `version` | The next version, the source of truth (see Versioning) |
-| `scripts/versionup.py` | Computes the version and writes it to `version` and `usage-bar/.claude-plugin/plugin.json` |
+| `scripts/versionup.py` | Computes the version and writes it to `version` and every plugin's `.claude-plugin/plugin.json` |
 | `scripts/dev_copy.py` | Copies a plugin under another name (`usage-bar-dev`) for development beside the installed one (see Developing) |
 | `usage-bar/types/index.d.ts` | Contract for the `$.state` values the module keeps; `claude plugin validate` holds every state key the module names to it |
 
@@ -26,9 +26,11 @@ Naming: the marketplace is `tempoc` (the product), and each plugin is named for 
 
 ## Versioning
 
-`version` is the source of truth; `usage-bar/.claude-plugin/plugin.json` carries a copy, because that is where Claude Code reads the plugin's version, and users receive a change only when that value changes (Claude Code keeps an installed copy per version and ignores new commits under the same one).
+`version` is the source of truth, and every plugin of the module takes it: each plugin's `.claude-plugin/plugin.json` carries a copy, because that is where Claude Code reads the plugin's version, and users receive a change only when that value changes (Claude Code keeps an installed copy per version and ignores new commits under the same one).
 
-`.github/workflows/versionup-mods.yml` runs on a push to `main` that touches `usage-bar/**` or `version`: `scripts/versionup.py` keeps an untagged `version` or bumps the patch of a tagged one, writes both files, merges the bump through a PR, and tags `mods-v<version>`. There is no release workflow: the bump reaching `main` is the release. It does not reach users by itself: Claude Code auto-updates only Anthropic's official marketplaces by default, so for `tempoc` a user runs `claude plugin marketplace update tempoc` and `claude plugin update usage-bar@tempoc`, or turns auto-update on in `/plugin` (README, Updating). A restart alone keeps the installed version. Edit `version` by hand to start a minor or major one. A change to the catalog (`../.claude-plugin/`) or the docs alone is no release.
+`.github/workflows/versionup-mods.yml` runs on a push to `main` that touches a plugin directory (`*/**`, `scripts/` excepted) or `version`: `scripts/versionup.py` keeps an untagged `version` or bumps the patch of a tagged one, writes it to `version` and every `plugin.json`, merges the bump through a PR, and tags `mods-v<version>`. There is no release workflow: the bump reaching `main` is the release. It does not reach users by itself: Claude Code auto-updates only Anthropic's official marketplaces by default, so for `tempoc` a user runs `claude plugin marketplace update tempoc` and `claude plugin update usage-bar@tempoc` (or **Update now** in `/plugin`), or turns auto-update on in `/plugin` (README, Updating). A restart alone keeps the installed version. Edit `version` by hand to start a minor or major one. A change to the catalog (`../.claude-plugin/`), the scripts or the docs alone is no release.
+
+Updating from the desktop app does not work (found by trial, Claude Code 2.1.286, desktop 2.19675): its plugin browser keeps Update disabled for a `tempoc` plugin even after `marketplace update` has put the newer version in the local catalog, and auto-update never runs there. The desktop starts Claude Code with `DISABLE_AUTOUPDATER=1`, which skips the startup plugin auto-update pass (and hides the auto-update toggle in `/plugin`); `FORCE_AUTOUPDATE_PLUGINS=1` in the settings' `env` reaches the process but still started no update. A terminal `claude` start with `autoUpdate` on refreshed the catalog and updated the plugin within seconds. Auto-update can also be set in user settings, as `extraKnownMarketplaces.tempoc.autoUpdate: true` beside (not inside) `source`; there is no CLI flag for it.
 
 ## usage-bar: data
 

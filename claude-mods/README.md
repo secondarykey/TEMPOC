@@ -52,18 +52,20 @@ or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin m
 
 ## Updating
 
-Claude Code updates plugins on its own only from Anthropic's official marketplaces. For a marketplace like `tempoc`, auto-update is off by default, so a new version does not arrive by restarting: Claude Code keeps the copy it installed until you update it.
+Claude Code keeps the version it installed until the plugin is updated; restarting alone does not fetch a new one. How to update depends on where you run it.
 
-The Update button in the desktop app's plugin browser stays disabled for this plugin, even when a newer version is out. From a shell, refresh the catalog, then update the plugin:
+**In the terminal**, open `/plugin`, go to **Installed**, pick **usage-bar @ tempoc** and choose **Update now**. From a shell, the same is:
 
 ```
 claude plugin marketplace update tempoc
 claude plugin update usage-bar@tempoc
 ```
 
-The new version takes effect in the next session. To have it happen at startup from then on, turn on auto-update for `tempoc` in the marketplace list of the `/plugin` panel (in a terminal session; the desktop app's Code tab does not open that panel).
+To have new versions arrive on their own, turn on auto-update for `tempoc` in the **Marketplaces** tab of `/plugin` (it is off by default for every marketplace but Anthropic's official ones). Then each start of Claude Code in a terminal refreshes the catalog and updates the plugin.
 
-The version in use is shown in the title of the settings pane (`TEMPOC v<version>`).
+**In the desktop app's Code tab**, neither works: the Update button in the plugin browser stays disabled for this plugin, even when the catalog already lists a newer version, and auto-update does not run when the desktop app starts Claude Code. Update from a terminal as above, or, with auto-update on, start `claude` in a terminal once. The terminal and the desktop app share the installed plugins, so the desktop app picks the new version up too.
+
+The new version takes effect in the next session. The version in use is shown in the title of the settings pane (`TEMPOC v<version>`).
 
 ## Using it
 

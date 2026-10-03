@@ -1,15 +1,15 @@
 """
 Compute the next Claude Code mods release version, then update
-`claude-mods/version` and the plugin's `.claude-plugin/plugin.json`.
+`claude-mods/version` and every plugin's `.claude-plugin/plugin.json`.
 
 Logic:
   - Read the current version from the `version` file.
   - If a release tag for that version already exists, bump the patch component.
   - Otherwise, use the version string as-is.
 
-`version` is the source of truth; plugin.json carries a copy because Claude Code
-reads the plugin's version from there, and users receive a change only when that
-value changes.
+`version` is the source of truth; each plugin.json carries a copy because Claude
+Code reads the plugin's version from there, and users receive a change only when
+that value changes. Every plugin of the module takes the same version.
 
 Outputs `version=<new_version>` to GITHUB_OUTPUT (or stdout when run locally).
 """
@@ -23,7 +23,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 TAG_PREFIX = "mods-v"
-PLUGIN_MANIFEST = ROOT / "usage-bar" / ".claude-plugin" / "plugin.json"
+# One per plugin directory (usage-bar, hello, ...).
+PLUGIN_MANIFESTS = sorted(ROOT.glob("*/.claude-plugin/plugin.json"))
 
 
 def get_tags() -> set[str]:
@@ -49,16 +50,17 @@ def main() -> None:
     # does not turn the files' line endings into CRLF.
     version_path.write_text(new_version + "\n", newline="")
 
-    # Update plugin.json (preserve formatting via regex)
-    with open(PLUGIN_MANIFEST, encoding="utf-8", newline="") as f:
-        content = f.read()
-    content = re.sub(
-        r'("version"\s*:\s*)"[^"]*"',
-        rf'\g<1>"{new_version}"',
-        content,
-        count=1,
-    )
-    PLUGIN_MANIFEST.write_text(content, encoding="utf-8", newline="")
+    # Update each plugin.json (preserve formatting via regex)
+    for manifest in PLUGIN_MANIFESTS:
+        with open(manifest, encoding="utf-8", newline="") as f:
+            content = f.read()
+        content = re.sub(
+            r'("version"\s*:\s*)"[^"]*"',
+            rf'\g<1>"{new_version}"',
+            content,
+            count=1,
+        )
+        manifest.write_text(content, encoding="utf-8", newline="")
 
     # Output for GitHub Actions or local use
     github_output = os.environ.get("GITHUB_OUTPUT")

@@ -50,6 +50,21 @@ To remove it, in the terminal:
 
 or from a shell, `claude plugin uninstall usage-bar@tempoc` and `claude plugin marketplace remove tempoc`. Removing the marketplace also uninstalls the plugin and deletes its saved settings.
 
+## Updating
+
+Claude Code updates plugins on its own only from Anthropic's official marketplaces. For a marketplace like `tempoc`, auto-update is off by default, so a new version does not arrive by restarting: Claude Code keeps the copy it installed until you update it.
+
+The Update button in the desktop app's plugin browser stays disabled for this plugin, even when a newer version is out. From a shell, refresh the catalog, then update the plugin:
+
+```
+claude plugin marketplace update tempoc
+claude plugin update usage-bar@tempoc
+```
+
+The new version takes effect in the next session. To have it happen at startup from then on, turn on auto-update for `tempoc` in the marketplace list of the `/plugin` panel (in a terminal session; the desktop app's Code tab does not open that panel).
+
+The version in use is shown in the title of the settings pane (`TEMPOC v<version>`).
+
 ## Using it
 
 | Control | Where | What it does |
@@ -79,7 +94,7 @@ Changes take effect on Apply and are kept across sessions.
 
 Claude Code receives the account's usage windows (`five_hour`, `seven_day`) with each of its own API responses, and this plugin reads them from there. It makes no request of its own and sends nothing anywhere. So:
 
-- The amount used updates when this Claude Code session gets a response. Usage you spend elsewhere (claude.ai, another session or machine) shows up at the next response. Elapsed time follows the clock on its own.
+- The amount used updates when this Claude Code session gets a response. Usage you spend elsewhere (claude.ai, another session or machine) shows up at the next response, or, for another Claude Code session on the same machine, as soon as you come back to this one. Elapsed time follows the clock on its own.
 - The last reading is kept between sessions, so a new session shows the bars before its first response.
 - Nothing is shown off a subscription (an API key), where there are no usage windows.
 - Per-model weekly limits and usage credits are not part of these figures.
@@ -87,6 +102,6 @@ Claude Code receives the account's usage windows (`five_hour`, `seven_day`) with
 ## Known limits
 
 - The band always takes one row above the prompt. Claude Code gives mods no place to draw a bar without taking room.
-- The band blinks when it is redrawn: when you send a prompt, when the amount used changes, when a bar changes color, and once an hour.
+- The band blinks when it is redrawn: when you send a prompt, when you come back to the session from another one, when the amount used changes, when a bar changes color, and once an hour.
 
 Mods are an early-access Claude Code feature; the API may change between Claude Code releases.

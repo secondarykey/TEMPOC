@@ -153,6 +153,24 @@ async function publish($: EngineInterface, limits: SessionRateLimit[]) {
   await $.store.set(STORE_KEY, list)
 }
 
+/**
+ * The reading the store holds, whichever session saved it last (a running
+ * session sees another's saves), or undefined when it is not a list of windows.
+ */
+async function readStored($: EngineInterface): Promise<TempocWindow[] | undefined> {
+  const list = await $.store.get(STORE_KEY)
+  const isWindow = (w: unknown): w is TempocWindow => {
+    const o = (typeof w === 'object' && w !== null ? w : {}) as Partial<Record<string, unknown>>
+    return (
+      typeof o.kind === 'string' &&
+      typeof o.percentUsed === 'number' &&
+      Number.isFinite(o.percentUsed) &&
+      (o.resetsAt === null || (typeof o.resetsAt === 'number' && Number.isFinite(o.resetsAt)))
+    )
+  }
+  return Array.isArray(list) && list.every(isWindow) ? list : undefined
+}
+
 // Bar colors, from the desktop app's theme (dark first, light second).
 const PALETTE = {
   accent: ['#7dd3fc', '#0284c7'],
@@ -434,8 +452,8 @@ export const register: Register = on => {
     current = readSettings(await $.store.get(SETTINGS_KEY))
     await update($, settings, () => current)
 
-    const stored = await $.store.get(STORE_KEY)
-    if (Array.isArray(stored)) await update($, windows, () => stored as TempocWindow[])
+    const stored = await readStored($)
+    if (stored) await update($, windows, () => stored)
     if ((await $.store.get(HIDDEN_KEY)) === true) await update($, isHidden, () => true)
     await publish($, (await $.session.usage()).rateLimits)
 
@@ -546,6 +564,20 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     await redraw?.()
     return next(e)
+  })
+
+  // Switching to another session detaches the desktop from this one, and
+  // switching back attaches it again before the band is drawn. The band then
+  // remounts and its SMIL replays from the last rebuild, up to an hour stale,
+  // so rebuilding here keeps it current, as prompt.submit does. The reading is
+  // taken from the store, where whichever session last got a response left
+  // it, so usage spent in the session just left shows here too.
+  on('session.attach', async ($, e, next) => {
+    const result = await next(e)
+    const stored = await readStored($)
+    if (stored) await update($, windows, () => stored)
+    await redraw?.()
+    return result
   })
 
   on('session.measure', async ($, e, next) => {

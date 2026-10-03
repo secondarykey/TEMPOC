@@ -3,13 +3,14 @@ name: Version Up (Claude Code mods)
 on:
   push:
     branches: [main]
-    # Only what reaches users: the plugin's own files (copied to each user's
-    # machine on install) and the version file. The catalog (the repo-root
-    # .claude-plugin/) and the docs under claude-mods/ never ship, so a change
-    # to them is no release.
+    # Only what reaches users: the plugins' own files (each plugin directory is
+    # copied to a user's machine on install) and the version file. The catalog
+    # (the repo-root .claude-plugin/), the scripts and the docs under
+    # claude-mods/ never ship, so a change to them is no release.
     paths:
-      - "claude-mods/usage-bar/**"
+      - "claude-mods/*/**"
       - "claude-mods/version"
+      - "!claude-mods/scripts/**"
   # Lets a bump be retried without a dummy commit -- e.g. after fixing GH_PAT.
   workflow_dispatch:
 
@@ -65,7 +66,7 @@ jobs:
       - name: Check for file changes
         id: changes
         run: |
-          if git diff --quiet claude-mods/version claude-mods/usage-bar/.claude-plugin/plugin.json; then
+          if git diff --quiet claude-mods/version claude-mods/*/.claude-plugin/plugin.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -78,7 +79,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           BRANCH="release/mods-v${{ steps.versionup.outputs.version }}"
           git checkout -b "$BRANCH"
-          git add claude-mods/version claude-mods/usage-bar/.claude-plugin/plugin.json
+          git add claude-mods/version claude-mods/*/.claude-plugin/plugin.json
           git commit -m "chore(claude-mods): bump version to ${{ steps.versionup.outputs.version }} [skip versionup]"
           git push origin "$BRANCH"
 

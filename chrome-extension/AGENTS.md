@@ -110,14 +110,17 @@ The usage page is a modal dialog at `https://claude.ai/new#settings/usage` (prev
 | Jul 2026 | Prepended a "Your limits are temporarily boosted." banner to a section | `nth-child` row position — fixed by matching the row's meter markup with `:has()` |
 | Aug 2026 | Inserted another wrapper div above the sections | The `> div:last-child` chain — fixed with `div:has(> section)` |
 | Sep 2026 | Rebuilt the dialog on CDS components: both usage rows moved into **one** section (section 2 is now "Usage credits"), and the meter gained wrapper divs | Every remaining path selector at once |
+| Nov 2026 | Made "This week" a disclosure: the row is now wrapped in `[row, breakdown panel]`, and its meter gained an overlay `<span>` (the per-model share) next to the fill | "The row is the direct child of the two meters' common ancestor" — it picked the wrapper, the clone threw on the missing second column, and the 7-day bar vanished |
 
 The only thing that has survived all of it is the meter's ARIA contract: the fill's container carries `role="meter"` with `aria-valuenow` / `aria-valuetext`. So that is the single anchor now, and the row is derived from it structurally:
 
 1. Collect the dialog's meters, skipping anything inside `[data-tempoc]` (TEMPOC's own clones also contain a meter).
 2. Take the first two in DOM order — 5-hour ("Current session"), then 7-day ("This week"). Extra weekly rows per model family sort after these two, so they are skipped naturally. That is intended: the injected bar shows *elapsed time through the window*, and every weekly row shares one window.
-3. Their nearest common ancestor is the row container; each row is that container's direct child on the path down to its meter.
+3. For each meter, `rowOf()` climbs until the branch it came from has a preceding element sibling; that parent is the row. Inside the meter column the meter's branch comes first, inside the row it comes after the title column, so this stops exactly at the row.
 
-No class name, no `nth-child`, no fixed depth — wrappers can be added or removed above or between the rows without breaking anything. `MaxRowDepth` caps step 3 at 8 levels: if claude.ai ever splits the two rows back into separate sections, the common ancestor jumps up the tree and "the row" would become a whole section, so the lookup fails instead of cloning half the dialog.
+No class name, no `nth-child`, no fixed depth, and nothing about what surrounds a row — each row is found from its own meter, so wrappers around a single row (the "This week" disclosure) or the rows landing in separate containers do not matter. `MaxRowDepth` caps the climb at 8 levels, and `createElement()` refuses a row that does not have the two columns below: if the shape changes, nothing is injected rather than a broken clone.
+
+**Where the clone goes.** Directly after its row (`row.after(clone)`), so the 7-day clone sits *inside* the disclosure wrapper, between the row and the breakdown panel. The rows are spaced by the row container's `gap`, which does not reach inside that wrapper, so `missingRowGap()` copies the amount onto the clone as `margin-top` whenever the row's direct parent has no gap of its own.
 
 **Row shape assumed downstream.** `createElement()` clones a row and `redraw()` rewrites it, both relying on the row having two element children:
 
@@ -126,7 +129,7 @@ No class name, no `nth-child`, no fixed depth — wrappers can be added or remov
 | `divs[0]` | `[title, "Resets at 12:40 PM"]` | title removed; `children[0]` becomes the reset-time line |
 | `divs[1]` | `[meter block, "63% used"]` | `children[1]` becomes the elapsed percentage |
 
-The fill bar is reached with `fillBarOf()` (`[role="meter"]` → first element child), never by an index chain — that chain is exactly what the CDS rewrite lengthened. The clone's stale `aria-valuenow` / `aria-valuetext` / `aria-labelledby` are stripped on creation and the first two are re-set to the elapsed values by `redraw()`, so screen readers do not read the usage percentage twice.
+The fill bar is reached with `fillBarOf()` (`[role="meter"]` → first element child), never by an index chain — that chain is exactly what the CDS rewrite lengthened. The clone's stale `aria-valuenow` / `aria-valuetext` / `aria-labelledby` are stripped on creation and the first two are re-set to the elapsed values by `redraw()`, so screen readers do not read the usage percentage twice. Any other child of the cloned meter (the weekly per-model overlay) is removed: it would sit on top of the elapsed fill and means nothing there.
 
 **Fill is a transform, not a width.** Claude renders the fill full-width and offsets it: `transform: translateX(calc(var(--_meter-dir, -1) * (100% - ...)))`. `redraw()` matches that with `width: 100%` plus its own `translateX(-N%)`; writing `width` instead would leave the cloned `translateX` in place and shift the bar left.
 

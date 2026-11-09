@@ -10,39 +10,47 @@ const TempocAttr = "data-tempoc";
 // メーターから行までの最大階層。現状は4段(メーター→w-full→flex-1→メーター欄→行)
 const MaxRowDepth = 8;
 
-// 使用量2行(5時間/7日)を返す。行そのものは
-// 「2つのメーターの最近共通祖先(=行コンテナ)の直下の子」として求めるので、
-// クラス名にも階層数にも依存しない。順序は DOM 順 = 5時間, 7日。
+// メーターが属する行。行は [見出し欄, メーター欄] の2欄なので、
+// メーターから上へ辿って「メーター側の枝より前に兄弟がある」最初の祖先が行になる
+// (メーター欄の中ではメーターが先頭、行の中では見出し欄の後ろ)。
+// 行の外側の形には依存しない: 7日の行は開閉用のラッパ
+// [行, 内訳パネル] に包まれていて、コンテナ直下の子ではない。
+function rowOf(meter) {
+  let e = meter;
+  for (let depth = 0; depth < MaxRowDepth; depth++) {
+    const parent = e.parentElement;
+    if (!parent) return null;
+    if (e.previousElementSibling) return parent;
+    e = parent;
+  }
+  // 行の形が変わって見つからない。大きな塊を複製するより何も出さない方を選ぶ
+  return null;
+}
+
+// 使用量2行(5時間/7日)を返す。クラス名にも階層数にも依存しない。
+// 順序は DOM 順 = 5時間, 7日。
 function findUsageRows() {
   const meters = Array.from(document.querySelectorAll(MeterSelector))
     .filter((m) => !m.closest("[" + TempocAttr + "]"));
   if (meters.length < 2) return null;
 
-  const first = meters[0];
-  const second = meters[1];
-
-  const ancestors = new Set();
-  for (let e = first; e; e = e.parentElement) ancestors.add(e);
-  let container = second;
-  while (container && !ancestors.has(container)) container = container.parentElement;
-  if (!container) return null;
-
-  const rowOf = (m) => {
-    let e = m;
-    let depth = 0;
-    while (e && e.parentElement !== container) {
-      e = e.parentElement;
-      // 2行が別コンテナに分かれた場合、共通祖先はずっと上になり
-      // 「行」としてセクション丸ごとを掴んでしまう。深すぎたら不成立扱いにして、
-      // 巨大な複製を挿し込むより何も出さない方を選ぶ
-      if (++depth > MaxRowDepth) return null;
-    }
-    return e;
-  };
-  const hour5 = rowOf(first);
-  const day7 = rowOf(second);
+  const hour5 = rowOf(meters[0]);
+  const day7 = rowOf(meters[1]);
   if (!hour5 || !day7 || hour5 === day7) return null;
+  if (hour5.contains(day7) || day7.contains(hour5)) return null;
   return { hour5: hour5, day7: day7 };
+}
+
+// 行間の余白。行コンテナの gap が行同士を離しているが、行がラッパに
+// 包まれているとクローンはラッパの中(gap なし)に入るので、同じ量を
+// margin で補う。直接の親に gap があれば補う必要はない。
+function missingRowGap(row) {
+  let e = row.parentElement;
+  for (let depth = 0; e && depth < 3; depth++, e = e.parentElement) {
+    const gap = parseFloat(getComputedStyle(e).rowGap);
+    if (gap > 0) return depth === 0 ? "" : gap + "px";
+  }
+  return "";
 }
 
 // 行の中の塗りバー。メーターの唯一の子が塗り
@@ -176,10 +184,10 @@ async function createElement(id) {
     cp.setAttribute(TempocAttr, "");
 
     var divs = cp.querySelectorAll(":scope > div");
-    divs[0].removeChild(divs[0].children[0]);
-
     const meter = cp.querySelector('[role="meter"]');
-    if (!meter) return null;
+    // 行が想定の2欄でなければ挿入しない(redraw() も同じ形を前提にしている)
+    if (divs.length < 2 || !divs[0].children[0] || !meter) return null;
+    divs[0].removeChild(divs[0].children[0]);
     // クローン元の使用率がスクリーンリーダーに残らないよう、aria 値は捨てる
     // (経過時間の値は redraw() が入れ直す)
     meter.removeAttribute("aria-valuenow");
@@ -194,6 +202,9 @@ async function createElement(id) {
     }
     bar.classList.remove("bg-fill-danger", "bg-fill-warning");
     bar.classList.add("bg-fill-accent");
+    // 7日のメーターには塗りの上にモデル別の内訳を示す重ね描きがある。
+    // 経過時間バーには意味がないので、塗り以外は捨てる
+    Array.from(meter.children).forEach((c) => { if (c !== bar) c.remove(); });
 
     // クローン元(使用量行)の値をそのまま出さない。usage API 応答前に挿入されると
     // 使用量の日時・%・塗り量が経過時間バーの値として見えてしまうため、
@@ -203,6 +214,7 @@ async function createElement(id) {
     bar.style.width = "100%";
     bar.style.transform = "translateX(-100%)";
 
+    cp.style.marginTop = missingRowGap(target);
     target.after(cp);
     return cp;
   })();

@@ -120,7 +120,7 @@ The only thing that has survived all of it is the meter's ARIA contract: the fil
 
 No class name, no `nth-child`, no fixed depth, and nothing about what surrounds a row — each row is found from its own meter, so wrappers around a single row (the "This week" disclosure) or the rows landing in separate containers do not matter. `MaxRowDepth` caps the climb at 8 levels, and `createElement()` refuses a row that does not have the two columns below: if the shape changes, nothing is injected rather than a broken clone.
 
-**Where the clone goes.** Directly after its row (`row.after(clone)`), so the 7-day clone sits *inside* the disclosure wrapper, between the row and the breakdown panel. The rows are spaced by the row container's `gap`, which does not reach inside that wrapper, so `missingRowGap()` copies the amount onto the clone as `margin-top` whenever the row's direct parent has no gap of its own.
+**Where the clone goes.** After `insertionAnchor(row)`: the child of the nearest ancestor that spaces its children with a `gap` (the row container). For the 5-hour row that is the row itself; for the 7-day row it is the disclosure wrapper, so the clone lands *after the breakdown panel*, not between "This week" and its breakdown — wedged in there, the per-model rows read as belonging to the elapsed bar. Being a child of the row container, the clone gets the same spacing as every other row with no margin of its own.
 
 **Row shape assumed downstream.** `createElement()` clones a row and `redraw()` rewrites it, both relying on the row having two element children:
 

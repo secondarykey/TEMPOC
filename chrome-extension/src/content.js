@@ -41,16 +41,16 @@ function findUsageRows() {
   return { hour5: hour5, day7: day7 };
 }
 
-// 行間の余白。行コンテナの gap が行同士を離しているが、行がラッパに
-// 包まれているとクローンはラッパの中(gap なし)に入るので、同じ量を
-// margin で補う。直接の親に gap があれば補う必要はない。
-function missingRowGap(row) {
-  let e = row.parentElement;
-  for (let depth = 0; e && depth < 3; depth++, e = e.parentElement) {
-    const gap = parseFloat(getComputedStyle(e).rowGap);
-    if (gap > 0) return depth === 0 ? "" : gap + "px";
+// クローンを後ろに挿し込む相手。行同士は行コンテナの gap で離れているので、
+// その gap を持つ祖先の直下の子を返す。ふつうは行そのものだが、7日の行は
+// 開閉用のラッパ [行, 内訳パネル] に包まれているのでラッパが返る。
+// こうするとクローンは内訳の後ろに並び、「This week」と内訳の間に割り込まない。
+function insertionAnchor(row) {
+  let e = row;
+  for (let depth = 0; depth < 3 && e.parentElement; depth++, e = e.parentElement) {
+    if (parseFloat(getComputedStyle(e.parentElement).rowGap) > 0) return e;
   }
-  return "";
+  return row;
 }
 
 // 行の中の塗りバー。メーターの唯一の子が塗り
@@ -214,8 +214,7 @@ async function createElement(id) {
     bar.style.width = "100%";
     bar.style.transform = "translateX(-100%)";
 
-    cp.style.marginTop = missingRowGap(target);
-    target.after(cp);
+    insertionAnchor(target).after(cp);
     return cp;
   })();
 
